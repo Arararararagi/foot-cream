@@ -17,7 +17,7 @@ if not ok_lfs then lfs = nil end
 local ok_ffiutil, ffiutil = pcall(require, "ffi/util")
 
 local FootFree = WidgetContainer:extend{
-    name     = "foot-free",
+    name     = "foot-cream",
     _enabled = true,
 }
 
@@ -3327,7 +3327,7 @@ function FootFree:addToMainMenu(menu_items)
         })
     end
 
-    menu_items["foot_free"] = {
+    menu_items["foot_cream"] = {
         sorting_hint = "tools",
         text = "Footcream",
         -- sub_item_table_func rebuilds items on every open so "Show hints"
