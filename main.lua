@@ -1,0 +1,3622 @@
+local WidgetContainer = require("ui/widget/container/widgetcontainer")
+local Widget          = require("ui/widget/widget")
+local Geom            = require("ui/geometry")
+local Blitbuffer      = require("ffi/blitbuffer")
+local InfoMessage     = require("ui/widget/infomessage")
+local UIManager       = require("ui/uimanager")
+local DataStorage     = require("datastorage")
+local logger          = require("logger")
+local Notification    = require("ui/widget/notification")
+local ConfirmBox      = require("ui/widget/confirmbox")
+local Event           = require("ui/event")
+local RenderImage     = require("ui/renderimage")
+local ok_lfs, lfs     = pcall(require, "libs/libkoreader-lfs")
+if not ok_lfs then ok_lfs, lfs = pcall(require, "lfs") end
+if not ok_lfs then lfs = nil end
+-- ffi/util provides runInSubProcess / isSubProcessDone for background work
+local ok_ffiutil, ffiutil = pcall(require, "ffi/util")
+
+local FootFree = WidgetContainer:extend{
+    name     = "foot-free",
+    _enabled = true,
+}
+
+-- ── Unicode constants (decimal-escaped UTF-8) ─────────────────────────────────
+local _PRIME  = "\226\128\178"   -- ′  U+2032
+local _DPRIME = "\226\128\179"   -- ″  U+2033
+local _ENDASH = "\226\128\147"   -- –  U+2013
+local _TIMES  = "\195\151"       -- ×  U+00D7
+local _SUP2   = "\194\178"       -- ²  U+00B2 (superscript two)
+
+local CACHE_VERSION = 19  -- bumped: sub-km distances shown in meters (0.4 km -> 400 m)
+local _REVERSE_VERSION = 2  -- v2: ordered originals per converted string (position-aware reverse lookup)
+
+-- ── Number prefixes ───────────────────────────────────────────────────────────
+
+-- [^0-9,] before the digit prevents mid-number matches (e.g. "0 lbs" from "140 lbs").
+local _ND  = "[^0-9,][0-9][0-9,.]*"   -- digit with mandatory boundary char
+
+-- ── Word → number lookup ──────────────────────────────────────────────────────
+-- Longest-first so sub(1,#word) finds the right entry before shorter prefixes.
+
+local _WORD_NUMS = {
+    { "a hundred thousand", 100000 }, { "one hundred thousand", 100000 },
+    { "ninety thousand",  90000 }, { "eighty thousand",  80000 },
+    { "seventy thousand", 70000 }, { "sixty thousand",   60000 },
+    { "fifty thousand",  50000 }, { "forty thousand",  40000 },
+    { "thirty thousand", 30000 }, { "twenty thousand", 20000 },
+    { "nineteen thousand",19000 }, { "eighteen thousand",18000 },
+    { "seventeen thousand",17000 }, { "sixteen thousand",16000 },
+    { "fifteen thousand",15000 }, { "fourteen thousand",14000 },
+    { "thirteen thousand",13000 }, { "twelve thousand", 12000 },
+    { "eleven thousand", 11000 }, { "ten thousand",    10000 },
+    { "nine thousand",    9000 }, { "eight thousand",   8000 },
+    { "seven thousand",   7000 }, { "six thousand",     6000 },
+    { "five thousand",    5000 }, { "four thousand",    4000 },
+    { "three thousand",   3000 }, { "two thousand",     2000 },
+    { "one thousand",     1000 }, { "a thousand",       1000 },
+    -- Hyphenated N-thousand forms for compound adjectives ("twenty-thousand-foot peaks").
+    -- Must precede plain "twenty" etc. in this prefix-match table.
+    { "ninety-thousand",  90000 }, { "eighty-thousand",  80000 },
+    { "seventy-thousand", 70000 }, { "sixty-thousand",   60000 },
+    { "fifty-thousand",  50000 }, { "forty-thousand",  40000 },
+    { "thirty-thousand", 30000 }, { "twenty-thousand", 20000 },
+    { "nineteen-thousand",19000 }, { "eighteen-thousand",18000 },
+    { "seventeen-thousand",17000 }, { "sixteen-thousand",16000 },
+    { "fifteen-thousand",15000 }, { "fourteen-thousand",14000 },
+    { "thirteen-thousand",13000 }, { "twelve-thousand", 12000 },
+    { "eleven-thousand", 11000 }, { "ten-thousand",    10000 },
+    { "nine-thousand",    9000 }, { "eight-thousand",   8000 },
+    { "seven-thousand",   7000 }, { "six-thousand",     6000 },
+    { "five-thousand",    5000 }, { "four-thousand",    4000 },
+    { "three-thousand",   3000 }, { "two-thousand",     2000 },
+    { "one-thousand",     1000 },
+    -- Broader fractions (fourths/fifths/sixths/eighths/tenths). Bare forms —
+    -- the fast scan strips "of a/an" and prefix-matches just the fraction
+    -- ("two fifths of a mile" → "two fifths" = 0.4). Placed before the plain
+    -- numbers further down so e.g. "one quarter" beats a bare "one".
+    { "seven eighths", 0.875 }, { "five eighths", 0.625 }, { "three eighths", 0.375 },
+    { "one eighth",   0.125 }, { "an eighth",    0.125 },
+    { "four fifths",    0.8 }, { "three fifths",  0.6 }, { "two fifths",    0.4 },
+    { "one fifth",      0.2 }, { "a fifth",       0.2 },
+    { "five sixths",    5/6 }, { "one sixth",     1/6 }, { "a sixth",       1/6 },
+    { "nine tenths",    0.9 }, { "seven tenths",  0.7 }, { "three tenths",  0.3 },
+    { "one tenth",      0.1 }, { "a tenth",       0.1 },
+    { "three fourths", 3/4 }, { "one quarter",   0.25 }, { "one fourth",   0.25 },
+    { "a fourth",      0.25 }, { "one half",       0.5 },
+    { "six sevenths",  6/7 }, { "five sevenths", 5/7 }, { "four sevenths", 4/7 },
+    { "three sevenths",3/7 }, { "two sevenths",  2/7 }, { "one seventh",   1/7 },
+    { "a seventh",     1/7 },
+    { "eight ninths",  8/9 }, { "seven ninths",  7/9 }, { "six ninths",    6/9 },
+    { "five ninths",   5/9 }, { "four ninths",   4/9 }, { "three ninths",  3/9 },
+    { "two ninths",    2/9 }, { "one ninth",     1/9 }, { "a ninth",       1/9 },
+    { "two thirds of a", 2/3 }, { "one third of a", 1/3 },
+    { "three quarters", 3/4 }, { "a third of a",  1/3 },
+    { "two thirds",     2/3 }, { "one third",     1/3 }, { "a third",      1/3 },
+    { "a hundred",     100 }, { "one hundred",   100 }, { "two hundred",   200 },
+    { "three hundred", 300 }, { "four hundred",  400 }, { "five hundred",  500 },
+    { "six hundred",   600 }, { "seven hundred", 700 }, { "eight hundred", 800 },
+    { "nine hundred",  900 },
+    -- Hyphenated N-hundred forms for compound adjectives ("two-hundred-foot drop").
+    -- Must precede plain "two", "three" etc.
+    { "two-hundred",   200 }, { "three-hundred",  300 }, { "four-hundred",  400 },
+    { "five-hundred",  500 }, { "six-hundred",    600 }, { "seven-hundred", 700 },
+    { "eight-hundred", 800 }, { "nine-hundred",   900 },
+    -- Hyphenated N-hundred (1100–1900) forms ("twelve-hundred-mile voyage")
+    { "nineteen-hundred", 1900 }, { "eighteen-hundred", 1800 },
+    { "seventeen-hundred",1700 }, { "sixteen-hundred",  1600 },
+    { "fifteen-hundred",  1500 }, { "fourteen-hundred", 1400 },
+    { "thirteen-hundred", 1300 }, { "twelve-hundred",   1200 },
+    { "eleven-hundred",   1100 },
+    { "thousand",     1000 }, { "hundred",      100 },
+    { "half an",       0.5 }, { "half a",        0.5 }, { "a quarter",    0.25 },
+    { "a dozen",        12 }, { "a half",        0.5 }, { "a third",      1/3  },
+    -- N-hundreds (1100–1900): must precede plain 11–19 entries
+    { "nineteen hundred", 1900 }, { "eighteen hundred", 1800 },
+    { "seventeen hundred",1700 }, { "sixteen hundred",  1600 },
+    { "fifteen hundred",  1500 }, { "fourteen hundred", 1400 },
+    { "thirteen hundred", 1300 }, { "twelve hundred",   1200 },
+    { "eleven hundred",   1100 },
+    { "nineteen",  19 }, { "eighteen",   18 }, { "seventeen", 17 },
+    { "sixteen",   16 }, { "fifteen",    15 }, { "fourteen",  14 },
+    { "thirteen",  13 }, { "twelve",     12 }, { "eleven",    11 },
+    -- Compound tens (must precede plain tens in the lookup table)
+    { "twenty-one", 21 }, { "twenty-two", 22 }, { "twenty-three", 23 },
+    { "twenty-four", 24 }, { "twenty-five", 25 }, { "twenty-six", 26 },
+    { "twenty-seven", 27 }, { "twenty-eight", 28 }, { "twenty-nine", 29 },
+    { "thirty-one", 31 }, { "thirty-two", 32 }, { "thirty-three", 33 },
+    { "thirty-four", 34 }, { "thirty-five", 35 }, { "thirty-six", 36 },
+    { "thirty-seven", 37 }, { "thirty-eight", 38 }, { "thirty-nine", 39 },
+    { "forty-one", 41 }, { "forty-two", 42 }, { "forty-three", 43 },
+    { "forty-four", 44 }, { "forty-five", 45 }, { "forty-six", 46 },
+    { "forty-seven", 47 }, { "forty-eight", 48 }, { "forty-nine", 49 },
+    { "fifty-one", 51 }, { "fifty-two", 52 }, { "fifty-three", 53 },
+    { "fifty-four", 54 }, { "fifty-five", 55 }, { "fifty-six", 56 },
+    { "fifty-seven", 57 }, { "fifty-eight", 58 }, { "fifty-nine", 59 },
+    { "sixty-one", 61 }, { "sixty-two", 62 }, { "sixty-three", 63 },
+    { "sixty-four", 64 }, { "sixty-five", 65 }, { "sixty-six", 66 },
+    { "sixty-seven", 67 }, { "sixty-eight", 68 }, { "sixty-nine", 69 },
+    { "seventy-one", 71 }, { "seventy-two", 72 }, { "seventy-three", 73 },
+    { "seventy-four", 74 }, { "seventy-five", 75 }, { "seventy-six", 76 },
+    { "seventy-seven", 77 }, { "seventy-eight", 78 }, { "seventy-nine", 79 },
+    { "eighty-one", 81 }, { "eighty-two", 82 }, { "eighty-three", 83 },
+    { "eighty-four", 84 }, { "eighty-five", 85 }, { "eighty-six", 86 },
+    { "eighty-seven", 87 }, { "eighty-eight", 88 }, { "eighty-nine", 89 },
+    { "ninety-one", 91 }, { "ninety-two", 92 }, { "ninety-three", 93 },
+    { "ninety-four", 94 }, { "ninety-five", 95 }, { "ninety-six", 96 },
+    { "ninety-seven", 97 }, { "ninety-eight", 98 }, { "ninety-nine", 99 },
+    { "ninety",    90 }, { "eighty",     80 }, { "seventy",   70 },
+    { "sixty",     60 }, { "fifty",      50 }, { "forty",     40 },
+    { "thirty",    30 }, { "quarter",   0.25 }, { "twenty",    20 },
+    { "dozen",     12 }, { "ten",        10 }, { "nine",        9 },
+    { "eight",      8 }, { "seven",       7 }, { "six",         6 },
+    { "five",       5 }, { "four",        4 }, { "three",       3 },
+    { "two",        2 }, { "half",       0.5 }, { "one",         1 },
+}
+
+-- ── Core helpers ─────────────────────────────────────────────────────────────
+
+-- Strip the leading boundary character that _ND captures.
+-- If matched_text starts with a non-digit then a digit, the first char is the
+-- boundary (e.g. " 6ft" → "6ft"). Word patterns start letter+letter, not stripped.
+-- UTF-8 bytes of U+2212 (−), the "real" minus sign some books use instead of
+-- an ASCII hyphen. Treated as a leading minus everywhere a hyphen would be.
+local _UMINUS = "\226\136\146"
+-- Other dashes books use as a leading minus before a number ("–10°F", "—10°F").
+local _ENDASH = "\226\128\147"   -- – U+2013
+local _EMDASH = "\226\128\148"   -- — U+2014
+-- All four dash forms, longest-byte-safe, treated as a leading minus sign.
+local _NEG_SIGNS = { ["-"] = true, [_UMINUS] = true, [_ENDASH] = true, [_EMDASH] = true }
+
+local function _display(text)
+    -- Strip the single leading boundary char the digit patterns require
+    -- ([^0-9,]) — but keep a leading minus sign so negatives read correctly
+    -- (e.g. "-10°F" must not display as "10°F"). U+2212 is multi-byte so it
+    -- never matched the single-byte strip below anyway.
+    local first = text:match("^([^0-9])[0-9]")
+    if first and first ~= "-" then return text:sub(2) end
+    return text
+end
+
+local function _parse_num(text)
+    local s_start, _, s = text:find("([0-9][0-9,.]*)")
+    if s then
+        local n = tonumber((s:gsub(",", "")))
+        if n then
+            -- Honor a minus sign immediately before the digits — ASCII hyphen
+            -- OR any of the Unicode dashes books use (U+2212 −, U+2013 –,
+            -- U+2014 —) — so "−10°F"/"–10°F"/"—10°F" parse as -10, not 10.
+            local before = text:sub(1, s_start - 1)
+            if _NEG_SIGNS[before:sub(-1)] or _NEG_SIGNS[before:sub(-3)] then
+                n = -n
+            end
+            return n
+        end
+    end
+    -- Strip leading punctuation/space so a paren- or quote-attached word number
+    -- still prefix-matches ("(three" → "three", "  ten" → "ten").
+    local lower = text:lower():gsub("^[^%w]+", "")
+    for _, entry in ipairs(_WORD_NUMS) do
+        local word = entry[1]
+        if lower:sub(1, #word) == word then return entry[2] end
+    end
+    return nil
+end
+
+-- Group the integer part with thin spaces as the thousands separator (SI style:
+-- "160000" -> "160 000"), never a comma. Operates on a formatted number string,
+-- preserving a leading sign and any decimal tail.
+local function _group_thousands(s)
+    local sign, intp, rest = s:match("^(%-?)(%d+)(.*)$")
+    if not intp then return s end
+    local g = intp:reverse():gsub("(%d%d%d)", "%1 "):reverse():gsub("^%s+", "")
+    return sign .. g .. rest
+end
+
+local function _fmt(v)
+    local s
+    if v == math.floor(v) then
+        s = string.format("%.0f", v)
+    else
+        -- One decimal, but drop a trailing ".0" so e.g. 0.9922 reads "1" not "1.0".
+        s = string.format("%.1f", v):gsub("%.0$", "")
+    end
+    return _group_thousands(s)
+end
+
+-- For compound feet+inches heights, _fmt's 1-decimal rounding loses too much
+-- (6'4" -> "1.9 m" hides a ~3cm range). Always show centimeter precision.
+local function _fmt_height(v)
+    return string.format("%.2f", v)
+end
+
+-- Pick a friendlier sub-unit when the value is below a whole one: km->m,
+-- m->cm, kg->g. Returns the scaled value and the new unit. ("0.4 km" -> "400 m",
+-- "0.1 m" -> "10 cm", "0.3 kg" -> "300 g".)
+local function _downscale(v, unit)
+    if v < 1 then
+        if unit == "km" then return v * 1000, "m"  end
+        if unit == "m"  then return v * 100,  "cm" end
+        if unit == "kg" then return v * 1000, "g"  end
+    end
+    return v, unit
+end
+
+local function _fmt_dist(v, unit)
+    local sv, su = _downscale(v, unit)
+    return _fmt(sv) .. " " .. su
+end
+
+-- Range version of _fmt_dist: downscales both ends based on the (larger) upper
+-- bound, so both endpoints stay in the same unit.
+local function _fmt_dist_range(r1, r2, unit)
+    local sr2, su = _downscale(r2, unit)
+    local scale = (su == unit or r2 == 0) and 1 or (sr2 / r2)
+    return _fmt(r1 * scale) .. _ENDASH .. _fmt(sr2) .. " " .. su
+end
+
+-- ── Smart Rounding of Converted Units ────────────────────────────────────────
+-- When on (default), a converted value gets rounded to a "nice" 1-2-5×10^n
+-- step — but only when the SOURCE number looks like an approximation
+-- (a round number: "ten thousand", "a hundred", "two hundred and fifty", ...).
+-- Precise source numbers ("27 feet", "65 pounds", "5.5 miles", "511 feet")
+-- are left exactly as today. The step is chosen as coarse as possible while
+-- staying within _SMART_ROUND_TOLERANCE of the true value.
+local _SMART_ROUND_TOLERANCE = 0.02  -- 2%
+
+local function _smart_rounding_enabled()
+    return G_reader_settings:readSetting("footcream_smart_rounding") ~= false
+end
+
+-- A whole number >= 10 with at least one trailing zero "looks approximate"
+-- (10, 100, 140, 250, 10000, ...). Numbers with a fractional part, or small/
+-- non-round integers (9, 27, 65, 511), are treated as deliberately precise.
+local function _is_approx_num(n)
+    if not n then return false end
+    -- Fractions of a single unit ("a third of a mile", "half a pound", "two
+    -- thirds of a foot") are colloquial approximations, not precise measurements,
+    -- so a value below 1 is rounded too (536.4 m -> 540 m). Precise sub-unit
+    -- decimals like "0.25 inches" are unaffected: _nice_round only rounds when a
+    -- coarser value stays within tolerance, which it can't for those.
+    if n > 0 and n < 1 then return true end
+    if n ~= math.floor(n) then return false end
+    if n < 10 then return false end
+    return n % 10 == 0
+end
+
+-- Round v to the coarsest 1-2-5×10^n step whose relative error stays within
+-- _SMART_ROUND_TOLERANCE. Returns v unchanged if even the smallest such step
+-- would overshoot the tolerance.
+local function _nice_round(v)
+    if v == 0 then return v end
+    -- Round the magnitude and reapply the sign, so negative values (sub-zero °C
+    -- temperatures, negative range endpoints) round the same way positives do.
+    local sign = 1
+    if v < 0 then sign, v = -1, -v end
+    -- Round to the FEWEST significant figures that stays within tolerance —
+    -- i.e. the nearest value at each precision level, coarsest first. Because
+    -- each candidate is a *nearest* rounding, the result never lands further
+    -- from the true value than necessary (the old coarsest-1-2-5-step rule could
+    -- overshoot, e.g. 6705.6 → 6800 instead of the closer 6700).
+    local digits = math.floor(math.log(v) / math.log(10))  -- 10^digits <= v < 10^(digits+1)
+    for sig = 1, 8 do
+        local pow = 10 ^ (digits - sig + 1)
+        local rounded = math.floor(v / pow + 0.5) * pow
+        if rounded > 0 and math.abs(rounded - v) / v <= _SMART_ROUND_TOLERANCE then
+            return sign * rounded
+        end
+    end
+    return sign * v
+end
+
+-- Apply smart rounding to a converted value `v`, given the source number `n`
+-- it was converted from. Pass force=true for ranges, which are inherently
+-- approximate regardless of how the endpoints happen to be written.
+local function _smart_round(v, n, force)
+    if not _smart_rounding_enabled() then return v end
+    if not force and not _is_approx_num(n) then return v end
+    return _nice_round(v)
+end
+
+-- ── Compound converters ───────────────────────────────────────────────────────
+
+-- "six foot two" / "6 foot 4" / "5 feet 3 inches" / "six-foot-four" → metres
+local function _conv_foot_inch_to_m(text)
+    local s = _display(text):lower()
+    local before, after = s:match("^(.-)[ %-]+foot[ %-]+(.+)$")
+    if not before then
+        before, after = s:match("^(.-)[ %-]+feet[ %-]+(.+)$")
+    end
+    if before and after then
+        local ft = _parse_num(before)
+        local in_ = _parse_num(after)
+        if ft then return _fmt_height(ft * 0.3048 + (in_ or 0) * 0.0254) .. " m" end
+    end
+    return nil
+end
+
+-- "6′9″" / "6'8"" → metres
+local function _conv_prime_to_m(text)
+    local clean = _display(text)
+    local f, i = clean:match("^([0-9]+)" .. _PRIME .. "([0-9]+)")
+    if not f then f, i = clean:match("^([0-9]+)'([0-9]+)") end
+    if f and i then
+        return _fmt_height(tonumber(f) * 0.3048 + tonumber(i) * 0.0254) .. " m"
+    end
+    return nil
+end
+
+-- "nine stone four" / "ten stone two" → kg  (stone + extra lbs)
+local function _conv_stone_lbs_to_kg(text)
+    local s = _display(text):lower()
+    local before, after = s:match("^(.-)%s+stone%s+(.+)$")
+    if before and after then
+        local st = _parse_num(before)
+        local lb = _parse_num(after)
+        if st then return _fmt(st * 6.35029 + (lb or 0) * 0.453592) .. " kg" end
+    end
+    return nil
+end
+
+-- "seven pounds four ounces" / "two pounds, four ounces" / "1-lb 4-oz" → kg
+local function _conv_lbs_oz_to_kg(text)
+    local s = _display(text):lower():gsub("%s+and%s+", " "):gsub("[,%-]%s*", " ")
+    local before, after = s:match("^(.-)%s+pounds?%s+(.-)%s+ounces?$")
+    if not before then before, after = s:match("^(.-)%s+lbs?%s+(.-)%s+oz$") end
+    if before and after then
+        local lb = _parse_num(before)
+        local oz = _parse_num(after)
+        if lb then return _fmt(lb * 0.453592 + (oz or 0) * 0.0283495) .. " kg" end
+    end
+    return nil
+end
+
+-- "four feet by two inches" / "6 ft by 3 in" → "1.8 m by 7.6 cm"
+local function _conv_ft_by_in(text)
+    local s = _display(text):lower()
+    -- f[eo]?[eo]?t matches feet / foot / ft (vowels optional → also "ft").
+    local before, after = s:match("^(.-)%s+f[eo]?[eo]?t%s+by%s+(.+)$")
+    if before and after then
+        local ft  = _parse_num(before)
+        local in_ = _parse_num(after)
+        if ft and in_ then
+            return _fmt(ft * 0.3048) .. " m by " .. _fmt(in_ * 2.54) .. " cm"
+        end
+    end
+    return nil
+end
+
+-- "4′ × 2″" / "4' × 2"" dimension → "1.2 m by 5.1 cm"
+local function _conv_dim_to_m_cm(text)
+    local clean = _display(text)
+    local f = clean:match("^([0-9]+)")
+    local i = clean:match(".*[^0-9]([0-9]+)")
+    if f and i then
+        return _fmt(tonumber(f) * 0.3048) .. " m by " .. _fmt(tonumber(i) * 2.54) .. " cm"
+    end
+    return nil
+end
+
+-- Range factory: "twenty or thirty feet" → "6.1–9.1 m"
+local function _range_conv(factor, offset, target)
+    return function(text)
+        local s = _display(text):lower()
+        for _, sep in ipairs({" and ", " or ", " to "}) do
+            local p = s:find(sep, 1, true)
+            if p then
+                local n1 = _parse_num(s:sub(1, p - 1))
+                local n2 = _parse_num(s:sub(p + #sep))
+                if n1 and n2 then
+                    local r1 = n1 * factor + offset
+                    local r2 = n2 * factor + offset
+                    if r1 > r2 then r1, r2 = r2, r1 end
+                    return _fmt_dist_range(_smart_round(r1, nil, true),
+                                            _smart_round(r2, nil, true), target)
+                end
+            end
+        end
+        return nil
+    end
+end
+
+-- "twelve acres" / "200 acres" → "809 372 m²" (whole m², space-grouped thousands)
+local function _conv_acres_to_m2(text)
+    local num = _parse_num(text)
+    if not num then return nil end
+    local s = string.format("%.0f", _smart_round(num * 4046.86, num))
+    return _group_thousands(s) .. " m" .. _SUP2
+end
+
+-- ── Convert a match to display string ────────────────────────────────────────
+
+local function _convert(r)
+    if r._converted then return r._converted end
+    -- Unit-first match: number in r._num, unit word in r.matched_text
+    if r._num ~= nil and r._search then
+        local unit_disp = _display(r.matched_text)
+        -- Compound height: "6 foot 4" detected via r._num2
+        if r._num2 then
+            local m = r._num * 0.3048 + r._num2 * 0.0254
+            return string.format("%s foot %s = %s m", _fmt(r._num), _fmt(r._num2), _fmt_height(m))
+        end
+        -- Compound stone: "nine stone four" via r._num2
+        if r._num_stone2 then
+            local kg = r._num * 6.35029 + r._num_stone2 * 0.453592
+            return string.format("%s stone %s = %s kg", _fmt(r._num), _fmt(r._num_stone2), _fmt(kg))
+        end
+        -- Compound lbs+oz: "seven pounds four ounces" via r._num_oz
+        if r._num_oz then
+            local kg = r._num * 0.453592 + r._num_oz * 0.0283495
+            return string.format("%s lbs %s oz = %s kg", _fmt(r._num), _fmt(r._num_oz), _fmt(kg))
+        end
+        -- Custom converter (e.g. acres → m²)
+        if r._search.converter then
+            local fake   = _fmt(r._num) .. " " .. unit_disp
+            local result = r._search.converter(fake)
+            if result then return string.format("%s %s = %s", _fmt(r._num), unit_disp, result) end
+        end
+        -- Standard factor/offset conversion
+        if r._search.factor then
+            local result = r._num * r._search.factor + r._search.offset
+            return string.format("%s %s = %s", _fmt(r._num), unit_disp,
+                                  _fmt_dist(_smart_round(result, r._num), r._search.target))
+        end
+        return unit_disp
+    end
+    -- Standard (non-unit-first) match
+    if not r._search then return r.matched_text end
+    local disp = _display(r.matched_text)
+    if r._search.converter then
+        local result = r._search.converter(r.matched_text)
+        if result then return string.format("%s = %s", disp, result) end
+    end
+    if not r._search.factor then return disp end
+    local num = _parse_num(r.matched_text)
+    if not num then return disp end
+    local result = num * r._search.factor + r._search.offset
+    return string.format("%s = %s", disp, _fmt_dist(_smart_round(result, num), r._search.target))
+end
+
+-- ── UK Imperial volume overrides ─────────────────────────────────────────────
+-- Applied when the book's dc:language starts with "en-GB" (UK volumes are always
+-- on now). UK volumes are ~20% larger than US equivalents.
+local _UNIT_CONV_UK = {
+    ["gallons"]      = { factor=4.54609,  offset=0, target="liters",  cat="volume" },
+    ["gallon"]       = { factor=4.54609,  offset=0, target="liters",  cat="volume" },
+    ["gal"]          = { factor=4.54609,  offset=0, target="liters",  cat="volume" },
+    ["pints"]        = { factor=0.568261, offset=0, target="liters",  cat="volume" },
+    ["pint"]         = { factor=0.568261, offset=0, target="liters",  cat="volume" },
+    ["pt"]           = { factor=0.568261, offset=0, target="liters",  cat="volume" },
+    ["quarts"]       = { factor=1.13652,  offset=0, target="liters",  cat="volume" },
+    ["quart"]        = { factor=1.13652,  offset=0, target="liters",  cat="volume" },
+    ["qt"]           = { factor=1.13652,  offset=0, target="liters",  cat="volume" },
+    ["fluid ounces"] = { factor=28.4131,  offset=0, target="mL", cat="volume" },
+    ["fluid ounce"]  = { factor=28.4131,  offset=0, target="mL", cat="volume" },
+    ["fl oz"]        = { factor=28.4131,  offset=0, target="mL", cat="volume" },
+}
+
+-- ── Pounds context classifier (weight vs. £ currency) ────────────────────────
+-- Always on now. Checks the prev/next context words that findAllText already
+-- returns — no extra document scan needed.
+local _CURRENCY_WORDS = {
+    paid=true, pay=true, paying=true, pays=true,
+    cost=true, costs=true, costing=true,
+    worth=true, value=true, valued=true,
+    earned=true, earn=true, earns=true, earning=true,
+    owed=true, owe=true, owes=true, owing=true,
+    spent=true, spend=true, spending=true,
+    price=true, priced=true, prices=true,
+    fee=true, fees=true, fine=true, fined=true,
+    salary=true, wage=true, wages=true,
+    charged=true, charge=true, charges=true,
+    bought=true, buy=true, buying=true,
+    sold=true, sell=true, selling=true,
+    lent=true, lend=true, borrowed=true, borrow=true,
+    debt=true, debts=true, sum=true, sums=true,
+    shilling=true, shillings=true, sterling=true,
+    advance=true, advanced=true,
+    income=true, payment=true, payments=true,
+    rent=true, rents=true, fortune=true, money=true,
+    -- "three hundred pounds in gold ... seven hundred in notes" — pounds is £,
+    -- not weight. These lean monetary (gold/silver do have a weight sense, but
+    -- "<N> pounds in gold/notes" is overwhelmingly currency).
+    gold=true, silver=true, notes=true, note=true, banknotes=true,
+    coin=true, coins=true, guinea=true, guineas=true,
+    sovereign=true, sovereigns=true, cash=true,
+}
+local _WEIGHT_WORDS = {
+    weighed=true, weighs=true, weigh=true, weighing=true,
+    weight=true, weights=true,
+    heavy=true, heavier=true, heaviest=true,
+    lighter=true, lightest=true,
+    lifted=true, lift=true, lifting=true,
+    carried=true, carry=true, carrying=true,
+    load=true, loaded=true, loading=true,
+    bag=true, bags=true, sack=true, sacks=true,
+    crate=true, crates=true,
+    gained=true, gain=true, gaining=true,
+    stone=true, ounce=true, ounces=true,
+    kilogram=true, kilograms=true,
+}
+
+-- ── Metric edition helpers ───────────────────────────────────────────────────
+
+-- Directory containing main.lua (and metric_epub.py).
+local _PLUGIN_DIR = (debug.getinfo(1, "S").source or ""):match("@?(.*)/[^/]*$") or "."
+local _METRIC_SCRIPT = _PLUGIN_DIR .. "/metric_epub.py"
+
+-- Return just the converted value (no "original = " prefix).
+-- e.g. "1.8 m" from a match for "six feet".
+local function _metric_only(r)
+    if r._converted then
+        return r._converted:match("= (.+)$") or r._converted
+    end
+    -- Compound matches carry pre-parsed numbers; mirror _convert's compound
+    -- branches so the value is correct even before a _converted string is
+    -- cached (e.g. a fresh fast-scan record shown in the tap popup).
+    if r._num ~= nil then
+        if r._num2 then
+            return _fmt_height(r._num * 0.3048 + r._num2 * 0.0254) .. " m"
+        end
+        if r._num_stone2 then
+            return _fmt(r._num * 6.35029 + r._num_stone2 * 0.453592) .. " kg"
+        end
+        if r._num_oz then
+            return _fmt(r._num * 0.453592 + r._num_oz * 0.0283495) .. " kg"
+        end
+    end
+    if not r._search then return nil end
+    if r._search.converter then
+        return r._search.converter(r.matched_text)
+    end
+    if r._search.factor then
+        local num = r._num or _parse_num(r.matched_text)
+        if num then
+            local result = num * r._search.factor + r._search.offset
+            return _fmt_dist(_smart_round(result, num), r._search.target)
+        end
+    end
+    return nil
+end
+
+-- NOTE: _patches_path and _is_metric_mode are defined after _SIDECAR_DIR below.
+
+-- ── Sidecar cache ────────────────────────────────────────────────────────────
+-- Stored in KOReader's own data dir to avoid permission/space issues on
+-- external mounts. Key is the sanitised book path so it survives book moves
+-- only if the path is identical on next open.
+
+local _CAT_ICONS = {
+    length      = "length",
+    weight      = "weight",
+    temperature = "temp",
+    volume      = "volume",
+    speed       = "speed",
+    area        = "length",   -- no separate area icon; length is the closest
+}
+
+local _SIDECAR_DIR         = DataStorage:getDataDir() .. "/footcream"
+local _SCAN_PROGRESS_FILE  = _SIDECAR_DIR .. "/scan_progress"
+local _PARTIAL_SIDECAR     = _SIDECAR_DIR .. "/scan_partial.lua"
+os.execute("mkdir -p " .. _SIDECAR_DIR)
+
+-- Developer marker: if this file exists, dev-only features turn on (currently the
+-- scan report). It lives in the same Mac↔VM shared debug folder that the report
+-- and other diagnostics already write to (/mnt/macos/debug = <repo>/debug on the
+-- Mac), so dev mode is flipped from the Mac side and never exists on a user's
+-- device. Enable:  touch <repo>/debug/.dev     Disable:  rm <repo>/debug/.dev
+local _DEV_FLAG_FILE       = "/mnt/macos/debug/.dev"
+
+-- True when the developer marker file is present.
+local function _dev_mode_enabled()
+    local fh = io.open(_DEV_FLAG_FILE)
+    if fh then fh:close(); return true end
+    return false
+end
+
+-- ── GitHub auto-update ────────────────────────────────────────────────────────
+local _GITHUB_REPO = "Fank1/foot-cream"
+
+-- Installed version, read from this plugin folder's _meta.lua (single source).
+local function _installed_version()
+    local ok, meta = pcall(dofile, _PLUGIN_DIR .. "/_meta.lua")
+    if ok and type(meta) == "table" and meta.version then return tostring(meta.version) end
+    return "0"
+end
+
+-- "v1.2" / "1.2.0" → {1,2,(0)}; numeric, dot-separated, leading v optional.
+local function _parse_ver(s)
+    local t = {}
+    for n in tostring(s):gsub("^[vV]", ""):gmatch("%d+") do t[#t + 1] = tonumber(n) end
+    return t
+end
+local function _ver_gt(a, b)  -- is version a strictly newer than b?
+    local va, vb = _parse_ver(a), _parse_ver(b)
+    for i = 1, math.max(#va, #vb) do
+        local x, y = va[i] or 0, vb[i] or 0
+        if x ~= y then return x > y end
+    end
+    return false
+end
+
+local function _json_decode(s)
+    local ok, rj = pcall(require, "rapidjson")
+    if ok and rj and rj.decode then
+        local ok2, t = pcall(rj.decode, s)
+        if ok2 then return t end
+    end
+    local ok3, J = pcall(require, "json")  -- fallback if rapidjson is unavailable
+    if ok3 and J and J.decode then
+        local ok4, t = pcall(J.decode, s)
+        if ok4 then return t end
+    end
+    return nil
+end
+
+-- HTTPS GET. With dest_path, streams the body to that file (for the zip);
+-- otherwise returns the body string. Follows redirects manually (GitHub asset
+-- URLs 302 to a CDN host, which luasec won't re-handshake automatically).
+local function _http_fetch(url, dest_path, depth)
+    depth = depth or 0
+    if depth > 6 then return nil, "too many redirects" end
+    local ltn12      = require("ltn12")
+    local socketutil = require("socketutil")
+    local socket_url = require("socket.url")
+    local requester  = url:match("^https:") and require("ssl.https") or require("socket.http")
+
+    local body, fh, sink = {}, nil, nil
+    if dest_path then
+        fh = io.open(dest_path, "wb")
+        if not fh then return nil, "cannot write " .. dest_path end
+        sink = ltn12.sink.file(fh)
+    else
+        sink = ltn12.sink.table(body)
+    end
+
+    socketutil:set_timeout(15, 120)
+    local ok, code, headers = requester.request{
+        url     = url,
+        method  = "GET",
+        headers = { ["User-Agent"] = "foot-cream-updater" },
+        sink    = sink,
+        redirect = false,  -- handled below
+    }
+    socketutil:reset_timeout()
+
+    if not ok then return nil, "network error: " .. tostring(code) end
+    code = tonumber(code)
+    if code and code >= 300 and code < 400 then
+        local loc = headers and (headers.location or headers.Location)
+        if not loc then return nil, "redirect without Location" end
+        return _http_fetch(socket_url.absolute(url, loc), dest_path, depth + 1)
+    end
+    if not code or code >= 400 then return nil, "HTTP " .. tostring(code) end
+    if dest_path then return true end
+    return table.concat(body)
+end
+
+-- After unzipping, find the directory that holds both main.lua and _meta.lua,
+-- wherever it sits in the archive (asset-zip root, "<name>.koplugin/", or the
+-- source zip's "<repo>-<tag>/plugin/"). Returns that path or nil.
+local function _find_plugin_root(dir)
+    local p = io.popen('find "' .. dir .. '" -name main.lua 2>/dev/null')
+    if not p then return nil end
+    for line in p:lines() do
+        local d = line:match("^(.*)/[^/]*$")
+        local mf = d and io.open(d .. "/_meta.lua")
+        if mf then mf:close(); p:close(); return d end
+    end
+    p:close()
+    return nil
+end
+
+-- Path of the patch record for a given book (defined here so _SIDECAR_DIR is set).
+local function _patches_path(doc_path)
+    local key = doc_path:gsub("[/\\]", "_"):gsub("[^%w%-%._]", "_")
+    if #key > 180 then key = key:sub(-180) end
+    return _SIDECAR_DIR .. "/patches_" .. key .. ".json"
+end
+
+local function _is_metric_mode(doc_path)
+    local fh = io.open(_patches_path(doc_path))
+    if fh then fh:close(); return true end
+    return false
+end
+
+-- Path of the converted->original reverse-lookup sidecar for a given book.
+local function _reverse_path(doc_path)
+    local key = doc_path:gsub("[/\\]", "_"):gsub("[^%w%-%._]", "_")
+    if #key > 180 then key = key:sub(-180) end
+    return _SIDECAR_DIR .. "/reverse_" .. key .. ".lua"
+end
+
+-- Escape ERE metacharacters so a converted string (e.g. "1.8 m") can be used
+-- as a literal alternative inside a findAllText regex pattern.
+local _RE_MAGIC = {
+    ["."] = true, ["^"] = true, ["$"] = true, ["*"] = true, ["+"] = true,
+    ["?"] = true, ["("] = true, [")"] = true, ["["] = true, ["]"] = true,
+    ["{"] = true, ["}"] = true, ["|"] = true, ["\\"] = true,
+}
+local function _re_escape(s)
+    local out = {}
+    for i = 1, #s do
+        local c = s:sub(i, i)
+        if _RE_MAGIC[c] then out[#out + 1] = "\\" end
+        out[#out + 1] = c
+    end
+    return table.concat(out)
+end
+
+-- xpointers look like ".../text().162" — split into the node path and the
+-- trailing character offset so overlapping matches on the same text node
+-- can be compared numerically.
+local function _xpointer_offset(xp)
+    local prefix, num = xp:match("^(.*%.)(%d+)$")
+    if not prefix then return xp, 0 end
+    return prefix, tonumber(num)
+end
+
+-- Numeric document-order key for an xpointer: the sequence of integers it
+-- contains (DocFragment index, element indices, char offset). Comparing these
+-- numerically orders e.g. DocFragment[7] before DocFragment[10] — a plain
+-- string compare would wrongly put "[10]" first.
+local function _xp_numkey(xp)
+    local t = {}
+    for n in tostring(xp):gmatch("%d+") do t[#t + 1] = tonumber(n) end
+    return t
+end
+local function _xp_key_less(ka, kb)
+    for i = 1, math.max(#ka, #kb) do
+        local va, vb = ka[i] or -1, kb[i] or -1
+        if va ~= vb then return va < vb end
+    end
+    return false
+end
+
+-- Drop matches that overlap an already-kept match on the same text node,
+-- preferring the longer match (e.g. "9.30 m" over the substring "30 m").
+-- Needed because findAllText's alternation can return overlapping hits when
+-- one converted value is itself a substring of another.
+local function _filter_overlapping_matches(matches)
+    local indexed = {}
+    for i, m in ipairs(matches) do
+        local prefix, s = _xpointer_offset(m.start)
+        local _, e = _xpointer_offset(m["end"])
+        indexed[i] = { m = m, prefix = prefix, s = s, e = e, key = _xp_numkey(m.start) }
+    end
+    table.sort(indexed, function(a, b)
+        if a.prefix ~= b.prefix then return _xp_key_less(a.key, b.key) end
+        if a.s ~= b.s then return a.s < b.s end
+        return a.e > b.e
+    end)
+    local result, last_prefix, last_end = {}, nil, -1
+    for _, it in ipairs(indexed) do
+        if it.prefix ~= last_prefix or it.s >= last_end then
+            table.insert(result, it.m)
+            last_prefix, last_end = it.prefix, it.e
+        end
+    end
+    return result
+end
+
+-- ── Donut progress indicator ──────────────────────────────────────────────────
+-- Pre-computed ring pixel list (built once, reused every frame).
+local _donut_pixels = nil
+
+local function _build_donut(r_outer, r_inner)
+    local pixels = {}
+    for dy = -r_outer, r_outer do
+        for dx = -r_outer, r_outer do
+            local d = math.sqrt(dx*dx + dy*dy)
+            if d >= r_inner and d <= r_outer then
+                -- Angle from top, clockwise: 0 at top, 2π at top again
+                local angle = math.atan2(dx, -dy)
+                if angle < 0 then angle = angle + 2 * math.pi end
+                table.insert(pixels, { dx=dx, dy=dy, angle=angle })
+            end
+        end
+    end
+    return pixels
+end
+
+local function _draw_donut(bb, cx, cy, progress)
+    local R_OUT = 11
+    local R_IN  =  7
+    if not _donut_pixels then
+        _donut_pixels = _build_donut(R_OUT, R_IN)
+    end
+    -- Clear the circle area with white so we paint over page content cleanly
+    bb:paintCircle(cx, cy, R_OUT, Blitbuffer.Color8(0xFF))
+    -- Draw ring: filled arc = black, unfilled arc = light grey
+    local threshold = progress * 2 * math.pi
+    local black = Blitbuffer.Color8(0x00)
+    local grey  = Blitbuffer.Color8(0xBB)
+    for _, p in ipairs(_donut_pixels) do
+        bb:paintRect(cx + p.dx, cy + p.dy, 1, 1,
+                     p.angle <= threshold and black or grey)
+    end
+end
+
+-- ── SVG scan-progress loader ──────────────────────────────────────────────────
+-- Custom artwork in assets/loader/<pct>%.svg (0..100 in 5% steps) replaces the
+-- hand-drawn donut. Each bucket's tile is rendered once and cached.
+local _LOADER_DIR = _PLUGIN_DIR .. "/assets/loader"
+local _LOADER_PX  = 28            -- on-screen size before DPI scaling
+local _loader_tile_cache = {}
+
+-- Map a 0..1 progress fraction to the nearest available 5% bucket (0,5,..,100).
+local function _loader_pct(progress)
+    local pct = math.floor((progress or 0) * 20 + 0.5) * 5
+    if pct < 0 then return 0 elseif pct > 100 then return 100 end
+    return pct
+end
+
+-- Rendered Blitbuffer for a bucket, or false if it couldn't render (cached
+-- either way so we don't retry every repaint).
+local function _loader_tile(pct)
+    local cached = _loader_tile_cache[pct]
+    if cached ~= nil then return cached end
+    local Screen = require("device").screen
+    local size = Screen:scaleBySize(_LOADER_PX)
+    local ok, tile = pcall(function()
+        return RenderImage:renderSVGImageFile(
+            _LOADER_DIR .. "/" .. pct .. "%.svg", size, size)
+    end)
+    if not ok or not tile then
+        _loader_tile_cache[pct] = false
+        return false
+    end
+    _loader_tile_cache[pct] = tile
+    return tile
+end
+
+-- Paint the loader at top-left (x, y). Falls back to the donut if the SVG
+-- can't be rendered. progress is 0..1.
+local function _draw_loader(bb, x, y, progress)
+    local tile = _loader_tile(_loader_pct(progress))
+    if not tile then
+        _draw_donut(bb, x + 11, y + 11, progress)
+        return
+    end
+    local tw, th = tile:getWidth(), tile:getHeight()
+    -- White disc behind the ring so it paints cleanly over page text.
+    bb:paintCircle(x + math.floor(tw / 2), y + math.floor(th / 2),
+                   math.floor(tw / 2) + 1, Blitbuffer.Color8(0xFF))
+    bb:alphablitFrom(tile, x, y, 0, 0, tw, th)
+end
+
+-- ── Underline styling ────────────────────────────────────────────────────────
+-- The underline is drawn 10% darker than the chosen intensity, for more contrast
+-- across the board (the menu still shows 10/20/30/40%, but 10% renders like 20%,
+-- … 40% like 50%). Applied in both the solid and wavy render paths.
+local _UNDERLINE_CONTRAST_BOOST = 10
+local function _underline_grey(pct)
+    local eff = math.min(100, pct + _UNDERLINE_CONTRAST_BOOST)
+    return math.floor(255 * (1 - eff / 100) + 0.5)
+end
+
+-- Greyscale underline color from a percent intensity: higher percent = darker
+-- line. 0% would be white, 100% would be black.
+local function _underline_color(pct)
+    return Blitbuffer.Color8(_underline_grey(pct))
+end
+
+-- The wavy underline tiles plugin/assets/wiggly-line.svg horizontally. The
+-- raw SVG (stroke="black", with or without a stroke-width attribute) is
+-- recolored and restroked per (raw underline-width, color %) combination,
+-- rendered once, and cached.
+local _WAVY_SVG_PATH = _PLUGIN_DIR .. "/assets/wiggly-line.svg"
+local _wavy_svg_template
+local _wavy_tile_cache = {}
+
+local function _load_wavy_template()
+    if _wavy_svg_template then return _wavy_svg_template end
+    local fh = io.open(_WAVY_SVG_PATH, "r")
+    if not fh then return nil end
+    _wavy_svg_template = fh:read("*a")
+    fh:close()
+    return _wavy_svg_template
+end
+
+-- Returns a rendered Blitbuffer tile, or false if rendering failed (cached
+-- either way so we don't retry every repaint).
+local function _wavy_tile(raw_width, color_pct)
+    local key = raw_width .. "_" .. color_pct
+    local cached = _wavy_tile_cache[key]
+    if cached ~= nil then return cached end
+
+    local template = _load_wavy_template()
+    if not template then
+        _wavy_tile_cache[key] = false
+        return false
+    end
+
+    local grey = _underline_grey(color_pct)
+    local hex  = string.format("#%02x%02x%02x", grey, grey, grey)
+    local svg  = template:gsub('stroke="black"', 'stroke="' .. hex .. '"')
+    if template:find('stroke%-width="[%d%.]+"') then
+        svg = svg:gsub('stroke%-width="[%d%.]+"', 'stroke-width="' .. raw_width .. '"')
+    else
+        -- Template has no stroke-width attribute (defaults to 1) — add one.
+        svg = svg:gsub('stroke="' .. hex .. '"', 'stroke="' .. hex .. '" stroke-width="' .. raw_width .. '"')
+    end
+
+    local svg_path = _SIDECAR_DIR .. "/wavy_" .. key .. ".svg"
+    local fh = io.open(svg_path, "w")
+    if fh then fh:write(svg); fh:close() end
+
+    -- Render at the SVG's own aspect ratio (read from its root <svg width=.. height=..>),
+    -- so a landscape tile isn't stretched/cropped into a square.
+    local svg_w = tonumber(template:match('<svg[^>]-width="([%d%.]+)"')) or 12
+    local svg_h = tonumber(template:match('<svg[^>]-height="([%d%.]+)"')) or 12
+    local Screen = require("device").screen
+    -- 1 SVG unit = 1 scaled pixel, so stroke-width="raw_width" renders as
+    -- raw_width actual pixels rather than being stretched by tile_w/svg_w.
+    local tile_w = Screen:scaleBySize(svg_w)
+    local tile_h = math.max(1, math.floor(tile_w * svg_h / svg_w + 0.5))
+    local ok, tile = pcall(function()
+        return RenderImage:renderSVGImageFile(svg_path, tile_w, tile_h)
+    end)
+    if not ok or not tile then
+        _wavy_tile_cache[key] = false
+        return false
+    end
+    _wavy_tile_cache[key] = tile
+    return tile
+end
+
+-- Draw a styled underline beneath `box` (screen coordinates).
+-- style: "solid" | "wavy"; width is in (already-scaled) pixels.
+-- raw_width/color_pct are the unscaled settings (1/2 Thin/Thick, 10-20-30-40), used to
+-- build the wavy SVG tile.
+local function _draw_underline(bb, box, style, color, width, raw_width, color_pct)
+    local y  = box.y + box.h - width
+    local x0 = box.x
+    local x1 = box.x + box.w
+    if style == "wavy" then
+        local tile = _wavy_tile(raw_width, color_pct)
+        if tile then
+            local tw, th = tile:getWidth(), tile:getHeight()
+            -- Centre the tile's stroke on the same line as the solid
+            -- underline's centre (box.h - width/2), not flush with the
+            -- bottom of the box.
+            local ypos = box.y + box.h - math.floor((th + width) / 2 + 0.5)
+            local x = x0
+            while x < x1 do
+                local w = math.min(tw, x1 - x)
+                bb:alphablitFrom(tile, x, ypos, 0, 0, w, th)
+                x = x + tw
+            end
+            return
+        end
+        -- Fall through to solid if the tile failed to render.
+    end
+    bb:paintRect(x0, y, box.w, width, color)
+end
+
+-- ── Popup pointer arrow ─────────────────────────────────────────────────────
+-- A small triangular "speech bubble" pointer drawn row-by-row. The two
+-- slanted edges get a border stripe; the base (which overlaps the popup
+-- card) is left border-free so it visually merges into the card.
+local _PointerArrow = Widget:extend{
+    width        = 0,
+    height       = 0,
+    direction    = "up",   -- "up": apex on top, base on bottom; "down": reverse
+    apex_offset  = 0,      -- apex x position, relative to the widget's left edge
+    border_size  = 1,
+    border_color = Blitbuffer.COLOR_BLACK,
+    fill_color   = Blitbuffer.COLOR_WHITE,
+}
+
+function _PointerArrow:getSize()
+    return Geom:new{ w = self.width, h = self.height }
+end
+
+function _PointerArrow:paintTo(bb, x, y)
+    local w, h  = self.width, self.height
+    local apex  = self.apex_offset
+    local bw    = self.border_size
+    for row = 0, h - 1 do
+        local frac = (self.direction == "up") and ((row + 1) / h) or ((h - row) / h)
+        local half  = (w * frac) / 2
+        local left  = math.floor(apex - half + 0.5)
+        local right = math.ceil(apex + half - 0.5)
+        bb:paintRect(x + left, y + row, math.max(1, right - left + 1), 1, self.border_color)
+
+        local inner_half = half - bw
+        if inner_half > 0 then
+            local ileft  = math.floor(apex - inner_half + 0.5)
+            local iright = math.ceil(apex + inner_half - 0.5)
+            if iright >= ileft then
+                bb:paintRect(x + ileft, y + row, iright - ileft + 1, 1, self.fill_color)
+            end
+        end
+    end
+end
+
+-- ── Underline preview widget ────────────────────────────────────────────────
+-- Renders just the underline (via _draw_underline) inside a widget the size
+-- of the sample word, so the Styling dialog can show a live preview.
+local _UnderlinePreview = Widget:extend{
+    width = 0, height = 0,
+    style = "solid", color = nil, line_width = 0, raw_width = 2, color_pct = 25,
+}
+
+function _UnderlinePreview:getSize()
+    return Geom:new{ w = self.width, h = self.height }
+end
+
+function _UnderlinePreview:paintTo(bb, x, y)
+    _draw_underline(bb, { x = x, y = y, w = self.width, h = self.height },
+        self.style, self.color, self.line_width, self.raw_width, self.color_pct)
+end
+
+local function _sidecar_path(doc_path)
+    local key = doc_path:gsub("[/\\]", "_"):gsub("[^%w%-%._]", "_")
+    if #key > 180 then key = key:sub(-180) end
+    return _SIDECAR_DIR .. "/" .. key .. ".lua"
+end
+
+local function _save_sidecar(doc_path, matches)
+    local sidecar = _sidecar_path(doc_path)
+    local fh, err = io.open(sidecar, "w")
+    if not fh then
+        logger.warn("FootFree: sidecar save failed: " .. tostring(err) .. " — " .. sidecar)
+        return
+    end
+    fh:write("return {\n  version = " .. CACHE_VERSION .. ",\n  matches = {\n")
+    for _, r in ipairs(matches) do
+        -- Core fields always written
+        fh:write(string.format(
+            "    { start=%q, [\"end\"]=%q, matched_text=%q, converted=%q, cat=%q," ..
+            " prev_text=%q, next_text=%q",
+            r.start, r["end"], r.matched_text, _convert(r), r._cat or "",
+            r.prev_text or "", r.next_text or ""))
+        -- For simple factor/offset matches: store raw unit+num+factor so
+        -- UK volume recalculation can happen without a rescan.
+        if r._unit and r._search and r._search.factor and not r._search.converter then
+            local num = _parse_num(r.matched_text)
+            if num then
+                fh:write(string.format(", unit=%q, num=%s, factor=%s, offset=%s",
+                    r._unit, tostring(num),
+                    tostring(r._search.factor), tostring(r._search.offset or 0)))
+            end
+        end
+        fh:write(" },\n")
+    end
+    fh:write("  },\n}\n")
+    fh:close()
+end
+
+-- Load raw matches from sidecar — no settings applied yet.
+-- Call _apply_settings_to_matches() after this.
+local function _load_sidecar_raw(doc_path)
+    local sidecar = _sidecar_path(doc_path)
+    -- Discard sidecar if the epub has been modified since it was saved.
+    -- This prevents stale xpointers from a rebuilt or updated epub file.
+    local epub_attr    = lfs and lfs.attributes(doc_path, "modification")
+    local sidecar_attr = lfs and lfs.attributes(sidecar,   "modification")
+    if epub_attr and sidecar_attr and epub_attr > sidecar_attr then
+        logger.info("FootFree: epub newer than sidecar — discarding stale cache")
+        os.remove(sidecar)
+        return nil
+    end
+    local ok, data = pcall(dofile, sidecar)
+    if not ok or type(data) ~= "table" or data.version ~= CACHE_VERSION then return nil end
+    local matches = {}
+    for _, m in ipairs(data.matches or {}) do
+        table.insert(matches, {
+            start        = m.start,
+            ["end"]      = m["end"],
+            matched_text = m.matched_text,
+            _converted   = m.converted,
+            _cat         = m.cat,
+            prev_text    = m.prev_text,   -- for pounds classifier
+            next_text    = m.next_text,   -- for pounds classifier
+            _unit        = m.unit,        -- for UK volume recalculation
+            _num         = m.num,         -- numeric value (nil for compound matches)
+            _factor      = m.factor,      -- US/default factor (nil for compound)
+            _offset      = m.offset,      -- offset (nil for compound)
+        })
+    end
+    return matches
+end
+
+-- Write the converted->original map immediately after a metric edition is applied.
+-- Write the `map` block: each converted string maps to its category and an
+-- ordered list of the original phrases that produced it, one entry per
+-- occurrence in document order. Keeping the list (rather than a single
+-- "first writer wins" original) lets two different originals that round to the
+-- same converted string each recover their own text by position (6.2).
+local function _write_reverse_map(fh, map)
+    fh:write("return {\n  version = " .. _REVERSE_VERSION .. ",\n  map = {\n")
+    for to, info in pairs(map) do
+        fh:write(string.format("    [%q] = { cat=%q, originals={", to, info.cat or ""))
+        for _, o in ipairs(info.originals or {}) do
+            fh:write(string.format("%q,", o))
+        end
+        fh:write("} },\n")
+    end
+    fh:write("  },\n")
+end
+
+local function _save_reverse_map(doc_path, map)
+    local fh = io.open(_reverse_path(doc_path), "w")
+    if not fh then return end
+    _write_reverse_map(fh, map)
+    fh:write("}\n")
+    fh:close()
+end
+
+-- Load the reverse map (and cached position scan, if present). Discards if
+-- the epub has been modified since the reverse sidecar was written.
+local function _load_reverse_data(doc_path)
+    local path = _reverse_path(doc_path)
+    local epub_attr = lfs and lfs.attributes(doc_path, "modification")
+    local rev_attr  = lfs and lfs.attributes(path, "modification")
+    if epub_attr and rev_attr and epub_attr > rev_attr then
+        os.remove(path)
+        return nil
+    end
+    local ok, data = pcall(dofile, path)
+    if not ok or type(data) ~= "table" or data.version ~= _REVERSE_VERSION then return nil end
+    return data
+end
+
+-- Rewrite the reverse sidecar with cached, fully-resolved match positions
+-- added, so future opens skip the one-time findAllText scan. Each cached entry
+-- already carries the specific original text for that position (resolved via
+-- document order), so the load path needs no further map lookup.
+local function _save_reverse_matches(doc_path, map, matches)
+    local fh = io.open(_reverse_path(doc_path), "w")
+    if not fh then return end
+    _write_reverse_map(fh, map)
+    fh:write("  matches = {\n")
+    for _, m in ipairs(matches) do
+        fh:write(string.format("    { start=%q, [\"end\"]=%q, original=%q, cat=%q },\n",
+            m.start, m["end"], m.original, m.cat or ""))
+    end
+    fh:write("  },\n}\n")
+    fh:close()
+end
+
+-- Read the book's declared language tag (lowercased), empty string if unknown.
+local function _get_book_lang(doc)
+    local ok, props = pcall(function() return doc:getDocumentProps() end)
+    if ok and type(props) == "table" then
+        return (props.language or props.lang or ""):lower()
+    end
+    return ""
+end
+
+-- True for en-*, or when language is unknown (empty → don't block).
+local function _is_english(doc)
+    local lang = _get_book_lang(doc)
+    return lang == "" or lang:match("^en") ~= nil
+end
+
+-- True specifically for en-GB / en-UK (UK Imperial volumes).
+local function _is_uk_book(doc)
+    local lang = _get_book_lang(doc)
+    return lang:match("^en%-gb") ~= nil or lang:match("^en%-uk") ~= nil
+end
+
+-- Human-readable label for the book's English-language variant, e.g.
+-- "UK English" / "US English". Returns nil for unknown/non-regional "en".
+local _LANG_LABELS = {
+    ["en-us"] = "US English",
+    ["en-gb"] = "UK English",
+    ["en-uk"] = "UK English",
+    ["en-ca"] = "Canadian English",
+    ["en-au"] = "Australian English",
+    ["en-nz"] = "New Zealand English",
+    ["en-ie"] = "Irish English",
+    ["en-za"] = "South African English",
+    ["en-in"] = "Indian English",
+}
+
+local function _lang_label(doc)
+    local lang = _get_book_lang(doc):match("^(en%-%a%a)")
+    return lang and _LANG_LABELS[lang]
+end
+
+-- Apply current settings to a raw match list (no findAllText needed).
+-- Returns a new filtered+adjusted list. Safe to call multiple times.
+local function _apply_settings_to_matches(matches, distinguish_pounds, use_uk_volumes)
+    local result = {}
+    for _, r in ipairs(matches) do
+        local keep = true
+
+        -- UK volume recalculation: if unit+num+factor stored, recompute with UK factor
+        if use_uk_volumes and r._unit and r._num and r._factor then
+            local uk = _UNIT_CONV_UK[r._unit]
+            if uk then
+                local disp = _display(r.matched_text)
+                local val  = r._num * uk.factor + uk.offset
+                r._converted = string.format("%s = %s %s", disp,
+                                              _fmt(_smart_round(val, r._num)), uk.target)
+            end
+        end
+
+        -- Pounds classifier: suppress when currency context clearly wins.
+        -- Only the spelled-out "pound(s)" is ambiguous with £ sterling — the
+        -- "lbs"/"lb" abbreviation is unambiguously weight (currency is never
+        -- abbreviated "lbs"), so it must never be suppressed by money context
+        -- (e.g. "one hundred lbs ... a month's wages" is still a weight).
+        if distinguish_pounds and r._cat == "weight" then
+            local mt = (r.matched_text or ""):lower()
+            if mt:find("pound") then
+                local window = ((r.prev_text or "") .. " " .. (r.next_text or "")):lower()
+                local cscore, wscore = 0, 0
+                for word in window:gmatch("%a+") do
+                    if _CURRENCY_WORDS[word] then cscore = cscore + 1 end
+                    if _WEIGHT_WORDS[word]   then wscore = wscore + 1 end
+                end
+                if cscore > wscore then keep = false end
+            end
+        end
+
+        if keep then table.insert(result, r) end
+    end
+    return result
+end
+
+-- ── Unit conversion table ────────────────────────────────────────────────────
+-- Unit string → conversion data ({factor, offset, target, cat} or {converter,…}).
+-- The fast scan looks units up here after anchoring on the unit word.
+local _UNIT_CONV = {
+    ["feet"]              = { factor=0.3048,   offset=0,       target="m",    cat="length"      },
+    ["foot"]              = { factor=0.3048,   offset=0,       target="m",    cat="length"      },
+    ["ft"]                = { factor=0.3048,   offset=0,       target="m",    cat="length"      },
+    ["inches"]            = { factor=2.54,     offset=0,       target="cm",   cat="length"      },
+    ["inch"]              = { factor=2.54,     offset=0,       target="cm",   cat="length"      },
+    ["miles"]             = { factor=1.60934,  offset=0,       target="km",   cat="length"      },
+    ["mile"]              = { factor=1.60934,  offset=0,       target="km",   cat="length"      },
+    ["mi"]                = { factor=1.60934,  offset=0,       target="km",   cat="length"      },
+    ["nautical miles"]    = { factor=1.852,    offset=0,       target="km",   cat="length"      },
+    ["nautical mile"]     = { factor=1.852,    offset=0,       target="km",   cat="length"      },
+    ["nmi"]               = { factor=1.852,    offset=0,       target="km",   cat="length"      },
+    ["yards"]             = { factor=0.9144,   offset=0,       target="m",    cat="length"      },
+    ["yard"]              = { factor=0.9144,   offset=0,       target="m",    cat="length"      },
+    ["yds"]               = { factor=0.9144,   offset=0,       target="m",    cat="length"      },
+    ["yd"]                = { factor=0.9144,   offset=0,       target="m",    cat="length"      },
+    ["fathoms"]           = { factor=1.8288,   offset=0,       target="m",    cat="length"      },
+    ["fathom"]            = { factor=1.8288,   offset=0,       target="m",    cat="length"      },
+    ["furlongs"]          = { factor=201.168,  offset=0,       target="m",    cat="length"      },
+    ["furlong"]           = { factor=201.168,  offset=0,       target="m",    cat="length"      },
+    ["pounds"]            = { factor=0.453592, offset=0,       target="kg",   cat="weight"      },
+    ["pound"]             = { factor=0.453592, offset=0,       target="kg",   cat="weight"      },
+    ["lbs"]               = { factor=0.453592, offset=0,       target="kg",   cat="weight"      },
+    ["lb"]                = { factor=0.453592, offset=0,       target="kg",   cat="weight"      },
+    ["ounces"]            = { factor=28.3495,  offset=0,       target="g",    cat="weight"      },
+    ["ounce"]             = { factor=28.3495,  offset=0,       target="g",    cat="weight"      },
+    ["oz"]                = { factor=28.3495,  offset=0,       target="g",    cat="weight"      },
+    ["stone"]             = { factor=6.35029,  offset=0,       target="kg",   cat="weight"      },
+    ["°F"]                = { factor=5/9,      offset=-32*5/9, target="°C",   cat="temperature" },
+    ["degrees Fahrenheit"]= { factor=5/9,      offset=-32*5/9, target="°C",   cat="temperature" },
+    ["degrees F"]         = { factor=5/9,      offset=-32*5/9, target="°C",   cat="temperature" },
+    ["gallons"]           = { factor=3.78541,  offset=0,       target="liters",    cat="volume"      },
+    ["gallon"]            = { factor=3.78541,  offset=0,       target="liters",    cat="volume"      },
+    ["gal"]               = { factor=3.78541,  offset=0,       target="liters",    cat="volume"      },
+    ["pints"]             = { factor=0.473176, offset=0,       target="liters",    cat="volume"      },
+    ["pint"]              = { factor=0.473176, offset=0,       target="liters",    cat="volume"      },
+    ["pt"]                = { factor=0.473176, offset=0,       target="liters",    cat="volume"      },
+    ["quarts"]            = { factor=0.946353, offset=0,       target="liters",    cat="volume"      },
+    ["quart"]             = { factor=0.946353, offset=0,       target="liters",    cat="volume"      },
+    ["qt"]                = { factor=0.946353, offset=0,       target="liters",    cat="volume"      },
+    ["fluid ounces"]      = { factor=29.5735,  offset=0,       target="mL",   cat="volume"      },
+    ["fluid ounce"]       = { factor=29.5735,  offset=0,       target="mL",   cat="volume"      },
+    ["fl oz"]             = { factor=29.5735,  offset=0,       target="mL",   cat="volume"      },
+    ["mph"]               = { factor=1.60934,  offset=0,       target="km/h", cat="speed"       },
+    ["miles per hour"]    = { factor=1.60934,  offset=0,       target="km/h", cat="speed"       },
+    ["miles an hour"]     = { factor=1.60934,  offset=0,       target="km/h", cat="speed"       },
+    ["knots"]             = { factor=1.852,    offset=0,       target="km/h", cat="speed"       },
+    ["knot"]              = { factor=1.852,    offset=0,       target="km/h", cat="speed"       },
+    ["kn"]                = { factor=1.852,    offset=0,       target="km/h", cat="speed"       },
+    ["acres"]             = { converter=_conv_acres_to_m2,     target="m2",   cat="area"        },
+    ["acre"]              = { converter=_conv_acres_to_m2,     target="m2",   cat="area"        },
+}
+
+-- Longest-first so "miles per hour" matches before "miles", etc.
+local _UNIT_SUFFIXES = {
+    "degrees Fahrenheit", "degrees F",
+    "nautical miles", "nautical mile",
+    "fluid ounces", "fluid ounce",
+    "miles per hour", "miles an hour",
+    "fl oz", "fathoms", "fathom", "furlongs", "furlong",
+    "gallons", "gallon", "quarts", "quart",
+    "knots", "knot", "pounds", "pound",
+    "ounces", "ounce", "pints", "pint",
+    "acres", "acre", "stone", "yards", "yard",
+    "miles", "mile", "feet", "foot", "inches", "inch",
+    "yds", "yd", "lbs", "lb", "nmi", "gal",
+    "mph", "kn", "ft", "mi", "oz", "pt", "qt", "°F",
+}
+
+local function _identify_unit(text)
+    local s = text:lower()
+    for _, u in ipairs(_UNIT_SUFFIXES) do
+        if s:sub(-#u) == u:lower() then return u end
+    end
+end
+
+-- Extract measurement number from the tail of prev_text.
+-- Tries the last 1-4 words as a phrase to handle "three hundred", "a dozen", etc.
+local function _parse_prev_num(prev)
+    if not prev or prev == "" then return nil end
+    local s = prev:lower():gsub("%-+%s*$", ""):match("^(.-)%s*$") or ""
+    if s == "" then return nil end
+    local words = {}
+    for w in s:gmatch("%S+") do table.insert(words, w) end
+    if #words == 0 then return nil end
+    for i = #words, math.max(1, #words - 3), -1 do
+        local n = _parse_num(table.concat(words, " ", i))
+        if n then return n end
+    end
+    return nil
+end
+
+-- Range converter: identifies unit from matched_text tail, splits on and/or/to.
+local function _range_conv_unit(text)
+    local unit = _identify_unit(text)
+    local info = unit and _UNIT_CONV[unit]
+    if not info or not info.factor then return nil end
+    local s = _display(text):lower()
+    for _, sep in ipairs({" and ", " or ", " to "}) do
+        local p = s:find(sep, 1, true)
+        if p then
+            local n1 = _parse_num(s:sub(1, p - 1))
+            local n2 = _parse_num(s:sub(p + #sep))
+            if n1 and n2 then
+                -- "four and a half feet" — separator is "and", second number is a
+                -- fraction (0 < n2 < 1): treat as addition, not a range.
+                -- "four and five feet" still has n2 ≥ 1 → handled as range below.
+                if sep == " and " and n1 >= 1 and n2 > 0 and n2 < 1 then
+                    local total  = n1 + n2
+                    local result = total * info.factor + info.offset
+                    return _fmt_dist(_smart_round(result, total), info.target)
+                end
+                -- Compound number addition: "a hundred and fifty" = 150.
+                -- When n1 is a round hundred/thousand and n2 < n1, it's addition.
+                if sep == " and " and n2 > 0 and n2 < n1 then
+                    if (n1 >= 100 and n1 % 100 == 0) or (n1 >= 1000 and n1 % 1000 == 0) then
+                        local total = n1 + n2
+                        local result = total * info.factor + info.offset
+                        return _fmt_dist(_smart_round(result, total), info.target)
+                    end
+                end
+                -- Shared-scale correction: "two or three hundred yards" means
+                -- 200–300 not 2–300. When n1 is a small integer and n2 is a
+                -- round hundred/thousand whose leading digit exceeds n1, scale up.
+                if n1 >= 1 and n1 < 10 then
+                    if n2 >= 1000 and n2 % 1000 == 0 and n1 < math.floor(n2/1000) then
+                        n1 = n1 * 1000
+                    elseif n2 >= 100 and n2 % 100 == 0 and n1 < math.floor(n2/100) then
+                        n1 = n1 * 100
+                    end
+                end
+                local r1 = n1 * info.factor + info.offset
+                local r2 = n2 * info.factor + info.offset
+                if r1 > r2 then r1, r2 = r2, r1 end
+                return _fmt_dist_range(_smart_round(r1, nil, true),
+                                        _smart_round(r2, nil, true), info.target)
+            end
+        end
+    end
+    return nil
+end
+
+-- ~24 patterns. Compound entries first (win start-position dedup).
+-- broad=true / range_broad=true: unit identified from matched_text at scan time.
+-- kw = plain strings: ANY must appear in book text or pattern is skipped.
+-- kw_pat = Lua pattern: checked in addition to kw (OR logic).
+-- Safety guarantee: if a keyword is absent, the pattern CANNOT match.
+-- "five-hundred-and-eleven-foot" → 511 feet → metric.
+-- Defined here (after _UNIT_CONV) so the table lookup is in scope.
+local function _conv_hundred_and(text)
+    local s = _display(text):lower()
+    local h_word, rem_and_unit = s:match("^(%a+)%-hundred%-and%-(.+)$")
+    if not h_word or not rem_and_unit then return nil end
+    local hundreds = _parse_num(h_word)
+    if not hundreds then return nil end
+    local rem_part, unit_word = rem_and_unit:match("^(.-)%-(%a+)$")
+    if not rem_part or not unit_word then return nil end
+    local remainder = _parse_num(rem_part)
+    if not remainder then return nil end
+    local total = hundreds * 100 + remainder
+    local info = _UNIT_CONV[unit_word]
+    if not info or not info.factor then return nil end
+    local result = total * info.factor + (info.offset or 0)
+    return _fmt_dist(_smart_round(result, total), info.target)
+end
+
+-- ── Scan ──────────────────────────────────────────────────────────────────────
+-- The only scan path: do ONE findAllText over the unit alternation, then
+-- classify each unit hit in Lua from the number that precedes it. ~40x faster
+-- than per-pattern passes (measured: Lonesome Dove 108s -> 2.5s) because the cost
+-- is the per-call document walk, not the matching. Compounds (feet+inches,
+-- pounds+ounces, "6 foot 4", "nine stone four"), ranges, fractions, and prime/°F
+-- notation are all handled (the last two via dedicated literal passes below).
+-- The unit alternation is built from the FULL unit list (longest-first). "°F" is
+-- handled separately (a word boundary around "°F" doesn't behave); bare "in" is
+-- intentionally not in _UNIT_SUFFIXES — too easily the English preposition.
+local _FAST_UNIT_PAT
+do
+    local alts = {}
+    for _, u in ipairs(_UNIT_SUFFIXES) do
+        if u ~= "°F" then alts[#alts + 1] = u end
+    end
+    -- "°F" (the degree-symbol form) is deliberately NOT anchored here: a leading
+    -- dash/minus and the range forms can't be read reliably from prev_text, so
+    -- °F is handled entirely by dedicated literal passes (_TEMP_PATS) instead.
+    _FAST_UNIT_PAT = "\\b(" .. table.concat(alts, "|") .. ")\\b"
+end
+
+-- Is this token part of a number phrase? (digit, number-word, or connector word
+-- like "a"/"and" that glue multi-word numbers such as "a hundred and fifty").
+local _NUM_CONNECTOR = { a = true, an = true, ["and"] = true, half = true, quarter = true }
+local function _is_number_word(w)
+    w = w:lower():gsub("[%.,;:%)]+$", ""):gsub("^[%(]+", "")
+    if w == "" then return false end
+    if w:match("%d") then return true end
+    if _NUM_CONNECTOR[w] then return true end
+    return _parse_num(w) ~= nil
+end
+
+-- The number phrase immediately before the unit, and how many words it spans.
+-- Walks back ONLY over consecutive number words, so "stood 5 feet 3" yields just
+-- "3" (1 word) — not "5 feet 3" — and "a hundred" yields 2 words.
+local function _prev_num_words(prev)
+    if not prev or prev == "" then return nil end
+    local s = prev:gsub("[%-%s]+$", ""):match("^(.-)%s*$") or ""
+    -- Fractional "<frac> of a/an [unit]" form ("two thirds of a mile"): the
+    -- word-walk below can't cross "of", so handle it up front. The fraction is
+    -- the word(s) just before "of a/an"; _parse_num knows these (e.g. prefix
+    -- "two thirds of a" = 2/3). Span includes the trailing "of a" (2 words).
+    local before_of = s:match("^(.-)%s+of%s+an?$")
+    if before_of and before_of ~= "" then
+        local fwords = {}
+        for w in before_of:gmatch("%S+") do fwords[#fwords + 1] = w end
+        for span = math.min(3, #fwords), 1, -1 do
+            local n = _parse_num(table.concat(fwords, " ", #fwords - span + 1))
+            if n and n < 1 then return n, span + 2 end
+        end
+    end
+    -- Additive "N and a/<frac> [unit]" form ("four and a half feet",
+    -- "three and a third feet"): value = whole N + fraction. Returned with a
+    -- third result `true` so the caller pins the conversion (matched_text's own
+    -- _parse_num would prefix-match just N).
+    local int_part, frac_part = s:match("([%w%-]+)%s+and%s+(.+)$")
+    if int_part and frac_part then
+        local iv, fv = _parse_num(int_part), _parse_num(frac_part)
+        if iv and fv and iv >= 1 and iv == math.floor(iv) and fv > 0 and fv < 1 then
+            local nw = 0
+            for _ in (int_part .. " and " .. frac_part):gmatch("%S+") do nw = nw + 1 end
+            return iv + fv, nw, true
+        end
+    end
+    local words = {}
+    for w in s:gmatch("%S+") do words[#words + 1] = w end
+    if #words == 0 or not _is_number_word(words[#words]) then return nil end
+    local first = #words
+    while first > 1 and (#words - first) < 4 and _is_number_word(words[first - 1]) do
+        first = first - 1
+    end
+    local n = _parse_num(table.concat(words, " ", first))
+    if n then return n, #words - first + 1 end
+    n = _parse_num(words[#words])
+    if n then return n, 1 end
+    return nil
+end
+
+-- Parse a leading "<number> [inches|ounces]" or bare "<number>" from next_text
+-- (the tail of a compound). Returns (value, "inch"|"oz"|"bare") or nil.
+local function _lead_compound(next_text)
+    -- Strip leading spaces/commas/hyphens AND a stray period (from an abbreviated
+    -- "ft." before the inches number), so the second number is found.
+    local s = (next_text or ""):gsub("^[%s,%.%-]+", "")
+    local tok = s:match("^([%w][%w%.,]*)")
+    if not tok then return nil end
+    local n = _parse_num((tok:gsub("[%.,]+$", "")))
+    if not n then return nil end
+    local rest = s:sub(#tok + 1):gsub("^[%s%-]+", "")
+    -- A spelled-out "inch(es)"/"ounce(s)" marks a compound tail handled by the
+    -- backward merge. The bare "in"/"in." abbreviation is reported separately
+    -- ("in_abbr") so the caller can accept it ONLY right after a feet/ft unit —
+    -- the one context where "in" reliably means inches, not the preposition.
+    if rest:match("^inch") then return n, "inch" end
+    if rest:match("^ounce") then return n, "oz" end
+    if rest:match("^in%f[%A]") or rest == "in" then
+        -- "clear" = "in" is the final token ("in." / "in," / "in"<end>), so it's
+        -- safe to draw under the highlight. "in <word>" (a preposition like "in
+        -- his socks") still counts as inches but its "in" is NOT highlighted.
+        local clear = rest:match("^in[%.,]") ~= nil or rest:match("^in%s*$") ~= nil
+        return n, "in_abbr", clear
+    end
+    return n, "bare"
+end
+
+-- Build a "phrase = converted" string for a known numeric value `val`. Used
+-- when matched_text's own _parse_num would disagree (e.g. additive "four and a
+-- half" prefix-parses as just 4), so the cached _converted carries the right value.
+local function _value_converted(disp, val, conv, unit)
+    local rstr
+    if conv.converter then
+        rstr = conv.converter(_fmt(val) .. " " .. unit)
+    elseif conv.factor then
+        rstr = _fmt_dist(_smart_round(val * conv.factor + (conv.offset or 0), val), conv.target)
+    end
+    return rstr and (disp .. " = " .. rstr) or nil
+end
+
+-- Range "N <conn> M [unit]" (unit appears once, e.g. "five to ten miles",
+-- "1 to 30 miles", "twenty or thirty miles"): detect from the lowercased
+-- prev_text. Returns (n1, n2, span-from-N-to-unit) or nil. "and" only ranges
+-- when M >= 1 — "N and a half" is the additive form handled in _prev_num_words.
+local function _detect_back_range(prev, unit)
+    for _, conn in ipairs({" to ", " or ", " and "}) do
+        local before, mtok = prev:match("^(.-)" .. conn .. "([%w%-][%w%-%.,°]*)%s*$")
+        if before and mtok then
+            local n2 = _parse_num((mtok:gsub("[%.,]+$", "")))
+            local n1, n1span = _prev_num_words(before)
+            local extra = 0
+            -- "N unit <conn> M unit" form: N is followed by the unit word, so
+            -- strip it before reading the first number ("5 miles to 10 miles").
+            if not n1 and unit and unit ~= "" then
+                local ue = unit:gsub("[%-%.%(%)%[%]%+%*%?%^%$%%]", "%%%0")
+                local stripped = before:gsub("%s+" .. ue .. "%s*$", "")
+                if stripped ~= before then
+                    n1, n1span = _prev_num_words(stripped)
+                    extra = 1
+                end
+            end
+            -- Any numbers qualify (incl. 0 / negative, e.g. "−10°F and 0°F").
+            -- The additive "N and a half" form is excluded structurally: its
+            -- connector is followed by two tokens ("a half"), not the single
+            -- token mtok matches. _range_conv_unit sorts out range vs additive.
+            if n1 and n2 then
+                return n1, n2, (n1span or 1) + 2 + extra
+            end
+        end
+    end
+    return nil
+end
+
+-- Is this unit hit the FIRST unit of an "N unit <conn> M unit" range? (Detected
+-- from next_text starting "<conn> M <same-unit>".) If so it's skipped — the
+-- second unit hit emits the whole range, avoiding a duplicate "15°F"/"5 miles".
+local function _is_range_start(nx, unit)
+    if not unit or unit == "" then return false end
+    local rest = nx:match("^%s*to%s+(.+)$") or nx:match("^%s*and%s+(.+)$")
+              or nx:match("^%s*or%s+(.+)$")
+    if not rest then return false end
+    local mtok = rest:match("^([%w%-%.,°]+)")
+    if not mtok or not _parse_num((mtok:gsub("[%.,]+$", ""))) then return false end
+    if unit:find("°", 1, true) then        -- °F: unit fused into the number
+        return mtok:find("°", 1, true) ~= nil
+    end
+    local after = rest:sub(#mtok + 1):gsub("^%s+", "")
+    local u = after:match("^(%a+)")
+    return u ~= nil and _identify_unit(u) == unit
+end
+
+-- Prime/apostrophe notation (6′8″, 3″, 5'11", 4′ × 2″) isn't anchored on a unit
+-- word, so these run as their own findAllText passes (longest-first so the
+-- feet+inches form claims "6′8″" before the bare feet/inches forms).
+local _PRIME_PATS = {
+    { pat = _ND.."(".._PRIME.."|')[ ]*".._TIMES.."[ ]*[0-9]+(".._DPRIME.."|\")",
+      converter = _conv_dim_to_m_cm, target = "m×cm", cat = "length" },
+    { pat = _ND.."(".._PRIME.."|')[0-9]+(".._DPRIME.."|\")",
+      converter = _conv_prime_to_m, target = "m", cat = "length" },
+    { pat = _ND.."(".._PRIME.."|')",   factor = 0.3048, offset = 0, target = "m",  cat = "length" },
+    { pat = _ND.."(".._DPRIME.."|\")", factor = 2.54,   offset = 0, target = "cm", cat = "length" },
+}
+
+-- All °F (degree-symbol form) handling runs as dedicated literal passes, like
+-- the prime passes — the unit-anchored stage can't reliably read a leading dash
+-- from prev_text (it would drop the sign, or emit the two endpoints as separate
+-- singles), so °F is intentionally absent from _FAST_UNIT_PAT. Longest-first:
+-- both-°F range, then trailing-°F range, then the bare value. Each number takes
+-- an optional dash prefix covering "−10°F"/"–10°F"/"—10°F"/"-10°F".
+local _DEGF = "\194\176F"   -- °F  (U+00B0 'F')
+local _TEMP_SIGN = "(-|" .. _ENDASH .. "|" .. _EMDASH .. "|" .. _UMINUS .. ")?"
+local _TNUM = _TEMP_SIGN .. "[0-9][0-9.,]*"
+local _TEMP_CONV = _range_conv(5/9, -32*5/9, "°C")
+local _TEMP_PATS = {
+    -- "−10°F and 0°F" / "15°F to 75°F"
+    { pat = _TNUM .. "[ ]*" .. _DEGF .. "[ ]+(to|and|or)[ ]+" .. _TNUM .. "[ ]*" .. _DEGF,
+      converter = _TEMP_CONV, target = "°C", cat = "temperature" },
+    -- "15 to 75°F" (only the trailing endpoint carries the symbol)
+    { pat = _TNUM .. "[ ]+(to|and|or)[ ]+" .. _TNUM .. "[ ]*" .. _DEGF,
+      converter = _TEMP_CONV, target = "°C", cat = "temperature" },
+    -- "98°F" / "−10°F"
+    { pat = _TNUM .. "[ ]*" .. _DEGF,
+      factor = 5/9, offset = -32*5/9, target = "°C", cat = "temperature" },
+}
+
+-- Does prev_text end with "<unit> [,/and] <number>"? Confirms a compound tail
+-- even with a comma or "and" connector ("two pounds, four ounces",
+-- "5 feet and 3 inches"), not just a plain space.
+local function _compound_tail(p, u1, u2)
+    return p:match(u1 .. "[,%s]+%S+%s*$")        or p:match(u2 .. "[,%s]+%S+%s*$")
+        or p:match(u1 .. "[,%s]+and%s+%S+%s*$")  or p:match(u2 .. "[,%s]+and%s+%S+%s*$")
+end
+
+local _INCH_UNITS  = { inches = true, inch = true, ["in"] = true }
+local _OZ_UNITS    = { ounces = true, ounce = true, oz = true }
+
+local function _fast_scan_matches(doc, cat_enabled)
+    local ok, hits = pcall(function()
+        return doc:findAllText(_FAST_UNIT_PAT, true, 8, 20000, true)
+    end)
+    if not ok or not hits then return {} end
+
+    local function text_of(a, b)
+        local okt, mt = pcall(function() return doc:getTextFromXPointers(a, b) end)
+        if okt and mt then return (mt:gsub("^%s+", ""):gsub("%s+$", "")) end
+        return nil
+    end
+    -- Extend a start xpointer back over the number, validating by text so it
+    -- crosses hyphens (which getPrevVisibleWordStart treats as word breaks, so
+    -- "six-foot-four" would otherwise stop the underline at "-foot-"). Returns
+    -- the position where the text begins with `num`; falls back to the plain
+    -- word-count position if no exact text match is found.
+    local function extend_start(unit_start, num, span)
+        local cand, fallback = unit_start, nil
+        for i = 1, 6 do
+            local okx, nxt = pcall(function() return doc:getPrevVisibleWordStart(cand) end)
+            if not okx or not nxt or nxt == cand then break end
+            cand = nxt
+            if i == span then fallback = cand end
+            local t = text_of(cand, unit_start)
+            local lead = t and t:match("^([%w][%w%.,%-]*)")
+            if lead and _parse_num(lead) == num then return cand end
+        end
+        return fallback or cand
+    end
+    -- Extend an end xpointer forward to include the second number of a compound
+    -- ("six-foot-|four", "6 foot |4"). With include_in, also pull a trailing
+    -- "in"/"in." inch abbreviation under the highlight ("five ft. seven |in.").
+    -- Returns the original end if the second number isn't found.
+    local function extend_end(unit_end, second, include_in)
+        local cand = unit_end
+        for _ = 1, 4 do
+            local okx, nxt = pcall(function() return doc:getNextVisibleWordEnd(cand) end)
+            if not okx or not nxt or nxt == cand then break end
+            cand = nxt
+            local t = text_of(unit_end, cand)
+            local tail = t and t:gsub("[%s%-]+$", ""):match("([%w][%w%.,]*)$")
+            if tail and _parse_num(tail) == second then
+                if include_in then
+                    local okn, after = pcall(function() return doc:getNextVisibleWordEnd(cand) end)
+                    if okn and after and after ~= cand then
+                        local w = text_of(cand, after)
+                        if w and w:match("(%a+)") and w:match("(%a+)"):lower() == "in" then
+                            return after
+                        end
+                    end
+                end
+                return cand
+            end
+        end
+        return unit_end
+    end
+    -- The second number of a compound — read from the text BETWEEN the first
+    -- match's end and the unit hit (exactly the inches/ounces number, robust to
+    -- a fused "4-oz" token that a prev_text word-walk mis-reads as "1-lb 4"→1).
+    -- Falls back to the single word just before the unit.
+    local function tail_num(prev_end, unit_start)
+        local between = text_of(prev_end, unit_start)
+        if between then
+            local n = _parse_num((between:gsub("^[%s,]+", "")))
+            if n then return n end
+        end
+        local okps, ps = pcall(function() return doc:getPrevVisibleWordStart(unit_start) end)
+        if okps and ps then
+            local bt = text_of(ps, unit_start)
+            if bt then return _parse_num(bt) end
+        end
+        return nil
+    end
+
+    local out, seen_end = {}, {}
+    for _, h in ipairs(hits) do
+        local unit = _identify_unit(h.matched_text)
+        local conv = unit and _UNIT_CONV[unit]
+        if conv and cat_enabled[conv.cat] ~= false and not seen_end[h["end"]]
+           and not _is_range_start((h.next_text or ""):lower(), (unit or ""):lower()) then
+            local p = (h.prev_text or ""):lower()
+            local ulow = (unit or ""):lower()
+
+            -- Range "N <conn> M unit" — reuse the classic _range_conv_unit for
+            -- the actual conversion. No _unit/_num is set, so the sidecar keeps
+            -- the range string verbatim (UK-volume recalc would otherwise
+            -- collapse it to a single value).
+            local range_done = false
+            local rn1, _, rspan = _detect_back_range(p, ulow)
+            if rn1 then
+                local rstart = extend_start(h.start, rn1, rspan)
+                local mt = text_of(rstart, h["end"])
+                -- Restore a dropped leading minus: extend_start can land AFTER a
+                -- U+2212/"−" it couldn't text-validate, so mt would read "10°F"
+                -- and _range_conv_unit would flip the negative first endpoint.
+                if mt and rn1 < 0 then
+                    local lead = mt:gsub("^%s+", "")
+                    if lead:sub(1, 1) ~= "-" and lead:sub(1, #_UMINUS) ~= _UMINUS then
+                        mt = _UMINUS .. lead
+                    end
+                end
+                local rconv = mt and _range_conv_unit(mt)
+                if rconv then
+                    out[#out + 1] = {
+                        start = rstart, ["end"] = h["end"],
+                        matched_text = mt, prev_text = h.prev_text, next_text = h.next_text,
+                        _search = conv, _cat = conv.cat,
+                        _converted = _display(mt) .. " = " .. rconv,
+                    }
+                    seen_end[h["end"]] = true
+                    range_done = true
+                end
+            end
+
+            local prevm = out[#out]
+            local merged = false
+
+            -- Compound TAIL: inches/ounces right after a feet/pounds match —
+            -- merge into the previously emitted match instead of standing alone.
+            if not range_done and _INCH_UNITS[unit] and prevm and not prevm._num2
+               and _compound_tail(p, "feet", "foot") then
+                local m = tail_num(prevm["end"], h.start) or _prev_num_words(h.prev_text)
+                if m then
+                    prevm._num    = prevm._num or _parse_num(prevm.matched_text)
+                    prevm._num2   = m
+                    prevm._search = _UNIT_CONV["feet"]
+                    prevm["end"]  = h["end"]
+                    prevm.matched_text = text_of(prevm.start, h["end"]) or prevm.matched_text
+                    prevm.next_text = h.next_text
+                    merged = true
+                end
+            elseif not range_done and _OZ_UNITS[unit] and prevm and not prevm._num_oz
+               and _compound_tail(p, "pounds?", "lbs?") then
+                local m = tail_num(prevm["end"], h.start) or _prev_num_words(h.prev_text)
+                if m then
+                    prevm._num    = prevm._num or _parse_num(prevm.matched_text)
+                    prevm._num_oz = m
+                    prevm._search = _UNIT_CONV["pounds"]
+                    prevm["end"]  = h["end"]
+                    prevm.matched_text = text_of(prevm.start, h["end"]) or prevm.matched_text
+                    prevm.next_text = h.next_text
+                    merged = true
+                end
+            -- Dimension "feet by inches": "four feet by two inches" → ONE unit
+            -- ("1.2 m by 5.1 cm"). Unlike a feet+inches height (summed), this is
+            -- two independent measurements, so pin _converted via _conv_ft_by_in
+            -- rather than the _num/_num2 height path.
+            elseif not range_done and _INCH_UNITS[unit] and prevm
+               and (prevm._unit == "feet" or prevm._unit == "foot")
+               and not prevm._num2 and not prevm._converted
+               and p:match("f[eo]?[eo]?t%s+by%s+%S+%s*$") then
+                local mt = text_of(prevm.start, h["end"])
+                local conv_str = mt and _conv_ft_by_in(mt)
+                if conv_str then
+                    prevm["end"]       = h["end"]
+                    prevm.matched_text = mt
+                    prevm.next_text    = h.next_text
+                    prevm._converted   = _display(mt) .. " = " .. conv_str
+                    prevm._unit        = nil  -- block single-unit recompute
+                    prevm._search      = conv
+                    merged = true
+                end
+            end
+            if merged then seen_end[h["end"]] = true end
+
+            if not range_done and not merged then
+                local num, span = _prev_num_words(h.prev_text)
+                if num then
+                    local rec = {
+                        start = extend_start(h.start, num, span), ["end"] = h["end"],
+                        prev_text = h.prev_text, next_text = h.next_text,
+                        _search = conv, _cat = conv.cat, _unit = unit,
+                    }
+                    -- Forward compound: "6 foot 4" (height) / "nine stone four".
+                    local second, kind, clear_in = _lead_compound(h.next_text)
+                    if second and (kind == "bare" or kind == "in_abbr")
+                       and (unit == "foot" or unit == "feet") then
+                        -- "six foot four" / "five ft. seven in." → feet+inches height.
+                        rec._num, rec._num2 = num, second
+                        rec["end"] = extend_end(h["end"], second, kind == "in_abbr" and clear_in)
+                    elseif second and kind == "in_abbr" and unit == "ft" then
+                        -- "5 ft 7 in" — accept the abbreviation only with an
+                        -- explicit "in" tail; a bare "5 ft 200" is NOT a height.
+                        rec._num, rec._num2 = num, second
+                        rec["end"] = extend_end(h["end"], second, clear_in)
+                    elseif second and kind == "bare" and unit == "stone" then
+                        rec._num, rec._num_stone2 = num, second
+                        rec["end"] = extend_end(h["end"], second)
+                    end
+                    rec.matched_text = text_of(rec.start, rec["end"])
+                        or (_fmt(num) .. " " .. h.matched_text)
+                    -- If matched_text's own _parse_num would disagree with the
+                    -- value we computed (e.g. additive "four and a half" parses
+                    -- as just 4), pin the conversion to the right value.
+                    if not rec._num2 and not rec._num_stone2 and not rec._num_oz
+                       and _parse_num(rec.matched_text) ~= num then
+                        rec._converted = _value_converted(_display(rec.matched_text), num, conv, unit)
+                    end
+                    seen_end[rec["end"]] = true
+                    out[#out + 1] = rec
+                end
+            end
+        end
+    end
+
+    -- Prime notation — skip these extra passes ONLY when we can positively
+    -- confirm the book has no prime/apostrophe-inch notation. The gate text is
+    -- read via getPageXPointer, which can fail in the forked subprocess (paging
+    -- not resolved) even though findAllText works fine — so if bt is
+    -- unavailable, run the passes rather than silently dropping primes.
+    local ok_t, bt = pcall(function()
+        return doc:getTextFromXPointers(doc:getPageXPointer(1),
+                                        doc:getPageXPointer(doc:getPageCount()))
+    end)
+    local maybe_primes = (not ok_t) or (not bt)
+        or bt:find(_PRIME, 1, true) or bt:find(_DPRIME, 1, true)
+        or bt:find("%d'") or bt:find('%d"')
+    -- Literal-match passes (primes, °F): run longest-first, deduped by start AND
+    -- end xpointer so a range claims its span before the single-value pass can
+    -- re-match an endpoint. seen_end is shared with the main unit loop above.
+    local seen_start = {}
+    local function run_passes(pats)
+        for _, e in ipairs(pats) do
+            local okp, pres = pcall(function()
+                return doc:findAllText(e.pat, true, 5, 2000, true)
+            end)
+            if okp and pres then
+                for _, r in ipairs(pres) do
+                    if not seen_end[r["end"]] then
+                        if not seen_start[r.start] then
+                            seen_start[r.start] = true
+                            seen_end[r["end"]] = true
+                            r._search = e
+                            r._cat = e.cat
+                            out[#out + 1] = r
+                        else
+                            seen_end[r["end"]] = true  -- block tail sub-matches
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    if maybe_primes then run_passes(_PRIME_PATS) end
+
+    local has_degf = (cat_enabled["temperature"] ~= false)
+        and ((not ok_t) or (not bt) or bt:find(_DEGF, 1, true) ~= nil)
+    if has_degf then run_passes(_TEMP_PATS) end
+
+    return out
+end
+
+-- ── Init ──────────────────────────────────────────────────────────────────────
+
+function FootFree:init()
+    self._cat_enabled = {}
+    for _, cat in ipairs({"length", "weight", "temperature", "volume", "speed", "area"}) do
+        local v = G_reader_settings:readSetting("footcream_cat_" .. cat)
+        self._cat_enabled[cat] = (v ~= false)
+    end
+    self._auto_scan         = G_reader_settings:readSetting("footcream_auto_scan") == true
+    -- Developer mode (hidden from users via a marker file). Drives the scan
+    -- report; future dev-only tooling can gate on self._dev_mode too.
+    self._dev_mode          = _dev_mode_enabled()
+    self._debug_report      = self._dev_mode
+    self._scanned           = false  -- set true once a scan/sidecar-load completes (6.1)
+    self._tap_mode          = G_reader_settings:readSetting("footcream_tap_mode") or 1
+    -- _enabled is the user's own on/off preference, persisted so it survives
+    -- restarts. It is independent of the conversion mode: switching modes (or
+    -- reverting/removing a book's data) must never silently flip it. The
+    -- mode-1 highlight loop is separately guarded against drawing on
+    -- already-converted (mode 3) text in _drawHighlights, so _enabled no
+    -- longer needs to be force-cleared in mode 3.
+    local saved_enabled = G_reader_settings:readSetting("footcream_enabled")
+    self._enabled = (saved_enabled ~= false)
+    -- Distinguish pounds (weight vs £) and UK volumes are always on — their
+    -- menu toggles were removed to slim the plugin down.
+    self._distinguish_pounds= true
+    self._uk_volumes        = true
+    -- Smart Rounding of Converted Units: default ON (nil treated as true)
+    self._smart_rounding    = _smart_rounding_enabled()
+    -- Show unit icon in tooltip: default ON (nil treated as true)
+    local show_icon = G_reader_settings:readSetting("footcream_show_icon")
+    self._show_icon         = (show_icon ~= false)
+    -- Underline styling: solid/wavy, 10/20/30/40% grey, Thin/Thick (1px/2px)
+    self._underline_style   = G_reader_settings:readSetting("footcream_underline_style") or "solid"
+    if self._underline_style == "dotted" then self._underline_style = "solid" end
+    self._underline_color   = G_reader_settings:readSetting("footcream_underline_color") or 20
+    -- Migrate stale 5%/25% (removed/renumbered options) to the nearest new value.
+    if self._underline_color == 5 then self._underline_color = 10
+    elseif self._underline_color == 25 then self._underline_color = 20
+    elseif not ({ [10]=true, [20]=true, [30]=true, [40]=true })[self._underline_color] then
+        self._underline_color = 20
+    end
+    self._underline_width   = G_reader_settings:readSetting("footcream_underline_width") or 2
+    -- Migrate stale 3px/4px (removed options) to "Thick" (2).
+    if self._underline_width == 3 or self._underline_width == 4 then
+        self._underline_width = 2
+    end
+    -- Show original units (tooltip) for converted values in "Convert directly
+    -- in the text" mode: default OFF.
+    self._show_original     = G_reader_settings:readSetting("footcream_show_original") == true
+    self.ui.menu:registerToMainMenu(self)
+end
+
+-- ── Scan ─────────────────────────────────────────────────────────────────────
+
+function FootFree:onReaderReady()
+    local doc = self.ui.document
+    if not doc or not doc.file then return end
+
+    -- ── Probe removed after API investigation ─────────────────────────────────
+    do
+        local fh = io.open("/mnt/macos/debug/api_probe.txt", "w")
+        if fh then
+            fh:write("probe removed\n")
+
+
+            fh:close()
+        end
+    end
+    -- ── End API probe ──────────────────────────────────────────────────────────
+
+    -- Wrap paintTo and tap up front so the view is ready whenever highlights arrive.
+    if not self._paintTo_wrapped then
+        local orig   = self.view.paintTo
+        local plugin = self
+        self.view.paintTo = function(view_self, bb, x, y)
+            -- Detect page turns so the background scan can pause gracefully
+            local cur = doc:getCurrentPage()
+            if plugin._scan_last_page and plugin._scan_last_page ~= cur then
+                plugin._page_just_turned = true
+            end
+            plugin._scan_last_page = cur
+            orig(view_self, bb, x, y)
+            local ok, err = pcall(function() plugin:_drawHighlights(bb) end)
+            if not ok then logger.warn("FootFree: draw error: " .. tostring(err)) end
+        end
+        self._paintTo_wrapped = true
+    end
+
+    local hl = self.ui.highlight
+    if hl and not self._tap_wrapped then
+        local orig_tap = hl.onTap
+        local plugin   = self
+        hl.onTap = function(hl_self, _, ges)
+            if ges and plugin:_handleTap(ges) then return true end
+            if orig_tap then return orig_tap(hl_self, _, ges) end
+        end
+        self._tap_wrapped = true
+    end
+
+    -- ── Recover from inconsistent leftover states before loading anything ────
+    -- An "apply in progress" marker means a previous conversion was interrupted
+    -- (process killed mid-write), so the book may be half-converted. Restore
+    -- the original text from the saved backup before doing anything else.
+    local marker = _patches_path(doc.file) .. ".inprogress"
+    local mfh = io.open(marker)
+    if mfh then
+        mfh:close()
+        logger.warn("FootFree: interrupted apply detected — auto-reverting")
+        UIManager:scheduleIn(0.2, function() self:_revertMetricEdition(doc) end)
+        return
+    end
+    -- Book is converted (mode-3 patches present) but the active mode is not
+    -- "convert directly" — an inconsistent leftover (e.g. mode changed while a
+    -- different book was open). Imperial-position highlights would render on
+    -- top of metric text; restore the original text for consistency.
+    if _is_metric_mode(doc.file) and self._tap_mode ~= 3 then
+        logger.info("FootFree: converted book opened in highlight mode — reverting for consistency")
+        UIManager:scheduleIn(0.2, function() self:_revertMetricEdition(doc) end)
+        return
+    end
+
+    -- ── Load sidecar or wait for user to trigger scan ─────────────────────────
+    logger.info(string.format(
+        "FootFree: onReaderReady — tap_mode=%d enabled=%s metric_mode=%s lang=%s",
+        self._tap_mode, tostring(self._enabled),
+        tostring(_is_metric_mode(doc.file)), _get_book_lang(doc)))
+    local raw = _load_sidecar_raw(doc.file)
+    if raw then
+        logger.info("FootFree: loaded " .. #raw .. " match(es) from sidecar")
+        local use_uk = self._uk_volumes and _is_uk_book(doc)
+        local applied = _apply_settings_to_matches(raw, self._distinguish_pounds, use_uk)
+        self._all_matches   = #applied > 0 and applied or nil
+        self._current_boxes = {}
+        -- The book has been scanned (even if it yielded zero matches). This
+        -- distinguishes "scanned, no imperial units" from "never scanned" so
+        -- the status line and convert-guard can tell them apart (6.1).
+        self._scanned       = true
+    else
+        self._all_matches   = nil
+        self._current_boxes = {}
+        self._scanned       = false
+        if self._auto_scan and _is_english(doc) then
+            self:_startScan(doc)
+        end
+    end
+
+    self:_loadReverseMatches(doc)
+end
+
+-- ── Filter + save (called after async scan completes) ─────────────────────────
+
+local function _write_book_report(doc, filtered)
+    os.execute("mkdir -p /mnt/macos/debug/book-scans 2>/dev/null")
+    local title
+    local ok_p, props = pcall(function() return doc:getProps() end)
+    if ok_p and props and type(props.title) == "string" and props.title ~= "" then
+        title = props.title
+    else
+        title = doc.file:match("([^/]+)%.%a+$") or "unknown"
+    end
+    local safe = title:gsub('[/\\:*?"<>|]', "_"):gsub("%s+", " "):sub(1, 80)
+    local path = "/mnt/macos/debug/book-scans/" .. safe .. ".txt"
+    local fh = io.open(path, "w")
+    if not fh then return end
+
+    -- Re-query each unique matched_text at 15 context words and key by xpointer.
+    -- The scan itself always runs at 5 words; this separate pass is report-only.
+    local queried  = {}
+    local long_ctx = {}
+    for _, r in ipairs(filtered) do
+        local mt = r.matched_text
+        if not queried[mt] then
+            queried[mt] = true
+            local ok, res = pcall(function()
+                return doc:findAllText(mt, true, 15, 500, false)
+            end)
+            if ok and res then
+                for _, lr in ipairs(res) do
+                    if lr.start then
+                        long_ctx[lr.start] = {prev=lr.prev_text or "", next=lr.next_text or ""}
+                    end
+                end
+            end
+        end
+    end
+
+    fh:write("FOOTCREAM SCAN REPORT\n")
+    fh:write("Book:    " .. title .. "\n")
+    fh:write("File:    " .. doc.file .. "\n")
+    fh:write("Date:    " .. (os.date("%Y-%m-%d %H:%M") or "") .. "\n")
+    fh:write("Matches: " .. #filtered .. "\n")
+    fh:write(string.rep("=", 72) .. "\n\n")
+
+    for i, r in ipairs(filtered) do
+        local match_str = _display(r.matched_text)
+        local conv_str  = _convert(r) or "?"
+        local ctx  = long_ctx[r.start]
+        local prev = ctx and ctx.prev or r.prev_text or ""
+        local nxt  = ctx and ctx.next or r.next_text or ""
+        fh:write(string.format("[%d] %q  →  %s\n", i, match_str, conv_str))
+        fh:write("    ..." .. prev .. "[" .. match_str .. "]" .. nxt .. "...\n\n")
+    end
+
+    fh:close()
+    logger.info("FootFree: book report → " .. path)
+end
+
+local function _show_conversion_popup(match, box, show_icon)
+    local InputContainer  = require("ui/widget/container/inputcontainer")
+    local FrameContainer  = require("ui/widget/container/framecontainer")
+    local CenterContainer = require("ui/widget/container/centercontainer")
+    local HorizontalGroup = require("ui/widget/horizontalgroup")
+    local TextWidget      = require("ui/widget/textwidget")
+    local ImageWidget     = require("ui/widget/imagewidget")
+    local GestureRange    = require("ui/gesturerange")
+    local Screen          = require("device").screen
+    local Font            = require("ui/font")
+    local Geom            = require("ui/geometry")
+
+    local cat       = match._cat or "length"
+    local icon_path = _PLUGIN_DIR .. "/unit-icons/" .. (_CAT_ICONS[cat] or "length") .. ".svg"
+    local converted = _metric_only(match) or _convert(match) or "?"
+
+    local sw = Screen:getWidth()
+    local sh = Screen:getHeight()
+    local sc = function(n) return Screen:scaleBySize(n) end
+
+    local icon_sz = sc(26)
+    local gap     = sc(14)
+    local pad_h   = sc(16)   -- left/right padding
+    local pad_v   = sc(4)    -- top/bottom padding
+
+    -- Right: converted value (large bold)
+    local text_col = TextWidget:new{
+        text = converted,
+        face = Font:getFace("infofont", sc(22)),
+        bold = true,
+    }
+
+    -- Horizontal row: icon (optional) | spacer | text
+    local row
+    if show_icon then
+        -- Left: icon centred in its own box
+        local icon_col = CenterContainer:new{
+            dimen = Geom:new{ w = icon_sz, h = icon_sz },
+            ImageWidget:new{
+                file   = icon_path,
+                width  = icon_sz,
+                height = icon_sz,
+                alpha  = true,
+                invert = G_reader_settings:isTrue("night_mode"),
+            },
+        }
+        row = HorizontalGroup:new{
+            align = "center",
+            icon_col,
+            WidgetContainer:new{ dimen = Geom:new{ w = gap, h = 1 } },
+            text_col,
+        }
+    else
+        row = text_col
+    end
+
+    -- Rounded bordered card
+    local card = FrameContainer:new{
+        padding_top    = pad_v,
+        padding_bottom = pad_v,
+        padding_left   = pad_h,
+        padding_right  = pad_h,
+        radius         = sc(12),
+        bordersize     = Screen:scaleBySize(1.5),
+        background     = Blitbuffer.COLOR_WHITE,
+        row,
+    }
+
+    -- Position near the tapped word: below if it fits, otherwise above.
+    local OverlapGroup   = require("ui/widget/overlapgroup")
+    local card_size      = card:getSize()
+    local margin         = sc(10)
+    local ref_x          = box and (box.x + box.w / 2) or (sw / 2)
+    local ref_bottom     = box and (box.y + box.h)     or (sh / 2)
+    local ref_top        = box and box.y                or (sh / 2)
+    local popup_x = math.max(0, math.min(sw - card_size.w,
+                             math.floor(ref_x - card_size.w / 2)))
+    local popup_y
+    local popup_below_word
+    if ref_bottom + margin + card_size.h <= sh then
+        popup_y = ref_bottom + margin          -- below the word
+        popup_below_word = true
+    else
+        popup_y = ref_top - margin - card_size.h  -- above the word
+        popup_below_word = false
+    end
+    popup_y = math.max(0, math.min(sh - card_size.h, popup_y))
+    card.overlap_offset = { popup_x, popup_y }
+
+    -- Pointer arrow: points toward the tapped word, flipped depending on
+    -- whether the popup landed below or above it.
+    local arrow_w     = sc(16)
+    local arrow_h     = sc(8)
+    local radius      = sc(12)
+    local border_px   = math.max(1, math.floor(Screen:scaleBySize(1.5) + 0.5))
+    local apex_min    = popup_x + radius + arrow_w / 2
+    local apex_max    = popup_x + card_size.w - radius - arrow_w / 2
+    local apex_x
+    if apex_min <= apex_max then
+        apex_x = math.max(apex_min, math.min(apex_max, ref_x))
+    else
+        apex_x = popup_x + card_size.w / 2
+    end
+    local arrow_x = math.floor(apex_x - arrow_w / 2)
+    local arrow_y
+    local arrow_dir
+    if popup_below_word then
+        arrow_dir = "up"     -- apex on top, base merges into the card's top edge
+        arrow_y   = popup_y - arrow_h + border_px
+    else
+        arrow_dir = "down"   -- apex on bottom, base merges into the card's bottom edge
+        arrow_y   = popup_y + card_size.h - border_px
+    end
+    local arrow = _PointerArrow:new{
+        width        = arrow_w,
+        height       = arrow_h,
+        direction    = arrow_dir,
+        apex_offset  = arrow_w / 2,
+        border_size  = border_px,
+        border_color = Blitbuffer.COLOR_BLACK,
+        fill_color   = Blitbuffer.COLOR_WHITE,
+    }
+    arrow.overlap_offset = { arrow_x, arrow_y }
+
+    -- Full-screen input overlay — tap anywhere to dismiss
+    local overlay
+    overlay = InputContainer:new{
+        dimen = Geom:new{ w = sw, h = sh },
+        ges_events = {
+            TapClose = {
+                GestureRange:new{
+                    ges   = "tap",
+                    range = Geom:new{ w = sw, h = sh },
+                },
+            },
+        },
+        OverlapGroup:new{
+            dimen = Geom:new{ w = sw, h = sh },
+            card,
+            arrow,
+        },
+    }
+    function overlay:onTapClose()
+        UIManager:close(self)
+        return true
+    end
+
+    UIManager:show(overlay)
+    UIManager:scheduleIn(5, function() UIManager:close(overlay) end)
+end
+
+-- Settings dialog with a live preview of the underline styling on a sample
+-- word. Each control closes and re-opens the dialog so the preview reflects
+-- the change immediately.
+local function _show_styling_dialog(plugin)
+    local InputContainer  = require("ui/widget/container/inputcontainer")
+    local FrameContainer  = require("ui/widget/container/framecontainer")
+    local CenterContainer = require("ui/widget/container/centercontainer")
+    local HorizontalGroup = require("ui/widget/horizontalgroup")
+    local VerticalGroup   = require("ui/widget/verticalgroup")
+    local VerticalSpan    = require("ui/widget/verticalspan")
+    local OverlapGroup    = require("ui/widget/overlapgroup")
+    local TextWidget      = require("ui/widget/textwidget")
+    local Button          = require("ui/widget/button")
+    local Screen          = require("device").screen
+    local Font            = require("ui/font")
+
+    local sc = function(n) return Screen:scaleBySize(n) end
+    local sw, sh = Screen:getWidth(), Screen:getHeight()
+
+    local overlay
+    local function refresh()
+        UIManager:close(overlay)
+        _show_styling_dialog(plugin)
+    end
+
+    local label_face = Font:getFace("infofont", sc(16))
+    local function label(text)
+        return TextWidget:new{ text = text, face = label_face }
+    end
+
+    local function span() return VerticalSpan:new{ width = sc(10) } end
+
+    -- Preview: a worked example ("Five foot six") with its underline
+    -- rendered live, plus an always-visible tooltip showing the conversion
+    -- exactly as it would appear when tapped in the book.
+    local sample = TextWidget:new{
+        text = "Five foot six",
+        face = Font:getFace("infofont", sc(24)),
+    }
+    local sample_size = sample:getSize()
+    local underline = _UnderlinePreview:new{
+        width      = sample_size.w,
+        height     = sample_size.h,
+        style      = plugin._underline_style,
+        color      = _underline_color(plugin._underline_color),
+        line_width = sc(plugin._underline_width),
+        raw_width  = plugin._underline_width,
+        color_pct  = plugin._underline_color,
+    }
+    local example = OverlapGroup:new{
+        dimen = sample_size,
+        underline,
+        sample,
+    }
+
+    -- Tooltip card mirrors _show_conversion_popup's styling. The real popup
+    -- shows _metric_only's "converted value only" form (e.g. "1.68 m"), not
+    -- the "original = converted" form, so match that here.
+    local conversion_text = string.format("%s m", _fmt_height(5 * 0.3048 + 6 * 0.0254))
+    local tooltip_text = TextWidget:new{
+        text = conversion_text,
+        face = Font:getFace("infofont", sc(18)),
+        bold = true,
+    }
+    local tooltip_row = tooltip_text
+    if plugin._show_icon then
+        local ImageWidget = require("ui/widget/imagewidget")
+        local icon_sz   = sc(20)
+        local icon_path = _PLUGIN_DIR .. "/unit-icons/" .. (_CAT_ICONS["length"] or "length") .. ".svg"
+        local icon_col = CenterContainer:new{
+            dimen = Geom:new{ w = icon_sz, h = icon_sz },
+            ImageWidget:new{
+                file   = icon_path,
+                width  = icon_sz,
+                height = icon_sz,
+                alpha  = true,
+                invert = G_reader_settings:isTrue("night_mode"),
+            },
+        }
+        tooltip_row = HorizontalGroup:new{
+            align = "center",
+            icon_col,
+            WidgetContainer:new{ dimen = Geom:new{ w = sc(10), h = 1 } },
+            tooltip_text,
+        }
+    end
+    local tooltip_card = FrameContainer:new{
+        padding_top    = sc(4),
+        padding_bottom = sc(4),
+        padding_left   = sc(12),
+        padding_right  = sc(12),
+        radius         = sc(8),
+        bordersize     = Screen:scaleBySize(1.5),
+        background     = Blitbuffer.COLOR_WHITE,
+        tooltip_row,
+    }
+
+    -- Pointer arrow, base merging into the tooltip card's bottom edge —
+    -- same overlap trick as _show_conversion_popup (arrow's top border row
+    -- lands exactly on the card's bottom border row).
+    local arrow_w   = sc(16)
+    local arrow_h   = sc(8)
+    local border_px = math.max(1, math.floor(Screen:scaleBySize(1.5) + 0.5))
+    local arrow = _PointerArrow:new{
+        width        = arrow_w,
+        height       = arrow_h,
+        direction    = "down",
+        apex_offset  = arrow_w / 2,
+        border_size  = border_px,
+        border_color = Blitbuffer.COLOR_BLACK,
+        fill_color   = Blitbuffer.COLOR_WHITE,
+    }
+
+    -- A row of buttons; the option matching `current` is marked with a filled dot.
+    local function option_row(options, current, on_select)
+        local row = { align = "center" }
+        for i, opt in ipairs(options) do
+            if i > 1 then
+                table.insert(row, WidgetContainer:new{ dimen = Geom:new{ w = sc(8), h = 1 } })
+            end
+            local marker = (opt.value == current) and "\226\151\143 " or "\226\151\139 "
+            table.insert(row, Button:new{
+                text       = marker .. opt.text,
+                bordersize = 0,
+                callback = function()
+                    on_select(opt.value)
+                    refresh()
+                end,
+            })
+        end
+        return HorizontalGroup:new(row)
+    end
+
+    local style_row = option_row({
+        { text = "Solid", value = "solid" },
+        { text = "Wavy",  value = "wavy"  },
+    }, plugin._underline_style, function(v)
+        plugin._underline_style = v
+        G_reader_settings:saveSetting("footcream_underline_style", v)
+    end)
+
+    local color_row = option_row({
+        { text = "10%", value = 10 },
+        { text = "20%", value = 20 },
+        { text = "30%", value = 30 },
+        { text = "40%", value = 40 },
+    }, plugin._underline_color, function(v)
+        plugin._underline_color = v
+        G_reader_settings:saveSetting("footcream_underline_color", v)
+    end)
+
+    local width_row = option_row({
+        { text = "Thin",  value = 1 },
+        { text = "Thick", value = 2 },
+    }, plugin._underline_width, function(v)
+        plugin._underline_width = v
+        G_reader_settings:saveSetting("footcream_underline_width", v)
+    end)
+
+    -- Manually stack tooltip card, arrow, and example, centred horizontally.
+    -- The preview frame stretches to match the widest option row below (so
+    -- it fills the modal's width), but never shrinks below what the worked
+    -- example itself needs.
+    local card_size    = tooltip_card:getSize()
+    local example_size = example:getSize()
+    local natural_content_w = math.max(card_size.w, example_size.w, arrow_w)
+
+    local preview_padding_h = sc(20) * 2
+    local preview_border_h  = Screen:scaleBySize(1) * 2
+    local max_row_w = 0
+    for _, w in ipairs({ style_row, color_row, width_row }) do
+        max_row_w = math.max(max_row_w, w:getSize().w)
+    end
+    local content_w = math.max(natural_content_w, max_row_w - preview_padding_h - preview_border_h)
+    local full_w = content_w + preview_padding_h + preview_border_h
+
+    local CheckButton = require("ui/widget/checkbutton")
+    local icon_checkbox = CheckButton:new{
+        text       = "Show Unit Icon",
+        checked    = plugin._show_icon,
+        face       = label_face,
+        single_line = true,
+        width      = full_w,
+        callback = function()
+            plugin._show_icon = not plugin._show_icon
+            G_reader_settings:saveSetting("footcream_show_icon", plugin._show_icon)
+            refresh()
+        end,
+    }
+
+    -- Close spans the full width of the preview frame below it.
+    local function close_overlay()
+        UIManager:close(overlay)
+        if plugin.view then UIManager:setDirty(plugin.view.dialog, "ui") end
+    end
+
+    local close_button = Button:new{
+        text  = "Close",
+        width = full_w,
+        callback = close_overlay,
+    }
+
+    local example_y = card_size.h + arrow_h - border_px + sc(10)
+    local content_h = example_y + example_size.h
+
+    tooltip_card.overlap_offset = { math.floor((content_w - card_size.w) / 2), 0 }
+    arrow.overlap_offset = { math.floor((content_w - arrow_w) / 2), card_size.h - border_px }
+    example.overlap_offset = { math.floor((content_w - example_size.w) / 2), example_y }
+
+    -- "PREVIEW" label in the top-left corner of the preview frame.
+    local preview_label = TextWidget:new{
+        text   = "PREVIEW",
+        face   = Font:getFace("infofont", sc(11)),
+        fgcolor = Blitbuffer.COLOR_DARK_GRAY,
+    }
+    preview_label.overlap_offset = { -sc(5), -sc(5) }
+
+    local content = OverlapGroup:new{
+        dimen = Geom:new{ w = content_w, h = content_h },
+        tooltip_card,
+        arrow,
+        example,
+        preview_label,
+    }
+
+    -- Hairline border frames the whole worked example.
+    local preview = FrameContainer:new{
+        padding_top    = sc(14),
+        padding_bottom = sc(14),
+        padding_left   = sc(20),
+        padding_right  = sc(20),
+        radius         = sc(6),
+        bordersize     = Screen:scaleBySize(1),
+        color          = Blitbuffer.COLOR_GRAY_B,
+        content,
+    }
+
+    local card = FrameContainer:new{
+        padding_top    = sc(12),
+        padding_bottom = sc(12),
+        padding_left   = sc(16),
+        padding_right  = sc(16),
+        radius         = sc(12),
+        bordersize     = Screen:scaleBySize(1.5),
+        background     = Blitbuffer.COLOR_WHITE,
+        VerticalGroup:new{
+            align = "left",
+            preview,
+            span(),
+            label("Underline style"),
+            style_row,
+            span(),
+            label("Underline Intensity"),
+            color_row,
+            span(),
+            label("Underline thickness"),
+            width_row,
+            span(),
+            icon_checkbox,
+            span(),
+            close_button,
+        },
+    }
+
+    overlay = InputContainer:new{
+        key_events = {
+            Close = { { "Back" } },
+        },
+        CenterContainer:new{
+            dimen = Geom:new{ w = sw, h = sh },
+            card,
+        },
+    }
+
+    function overlay:onClose()
+        close_overlay()
+        return true
+    end
+
+    if plugin.view then UIManager:setDirty(plugin.view.dialog, "ui") end
+    UIManager:show(overlay)
+end
+
+function FootFree:_finishScan(doc, all_matches, t_per_pat, t_total, in_subprocess, debug_report)
+    local _STONE_NOUNS = { "step", "wall", "slab", "floor", "path", "block", "arch",
+                            "building", "pillar", "stair", "bridge", "column", "chip" }
+    local filtered = {}
+    for _, r in ipairs(all_matches) do
+        local keep = true
+        local mt   = r.matched_text:lower()
+        local prev = (r.prev_text or ""):lower()
+        local nxt  = (r.next_text or ""):lower()
+
+        if r._search.target == "kg" and mt:find("stone") then
+            local nw = nxt:match("^%s*(%a+)")
+            if nw then
+                for _, noun in ipairs(_STONE_NOUNS) do
+                    if nw:sub(1, #noun) == noun then keep = false; break end
+                end
+            end
+        end
+        if mt:find("nine") and mt:find("yard") and prev:find("whole") then keep = false end
+        -- "one pounds" is the verb "to pound" (3rd-person singular); never a measurement.
+        if mt == "one pounds" then keep = false end
+        -- "prize of N pounds" / "N-pound prize" — British sterling (£), not weight.
+        -- "prize" can precede (space form) or follow (hyphenated adjective form).
+        if r._search.target == "kg" and mt:find("pound") and
+           (prev:find("prize", 1, true) or nxt:find("prize", 1, true)) then keep = false end
+        -- "N-mile-an-hour" is a speed expressed as a compound adjective, not a distance.
+        if r._search.target == "km" and mt:find("mile") and nxt:match("^%s*an%s+hour") then keep = false end
+        -- Suppress numeric tail of a hyphenated compound number when prev_text reaches
+        -- back far enough to expose the "-and-" connector (short compounds only).
+        -- "five-hundred-and-eleven-foot" is accepted as an imperfect match (rare form).
+        if prev:match("%-and%s*$") then keep = false end
+        if mt:find("one") and mt:find("foot") then
+            if nxt:find("in front", 1, true)                      or
+               nxt:match("^%s*into ")                             or
+               nxt:match("^%s*over ")                             or
+               nxt:match("^%s*forward")                           or
+               nxt:match("^%s*grounded")                          or
+               nxt:match("^%s*braced")                            or
+               nxt:match("^%s*firmly")                            or
+               (nxt:match("^%s*on ") and not nxt:match("on%s*%d")) then
+                keep = false
+            end
+        end
+        if mt:find("one") and mt:find("stone") and prev:find("with") then keep = false end
+        if r._search.target == "cm" then
+            local p = (r.prev_text or ""):lower()
+            -- Allow trailing hyphen: "six-foot-[five-inch]" has prev ending "foot-"
+            if p:match("feet[%s%-]?$") or p:match("foot[%s%-]?$") or p:match("%sft[%s%-]?$") then keep = false end
+            -- Suppress the inches half of compound prime heights like 5'11" or 5′9″.
+            -- The _ND boundary char is the prime/apostrophe between the feet digit
+            -- and inches digit, so matched_text starts with ' " ′ or ″.
+            -- This never happens for a legitimate standalone inches measurement.
+            local mt1 = r.matched_text:sub(1, 1)
+            if mt1 == "'" or mt1 == '"'
+               or r.matched_text:sub(1, 3) == _PRIME
+               or r.matched_text:sub(1, 3) == _DPRIME then
+                keep = false
+            end
+        end
+        -- "N oz" immediately after "lbs?" is the tail of a compound like "1-lb 4-oz"
+        if r._search.target == "g" then
+            local p = (r.prev_text or ""):lower()
+            if p:match("lbs?%s*$") or p:match("pounds?%s*$") then keep = false end
+        end
+        -- Suppress mid-word false positives: if next_text starts with a letter
+        -- immediately (no leading space/punctuation), the match ended inside a
+        -- longer word. e.g. "mi" matching the first 2 chars of "minutes".
+        if (r.next_text or ""):match("^[a-zA-Z]") then keep = false end
+
+        -- NOTE: pounds classifier and UK volume recalculation happen in
+        -- _apply_settings_to_matches(), called after _finishScan saves the sidecar.
+        -- Suppress fractional tail: "a half pounds" / "half pounds" when prev
+        -- ends with "and" — it is the second half of "N and a half pounds".
+        do
+            local frac_starts = {"a half", "half a", "half ", "a quarter",
+                                 "a third", "two thirds", "one third", "three quarters"}
+            for _, fw in ipairs(frac_starts) do
+                if mt:sub(1, #fw) == fw then
+                    if prev:match("%sand%s*$") or prev:match("%sand%sa%s*$") then
+                        keep = false
+                    end
+                    break
+                end
+            end
+        end
+        if prev:find(_TIMES, 1, true) then
+            local disp = _display(mt)
+            if disp:match("^[0-9]+" .. _DPRIME) or disp:match('^[0-9]+"') then keep = false end
+        end
+        -- Decimal false positive: _ND uses [^0-9,] as boundary, so the "."
+        -- in "0.5 inches" also creates a spurious ".5 inches" match.
+        -- Suppress when matched_text starts with the boundary char "." (period).
+        if r.matched_text:match("^%.") then keep = false end
+        -- Product model numbers: a comma between the number and the unit (e.g.
+        -- "VTS989, kn") never appears in real measurements.
+        if r.matched_text:match("%d,%s*%a") then keep = false end
+        if keep then table.insert(filtered, r) end
+    end
+
+    logger.info(string.format("FootFree: %d match(es) found  total=%.3fs", #filtered, t_total or 0))
+    _save_sidecar(doc.file, filtered)
+
+    os.execute("mkdir -p /mnt/macos/debug 2>/dev/null")
+    local fh = io.open("/mnt/macos/debug/scan_report.txt", "w")
+    if fh then
+        fh:write(string.format("footcream scan report\nBook: %s\n%d match(es)  total=%.3fs\n%s\n",
+            doc.file, #filtered, t_total or 0, string.rep("-", 60)))
+        if t_per_pat then
+            fh:write("pattern timing:\n")
+            for _, t in ipairs(t_per_pat) do
+                fh:write(string.format("  [%d] %-22s  %.3fs  %d hits\n",
+                    t.idx, t.label, t.elapsed, t.hits))
+            end
+            fh:write(string.rep("-", 60) .. "\n")
+        end
+        for i, r in ipairs(filtered) do
+            fh:write(string.format("[%3d] %s\n      Context: ...%s[%s]%s...\n\n",
+                i, _convert(r), r.prev_text or "", _display(r.matched_text), r.next_text or ""))
+        end
+        fh:close()
+    end
+
+    if debug_report then
+        _write_book_report(doc, filtered)
+    end
+
+    if not in_subprocess then
+        -- Apply current settings (UK volumes, pounds classifier) to the
+        -- just-scanned matches and update the live display.
+        local use_uk = self._uk_volumes and self.ui.document and _is_uk_book(self.ui.document)
+        local applied = _apply_settings_to_matches(filtered, self._distinguish_pounds, use_uk)
+        local n = #applied
+        self._all_matches   = n > 0 and applied or nil
+        self._current_boxes = {}
+        self._scanned       = true  -- a scan just completed (even if 0 matches) (6.1)
+        if self.view then UIManager:setDirty(self.view.dialog, "ui") end
+        UIManager:show(Notification:new{
+            text = string.format("Scan complete: %d unit%s found",
+                                 n, n == 1 and "" or "s"),
+        })
+    end
+end
+
+-- ── Metric edition — apply / revert ──────────────────────────────────────────
+
+-- Words that, when they immediately follow an ambiguous "foot" phrase, mark it
+-- as a body-part idiom ("one foot in front of the other") rather than a
+-- measurement. The in-place rewrite replaces by surface text book-wide, so
+-- without this guard a real "one foot deep" match would also convert every
+-- idiom "one foot" elsewhere. Mirrors the scanner's "one foot" exclusion so
+-- mode 1 (highlight) and mode 3 (convert) stay consistent.
+local _FOOT_IDIOM_NEXT = {
+    "in front", "into", "onto", "over", "forward",
+    "grounded", "braced", "firmly", "on",
+}
+local function _idiom_guard(original)
+    local o = original:lower():gsub("^%s+", ""):gsub("%s+$", "")
+    if o == "one foot" or o == "a foot" then return _FOOT_IDIOM_NEXT end
+    return nil
+end
+local function _json_str(s)
+    return '"' .. s:gsub('\\', '\\\\'):gsub('"', '\\"') .. '"'
+end
+
+function FootFree:_applyMetricEdition(doc, skip_confirm)
+    if _is_metric_mode(doc.file) then
+        UIManager:show(InfoMessage:new{
+            text = "This book is already in metric edition.\nUse 'Remove Footcream data from this book' (Advanced) first.",
+            timeout = 4,
+        })
+        return
+    end
+    if not self._all_matches or #self._all_matches == 0 then
+        -- Distinguish "scanned, genuinely no imperial units" from "not scanned
+        -- yet" — the two used to share the misleading "scan first" message.
+        UIManager:show(InfoMessage:new{
+            text = self._scanned
+                and "No imperial measurements found in this book — nothing to convert."
+                or  "No hints yet — scan the book first.",
+            timeout = 3,
+        })
+        return
+    end
+    -- "Convert directly in the text" rewrites the book's own text. Confirm
+    -- first — this is easy to trigger inadvertently (e.g. via the Enable
+    -- toggle while the global mode happens to be set to convert).
+    if not skip_confirm then
+        UIManager:show(ConfirmBox:new{
+            text = "Convert this book's measurements to metric?\n\nThe book's text is rewritten in place. You can undo it any time with 'Remove Footcream data from this book' (Advanced).",
+            ok_text     = "Convert",
+            cancel_text = "Cancel",
+            ok_callback = function() self:_doApplyMetricEdition(doc) end,
+        })
+        return
+    end
+    self:_doApplyMetricEdition(doc)
+end
+
+function FootFree:_doApplyMetricEdition(doc)
+    logger.info("FootFree: applying metric edition — " .. #self._all_matches .. " matches")
+
+    -- Process matches in document order so the reverse map records each
+    -- converted value's original phrase in reading order. The load path
+    -- re-scans the converted text (also document order) and pairs the Nth
+    -- occurrence of a converted string with the Nth original here — so two
+    -- different originals that round to the same string ("two pounds three
+    -- ounces" and "two pounds, four ounces" → "1.0 kg") each recover their
+    -- own text instead of both showing the first one (6.2).
+    local ordered = {}
+    for _, r in ipairs(self._all_matches) do ordered[#ordered + 1] = r end
+    table.sort(ordered, function(a, b)
+        return _xp_key_less(_xp_numkey(a.start), _xp_numkey(b.start))
+    end)
+
+    -- Build the replacement list (deduped by surface text — the in-place
+    -- rewrite replaces all occurrences of each phrase) and a converted->original
+    -- reverse map (one original per occurrence, in order) for "show original".
+    local seen = {}
+    local reps = {}
+    local rev_map = {}
+    for _, r in ipairs(ordered) do
+        local original = _display(r.matched_text)
+        local metric   = _metric_only(r)
+        if original and metric then
+            if not seen[original] then
+                seen[original] = true
+                local entry = '{"from":' .. _json_str(original) .. ',"to":' .. _json_str(metric)
+                local guard = _idiom_guard(original)
+                if guard then
+                    local gs = {}
+                    for _, g in ipairs(guard) do gs[#gs + 1] = _json_str(g) end
+                    entry = entry .. ',"guard_next":[' .. table.concat(gs, ",") .. "]"
+                end
+                table.insert(reps, entry .. "}")
+            end
+            local info = rev_map[metric]
+            if not info then
+                info = { cat = r._cat or "", originals = {} }
+                rev_map[metric] = info
+            end
+            info.originals[#info.originals + 1] = original
+        end
+    end
+    if #reps == 0 then return end
+
+    local json_in = "[" .. table.concat(reps, ",") .. "]"
+    local patches = _patches_path(doc.file)
+
+    -- Run Python script
+    local cmd = string.format(
+        'echo %s | python3 %q apply %q %q 2>/dev/null',
+        "'" .. json_in:gsub("'", "'\\''") .. "'",
+        _METRIC_SCRIPT, doc.file, patches)
+    local fh = io.popen(cmd)
+    local result = fh and fh:read("*l") or ""
+    if fh then fh:close() end
+
+    if result:match("^OK:") then
+        local n = tonumber(result:match(":(%d+)")) or 0
+        logger.info("FootFree: metric edition applied, " .. n .. " file(s) modified")
+        -- Preserve the sidecar: rewrite it to update its modification timestamp.
+        -- Without this, the epub (just modified) would be newer than the sidecar,
+        -- causing the mod-time check to discard it on reload — losing scan data.
+        local sp = _sidecar_path(doc.file)
+        local sf = io.open(sp, "r")
+        if sf then
+            local content = sf:read("*a"); sf:close()
+            sf = io.open(sp, "w")
+            if sf then sf:write(content); sf:close() end
+        end
+        -- Persist the converted->original map for the "show original units" feature.
+        _save_reverse_map(doc.file, rev_map)
+        -- Reload document (seamless — keeps xpointer position)
+        self.ui:reloadDocument(nil, true)
+    else
+        UIManager:show(InfoMessage:new{
+            text = "Could not apply metric edition.\nIs Python 3 available?\n" .. tostring(result),
+            timeout = 5,
+        })
+    end
+end
+
+function FootFree:_revertMetricEdition(doc)
+    local patches = _patches_path(doc.file)
+    local cmd = string.format(
+        'python3 %q revert %q %q 2>/dev/null',
+        _METRIC_SCRIPT, doc.file, patches)
+    local fh = io.popen(cmd)
+    local result = fh and fh:read("*l") or ""
+    if fh then fh:close() end
+
+    if result == "OK" then
+        logger.info("FootFree: metric edition reverted")
+        -- The revert just modified the epub, so its timestamp is now newer than
+        -- the sidecar. Rewrite the sidecar in-place to update its timestamp;
+        -- otherwise the mod-time check in _load_sidecar_raw discards it on reload.
+        local sp = _sidecar_path(doc.file)
+        local sf = io.open(sp, "r")
+        if sf then
+            local content = sf:read("*a")
+            sf:close()
+            sf = io.open(sp, "w")
+            if sf then sf:write(content); sf:close() end
+        end
+        os.remove(_reverse_path(doc.file))
+        self._reverse_matches = nil
+        -- After a byte-exact revert the restored text is identical to the
+        -- original, so the sidecar's xpointer positions are valid again — no
+        -- rescan needed. (Rescanning a converted book is separately prevented
+        -- in the "Rescan book" handler, which reverts first.)
+        self.ui:reloadDocument(nil, true)
+    elseif result:match("changed since conversion") then
+        -- The on-disk file is no longer the one we converted (it was replaced
+        -- externally — e.g. a re-download or sync of a different edition under
+        -- the same filename). Restoring our saved chapters into it would splice
+        -- unrelated content together. Leave the book untouched and just drop the
+        -- now-stale conversion record so it isn't stuck appearing "converted".
+        os.remove(_patches_path(doc.file))
+        os.remove(_reverse_path(doc.file))
+        self._reverse_matches = nil
+        if self.view then UIManager:setDirty(self.view.dialog, "ui") end
+        UIManager:show(InfoMessage:new{
+            text = "This book's file changed since Footcream converted it, so the original text can't be restored. Footcream's conversion record has been cleared.",
+            timeout = 6,
+        })
+    else
+        UIManager:show(InfoMessage:new{
+            text = "Could not revert.\n" .. tostring(result),
+            timeout = 4,
+        })
+    end
+end
+
+-- Build self._reverse_matches: positions of converted values in the text,
+-- paired with the original imperial text, for the "show original units"
+-- toggle in "Convert directly in the text" mode.
+--
+-- Returns "missing" if the feature should be active (mode 3, toggle on, book
+-- converted) but the reverse-map sidecar is gone — e.g. it was deleted while
+-- the patches file survived. The caller (toggle) surfaces a message rather
+-- than silently doing nothing (5.4). Returns true/nil otherwise.
+function FootFree:_loadReverseMatches(doc)
+    self._reverse_matches = nil
+    if self._tap_mode ~= 3 or not self._show_original then return end
+    if not _is_metric_mode(doc.file) then return end
+
+    local data = _load_reverse_data(doc.file)
+    if not data or not data.map then
+        return "missing"
+    end
+
+    -- Fast path: positions already resolved (each carries its own original).
+    if data.matches then
+        local result = {}
+        for _, m in ipairs(data.matches) do
+            table.insert(result, { start = m.start, ["end"] = m["end"],
+                                    _converted = m.original, _cat = m.cat })
+        end
+        self._reverse_matches = #result > 0 and result or nil
+        return true
+    end
+
+    -- First time after applying: scan once for the converted strings, then
+    -- cache. findAllText returns hits in document order; for each converted
+    -- string we walk its ordered originals list in lockstep so the Nth
+    -- occurrence recovers the Nth original (6.2).
+    local alts = {}
+    for to in pairs(data.map) do table.insert(alts, to) end
+    if #alts == 0 then return true end
+    table.sort(alts, function(a, b) return #a > #b end)
+    local esc = {}
+    for _, a in ipairs(alts) do esc[#esc + 1] = _re_escape(a) end
+    local pat = "(" .. table.concat(esc, "|") .. ")"
+
+    local ok, results = pcall(function()
+        return doc:findAllText(pat, true, 0, 1000, true)
+    end)
+    if not ok or not results then return true end
+
+    local counters = {}
+    local result, cached = {}, {}
+    for _, r in ipairs(_filter_overlapping_matches(results)) do
+        local info = data.map[r.matched_text]
+        if info and info.originals then
+            local idx = (counters[r.matched_text] or 0) + 1
+            counters[r.matched_text] = idx
+            local original = info.originals[idx] or info.originals[#info.originals]
+            table.insert(result, { start = r.start, ["end"] = r["end"],
+                                    _converted = original, _cat = info.cat })
+            table.insert(cached, { start = r.start, ["end"] = r["end"],
+                                    original = original, cat = info.cat })
+        end
+    end
+    _save_reverse_matches(doc.file, data.map, cached)
+    self._reverse_matches = #result > 0 and result or nil
+    return true
+end
+
+-- ── Broad scan (triggered from menu / auto-scan) ──────────────────────────────
+
+-- Experimental unit-anchored fast scan. Runs synchronously (~a couple of
+-- seconds even on a huge book) and hands its records to _finishScan, which
+-- applies the same idiom filters and saves the same sidecar as the classic scan.
+function FootFree:_startFastScan(doc)
+    logger.info("FootFree: fast scan — " .. doc.file)
+    self._all_matches   = nil
+    self._current_boxes = {}
+    self._scan_progress = 0.0  -- show the corner loader while it runs
+    os.remove(_PARTIAL_SIDECAR)
+    if self.view then UIManager:setDirty(self.view.dialog, "ui") end
+
+    local cat_enabled  = self._cat_enabled
+    local debug_report = self._debug_report
+
+    -- Run in a subprocess so the UI stays responsive (same as the classic scan).
+    if ok_ffiutil and ffiutil.runInSubProcess then
+        local ok_pid, pid = pcall(function()
+            return ffiutil.runInSubProcess(function()
+                -- CHILD: inherits crengine state at fork; no UIManager calls.
+                local matches = _fast_scan_matches(doc, cat_enabled)
+                FootFree._finishScan(nil, doc, matches, {}, 0, true, debug_report)
+            end)
+        end)
+        if ok_pid and pid and pid > 0 then
+            logger.info("FootFree: fast-scan subprocess pid=" .. tostring(pid))
+            self._scan_pid = pid
+            self._scan_doc = doc
+            UIManager:scheduleIn(0.12, function() self:_pollFastScan() end)
+            return
+        end
+        logger.warn("FootFree: fast-scan subprocess spawn failed — running synchronously")
+    end
+
+    -- Fallback: synchronous (still only a couple of seconds).
+    self._scan_progress = nil
+    local matches = _fast_scan_matches(doc, self._cat_enabled)
+    self:_finishScan(doc, matches, {}, 0, false, self._debug_report)
+end
+
+-- The unit-anchored fast scan is the only scan path now; _startScan delegates
+-- straight to it. (The old multi-pass classic scan was removed.)
+function FootFree:_startScan(doc)
+    if not doc or not doc.file then return end
+    return self:_startFastScan(doc)
+end
+
+-- ── Poll subprocess completion ─────────────────────────────────────────────────
+
+-- Shared scan-completion: load the saved sidecar into _all_matches, clear the
+-- progress indicator, and notify. Used by both the classic and fast pollers.
+function FootFree:_onScanComplete(err)
+    logger.info("FootFree: subprocess complete")
+    if self._scan_indicator then
+        UIManager:close(self._scan_indicator)
+        self._scan_indicator = nil
+    end
+    local doc = self._scan_doc
+    self._scan_pid = nil
+    self._scan_doc = nil
+
+    local raw = doc and _load_sidecar_raw(doc.file)
+    if raw then
+        local use_uk = self._uk_volumes and doc and _is_uk_book(doc)
+        local applied = _apply_settings_to_matches(raw, self._distinguish_pounds, use_uk)
+        local n = #applied
+        self._all_matches   = n > 0 and applied or nil
+        self._current_boxes = {}
+        self._scanned       = true  -- background scan finished (6.1)
+        if self.view then UIManager:setDirty(self.view.dialog, "ui") end
+        UIManager:show(Notification:new{
+            text = string.format("Scan complete: %d unit%s found",
+                                 n, n == 1 and "" or "s"),
+        })
+    else
+        logger.warn("FootFree: subprocess done but no sidecar found" ..
+                    (err and (" — " .. err) or ""))
+    end
+    self._scan_progress = nil
+    os.remove(_SCAN_PROGRESS_FILE)
+    os.remove(_PARTIAL_SIDECAR)
+end
+
+-- Poll the fast-scan subprocess. It's a single opaque pass (no per-step
+-- progress), so animate the donut indeterminately — easing toward 0.9 — until
+-- it completes, then hand off to the shared completion handler.
+function FootFree:_pollFastScan()
+    if not self._scan_pid then return end
+    local done, err = false, nil
+    if ok_ffiutil and ffiutil.isSubProcessDone then
+        local ok, result = pcall(function()
+            return ffiutil.isSubProcessDone(self._scan_pid)
+        end)
+        done = ok and result
+        if not ok then err = tostring(result) end
+    end
+    if done then
+        self:_onScanComplete(err)
+    else
+        local p = self._scan_progress or 0
+        self._scan_progress = p + (0.9 - p) * 0.18
+        if self.view then UIManager:setDirty(self.view.dialog, "fast") end
+        UIManager:scheduleIn(0.12, function() self:_pollFastScan() end)
+    end
+end
+
+
+-- ── Settings re-application (instant toggle without rescan) ───────────────────
+
+function FootFree:_reapply_settings()
+    local doc = self.ui.document
+    if not doc or not doc.file then return end
+    local raw = _load_sidecar_raw(doc.file)
+    if not raw then return end  -- no sidecar yet — user needs to scan first
+    local use_uk = self._uk_volumes and _is_uk_book(doc)
+    local applied = _apply_settings_to_matches(raw, self._distinguish_pounds, use_uk)
+    self._all_matches   = #applied > 0 and applied or nil
+    self._current_boxes = {}
+    if self.view then UIManager:setDirty(self.view.dialog, "ui") end
+end
+
+-- ── Draw ──────────────────────────────────────────────────────────────────────
+
+-- Digit matches include a leading boundary char (the [^0-9,] the _ND pattern
+-- requires), so r.start points at the space/punctuation *before* the number,
+-- not the number itself. When that leading char wraps onto the previous line,
+-- crengine's per-segment box for the first line fragment is computed wrong (or
+-- missing) — the cause of the "15°F has no underline / wrong token underlined"
+-- bug on wrapped range matches. Start the box at the real first character.
+-- (A leading minus sign is kept — we want to underline it.)
+local function _draw_start_xp(r)
+    local mt = r.matched_text
+    if mt then
+        local first = mt:match("^([^0-9])[0-9]")
+        if first and first ~= "-" then
+            local prefix, num = _xpointer_offset(r.start)
+            if num then return prefix .. tostring(num + 1) end
+        end
+    end
+    return r.start
+end
+
+-- Optional diagnostics: when developer mode is on (the .dev marker file), dump the screen
+-- boxes for every match drawn on the current page so wrap/geometry issues can
+-- be inspected from the file rather than guessed at.
+local _BOX_DEBUG_FILE = "/mnt/macos/debug/footcream_boxes.txt"
+
+function FootFree:_drawHighlights(bb)
+    if not self._cat_enabled then return end
+    local doc = self.ui.document
+    if not doc then return end
+
+    -- Paint the SVG scan-progress loader directly into the framebuffer.
+    -- Sits at the same top-left position as KOReader's reflow progress bar.
+    -- If reflow is active (bar occupies x=0..Screen/3), we shift right past it.
+    if self._scan_progress ~= nil then
+        local Screen = require("device").screen
+        local x_base = Screen:scaleBySize(4)
+        if self.ui.rolling and self.ui.rolling.rendering_state
+           and self.ui.rolling.rendering_state ~= 0 then
+            x_base = math.floor(Screen:getWidth() / 3) + Screen:scaleBySize(4)
+        end
+        local y_base = Screen:scaleBySize(4)
+        pcall(_draw_loader, bb, x_base, y_base, self._scan_progress)
+    end
+
+    self._current_boxes = {}
+    if not self._all_matches and not self._reverse_matches then return end
+
+    local Screen = require("device").screen
+    local color = _underline_color(self._underline_color)
+    local width = Screen:scaleBySize(self._underline_width)
+
+    local dbg = self._debug_report and {} or nil
+
+    -- Draw underlines for one match's on-screen segments, recording tap boxes.
+    local function draw_match(r, is_reverse)
+        if self._cat_enabled[r._cat] == false then return end
+        local start_xp = _draw_start_xp(r)
+        local ok, boxes = pcall(function()
+            return doc:getScreenBoxesFromPositions(start_xp, r["end"], true)
+        end)
+        -- If advancing past the boundary char yielded nothing (e.g. the char
+        -- and the digit were in different text nodes), fall back to the raw
+        -- start so we never lose an underline that used to render.
+        if ok and boxes and #boxes == 0 and start_xp ~= r.start then
+            ok, boxes = pcall(function()
+                return doc:getScreenBoxesFromPositions(r.start, r["end"], true)
+            end)
+        end
+        if not ok or not boxes then return end
+        if dbg and #boxes > 0 then
+            dbg[#dbg + 1] = string.format("%s %q  start=%s end=%s  (%d segment%s)",
+                is_reverse and "[rev]" or "[fwd]",
+                tostring(r.matched_text or r._converted or "?"), tostring(start_xp),
+                tostring(r["end"]), #boxes, #boxes == 1 and "" or "s")
+        end
+        for _, box in ipairs(boxes) do
+            local drawn = box.h > 0 and box.w > 0
+            if drawn then
+                _draw_underline(bb, box, self._underline_style, color, width,
+                    self._underline_width, self._underline_color)
+                table.insert(self._current_boxes, { box = box, match = r, _reverse = is_reverse })
+            end
+            if dbg then
+                dbg[#dbg + 1] = string.format("    box x=%s y=%s w=%s h=%s%s",
+                    tostring(box.x), tostring(box.y), tostring(box.w), tostring(box.h),
+                    drawn and "" or "  [skipped: zero w/h]")
+            end
+        end
+    end
+
+    -- Mode 1 highlights point at imperial-text positions; in mode 3 the book
+    -- text is already converted, so those positions are meaningless — never
+    -- draw them there (the reverse-match loop below handles mode 3 instead).
+    if self._enabled and self._tap_mode ~= 3 and self._all_matches then
+        for _, r in ipairs(self._all_matches) do draw_match(r, false) end
+    end
+    if self._reverse_matches then
+        for _, r in ipairs(self._reverse_matches) do draw_match(r, true) end
+    end
+
+    if dbg and #dbg > 0 then
+        local fh = io.open(_BOX_DEBUG_FILE, "w")
+        if fh then fh:write(table.concat(dbg, "\n") .. "\n"); fh:close() end
+    end
+end
+
+-- ── Tap ───────────────────────────────────────────────────────────────────────
+
+function FootFree:_handleTap(ges)
+    if not self._enabled and not self._reverse_matches then return false end
+    if not self._current_boxes or #self._current_boxes == 0 then return false end
+    local tx, ty = ges.pos.x, ges.pos.y
+
+    for _, entry in ipairs(self._current_boxes) do
+        local b = entry.box
+        if tx >= b.x and tx <= b.x + b.w and
+           ty >= b.y - 6 and ty <= b.y + b.h + 6 then
+            if entry._reverse then
+                -- Converted value tapped: show its original imperial text.
+                _show_conversion_popup(entry.match, b, self._show_icon)
+            elseif self._tap_mode == 3 then
+                -- Mode 3: metric edition is applied automatically on mode selection.
+                -- If tapped before it could run (e.g. no scan data at the time),
+                -- try again now.
+                local doc = self.ui.document
+                if doc and not _is_metric_mode(doc.file) then
+                    self:_applyMetricEdition(doc)
+                end
+            else
+                -- Option 1 (default): popup
+                _show_conversion_popup(entry.match, b, self._show_icon)
+            end
+            return true
+        end
+    end
+    return false
+end
+
+-- ── GitHub auto-update (UI flow) ──────────────────────────────────────────────
+
+-- Entry point (menu callback): ensure we're online, then check the latest
+-- release. Wrapped in Trapper so the network wait shows a dismissable spinner.
+function FootFree:_checkForUpdate()
+    local NetworkMgr = require("ui/network/manager")
+    NetworkMgr:runWhenOnline(function()
+        local Trapper = require("ui/trapper")
+        Trapper:wrap(function() self:_runUpdateCheck(Trapper) end)
+    end)
+end
+
+function FootFree:_runUpdateCheck(Trapper)
+    local InfoMessage = require("ui/widget/infomessage")
+    Trapper:info("Checking for updates…")
+    local body, err = _http_fetch(
+        "https://api.github.com/repos/" .. _GITHUB_REPO .. "/releases/latest")
+    Trapper:clear()
+    if not body then
+        UIManager:show(InfoMessage:new{ text = "Update check failed:\n" .. tostring(err) })
+        return
+    end
+    local rel = _json_decode(body)
+    if not rel or not rel.tag_name then
+        UIManager:show(InfoMessage:new{ text = "Could not read the latest release info." })
+        return
+    end
+    local installed = _installed_version()
+    if not _ver_gt(rel.tag_name, installed) then
+        UIManager:show(InfoMessage:new{
+            text = string.format("You're up to date (v%s).", installed) })
+        return
+    end
+    -- Prefer an attached .zip asset; fall back to the source zipball.
+    local asset_url
+    for _, a in ipairs(rel.assets or {}) do
+        if a.name and a.name:match("%.zip$") and a.browser_download_url then
+            asset_url = a.browser_download_url
+            break
+        end
+    end
+    asset_url = asset_url or rel.zipball_url
+    if not asset_url then
+        UIManager:show(InfoMessage:new{ text = "No downloadable release package found." })
+        return
+    end
+    UIManager:show(ConfirmBox:new{
+        text = string.format("Update available: %s\n(installed: v%s)\n\nDownload and install now?",
+                             rel.tag_name, installed),
+        ok_text = "Update",
+        ok_callback = function()
+            local Trapper2 = require("ui/trapper")
+            Trapper2:wrap(function() self:_installUpdate(Trapper2, asset_url, rel.tag_name) end)
+        end,
+    })
+end
+
+function FootFree:_installUpdate(Trapper, asset_url, tag)
+    local InfoMessage = require("ui/widget/infomessage")
+    local tmp_zip = _SIDECAR_DIR .. "/update.zip"
+    local tmp_dir = _SIDECAR_DIR .. "/update"
+    os.remove(tmp_zip)
+
+    Trapper:info("Downloading " .. tag .. "…")
+    local ok, err = _http_fetch(asset_url, tmp_zip)
+    if not ok then
+        Trapper:clear()
+        UIManager:show(InfoMessage:new{ text = "Download failed:\n" .. tostring(err) })
+        return
+    end
+
+    Trapper:info("Installing " .. tag .. "…")
+    os.execute('rm -rf "' .. tmp_dir .. '" && mkdir -p "' .. tmp_dir .. '"')
+    os.execute('unzip -o "' .. tmp_zip .. '" -d "' .. tmp_dir .. '" >/dev/null 2>&1')
+    local src = _find_plugin_root(tmp_dir)
+    if not src then
+        Trapper:clear()
+        os.execute('rm -rf "' .. tmp_dir .. '"'); os.remove(tmp_zip)
+        UIManager:show(InfoMessage:new{ text = "Update package didn't contain the plugin files." })
+        return
+    end
+
+    -- Back up the current folder, copy the new files over it, verify, restore on failure.
+    local backup = _PLUGIN_DIR .. ".bak"
+    os.execute('rm -rf "' .. backup .. '" && cp -rf "' .. _PLUGIN_DIR .. '" "' .. backup .. '"')
+    os.execute('cp -rf "' .. src .. '/." "' .. _PLUGIN_DIR .. '/"')
+    Trapper:clear()
+
+    local vfh = io.open(_PLUGIN_DIR .. "/main.lua")
+    if not vfh then
+        os.execute('rm -rf "' .. _PLUGIN_DIR .. '" && cp -rf "' .. backup .. '" "' .. _PLUGIN_DIR .. '"')
+        os.execute('rm -rf "' .. backup .. '" "' .. tmp_dir .. '"'); os.remove(tmp_zip)
+        UIManager:show(InfoMessage:new{ text = "Install failed — restored the previous version." })
+        return
+    end
+    vfh:close()
+    os.execute('rm -rf "' .. backup .. '" "' .. tmp_dir .. '"'); os.remove(tmp_zip)
+
+    UIManager:show(InfoMessage:new{
+        text = string.format("Updated to %s.\nPlease restart KOReader to load it.", tag) })
+end
+
+-- ── Menu ──────────────────────────────────────────────────────────────────────
+
+function FootFree:addToMainMenu(menu_items)
+    local cat_items = {}
+    for _, c in ipairs({
+        { key = "length",      label = "Length & Distance" },
+        { key = "weight",      label = "Weight"            },
+        { key = "temperature", label = "Temperature"       },
+        { key = "volume",      label = "Volume"            },
+        { key = "speed",       label = "Speed"             },
+        { key = "area",        label = "Area"              },
+    }) do
+        local key = c.key
+        table.insert(cat_items, {
+            text = c.label,
+            checked_func = function()
+                return self._cat_enabled[key] ~= false
+            end,
+            callback = function()
+                self._cat_enabled[key] = not (self._cat_enabled[key] ~= false)
+                G_reader_settings:saveSetting("footcream_cat_" .. key, self._cat_enabled[key])
+                if self.view then UIManager:setDirty(self.view.dialog, "ui") end
+            end,
+        })
+    end
+
+    menu_items["foot_free"] = {
+        sorting_hint = "tools",
+        text = "Footcream",
+        -- sub_item_table_func rebuilds items on every open so "Show hints"
+        -- can appear/disappear based on current mode without a reload.
+        sub_item_table_func = function()
+            local items = {}
+
+            -- 1. Hints count (read-only status line)
+            table.insert(items, {
+                text_func = function()
+                    if not self.ui.document then return "No book open" end
+                    local n = self._all_matches and #self._all_matches or 0
+                    if n > 0 then
+                        local label = _lang_label(self.ui.document)
+                        if label then
+                            return string.format("%d hints found in this %s book", n, label)
+                        end
+                        return string.format("%d hints found", n)
+                    elseif self._scanned then
+                        -- Scanned, but no imperial units — distinct from "never
+                        -- scanned" so the user isn't stuck re-scanning forever (6.1).
+                        return "0 hints found"
+                    else
+                        return "Not yet scanned"
+                    end
+                end,
+                enabled_func = function() return false end,
+            })
+
+            -- 2. Enable Footcream — universal toggle, behaviour depends on mode
+            table.insert(items, {
+                text = "Enable Footcream",
+                checked_func = function()
+                    if self._tap_mode == 3 then
+                        -- Checked = metric edition is currently applied to this book
+                        return self.ui.document ~= nil
+                            and _is_metric_mode(self.ui.document.file)
+                    else
+                        -- Checked = hints are visible
+                        return self._enabled
+                    end
+                end,
+                callback = function()
+                    local doc = self.ui.document
+                    if self._tap_mode == 3 then
+                        -- Mode 3: toggle applies or reverts the metric edition
+                        if doc and _is_metric_mode(doc.file) then
+                            logger.info("Footcream: Enable toggled OFF → reverting")
+                            self:_revertMetricEdition(doc)
+                        elseif doc then
+                            logger.info("Footcream: Enable toggled ON → applying")
+                            self:_applyMetricEdition(doc)
+                        end
+                    else
+                        -- Mode 1: toggle hints on/off
+                        self._enabled = not self._enabled
+                        G_reader_settings:saveSetting("footcream_enabled", self._enabled)
+                        logger.info("Footcream: hints " .. (self._enabled and "ON" or "OFF"))
+                        if self.view then UIManager:setDirty(self.view.dialog, "ui") end
+                    end
+                end,
+            })
+
+            -- 3. Mode (shows active mode name in the label)
+            table.insert(items, {
+                text_func = function()
+                    local name = self._tap_mode == 3
+                        and "Convert directly in the text"
+                        or  "Underline & tap for metric"
+                    return "Mode: " .. name
+                end,
+                sub_item_table = {
+                    {
+                        text = "Underline & tap for metric",
+                        checked_func = function() return self._tap_mode == 1 end,
+                        callback = function()
+                            local doc = self.ui.document
+                            local was_mode2 = self._tap_mode == 3
+                            -- Set new mode before any reload so it persists.
+                            -- Note: the "Enable Footcream" preference is left
+                            -- untouched — switching modes must not flip it.
+                            self._tap_mode = 1
+                            G_reader_settings:saveSetting("footcream_tap_mode", 1)
+                            logger.info("Footcream: mode→1 (interactive hints)")
+                            if was_mode2 and doc and _is_metric_mode(doc.file) then
+                                -- Book is in metric edition — revert it, then hints will show
+                                logger.info("Footcream: reverting metric edition before switching to mode 1")
+                                self.ui:handleEvent(Event:new("CloseReaderMenu"))
+                                self:_revertMetricEdition(doc)
+                            end
+                        end,
+                    },
+                    {
+                        text = "Convert directly in the text",
+                        checked_func = function() return self._tap_mode == 3 end,
+                        callback = function()
+                            -- Switch mode only; the "Enable Footcream"
+                            -- preference is left untouched.
+                            self._tap_mode = 3
+                            G_reader_settings:saveSetting("footcream_tap_mode", 3)
+                            logger.info("Footcream: mode→3 — auto-applying metric edition")
+                            self.ui:handleEvent(Event:new("CloseReaderMenu"))
+                            -- Auto-apply after menu closes; _applyMetricEdition handles
+                            -- "already converted" and "no scan data" cases gracefully.
+                            local doc = self.ui.document
+                            if doc then
+                                UIManager:scheduleIn(0.3, function()
+                                    self:_applyMetricEdition(doc)
+                                end)
+                            end
+                        end,
+                    },
+                },
+            })
+
+            -- 4. Auto-scan
+            table.insert(items, {
+                text = "Auto-scan when opening a new book",
+                checked_func = function() return self._auto_scan end,
+                callback = function()
+                    self._auto_scan = not self._auto_scan
+                    G_reader_settings:saveSetting("footcream_auto_scan", self._auto_scan)
+                end,
+            })
+
+            -- 5. Unit categories
+            table.insert(items, {
+                text = "Unit categories",
+                sub_item_table = cat_items,
+            })
+
+            -- 6. Scan / Rescan book
+            table.insert(items, {
+                text_func = function()
+                    if self.ui.document then
+                        local fh = io.open(_sidecar_path(self.ui.document.file))
+                        if fh then fh:close(); return "Rescan book" end
+                    end
+                    return "Scan book"
+                end,
+                enabled_func = function() return self.ui.document ~= nil end,
+                callback = function()
+                    local doc = self.ui.document
+                    if not doc then return end
+                    local function do_scan()
+                        os.remove(_sidecar_path(doc.file))
+                        self:_startScan(doc)
+                    end
+                    local function maybe_scan()
+                        if _is_english(doc) then
+                            do_scan()
+                        else
+                            local lang = _get_book_lang(doc)
+                            local note = lang ~= "" and (" (detected: " .. lang .. ")") or ""
+                            UIManager:show(ConfirmBox:new{
+                                text = "This book does not appear to be in English" ..
+                                       note .. ".\n\nScan it anyway?",
+                                ok_text     = "Scan",
+                                cancel_text = "Cancel",
+                                ok_callback = do_scan,
+                            })
+                        end
+                    end
+                    -- Rescanning a converted (mode-3) book in place corrupts the
+                    -- sidecar/patches/reverse-map consistency: the scan would run
+                    -- against metric text and find almost nothing, while the
+                    -- patch record still describes the old conversion. Restore the
+                    -- original text first, then scan that. (2.4)
+                    if _is_metric_mode(doc.file) then
+                        self.ui:handleEvent(Event:new("CloseReaderMenu"))
+                        UIManager:show(ConfirmBox:new{
+                            text = "This book is currently converted to metric. " ..
+                                   "Footcream will restore the original text first, " ..
+                                   "then rescan it.\n\nYou can re-convert afterward via " ..
+                                   "the Mode menu. Continue?",
+                            ok_text     = "Restore & scan",
+                            cancel_text = "Cancel",
+                            ok_callback = function()
+                                -- Revert reloads the document; once it settles the
+                                -- restored text is in place, then scan it.
+                                self:_revertMetricEdition(doc)
+                                UIManager:scheduleIn(1.0, function()
+                                    local d = self.ui.document
+                                    if d then
+                                        os.remove(_sidecar_path(d.file))
+                                        self:_startScan(d)
+                                    end
+                                end)
+                            end,
+                        })
+                        return
+                    end
+                    maybe_scan()
+                end,
+            })
+
+            table.insert(items, {
+                text = "Styling",
+                callback = function()
+                    self.ui:handleEvent(Event:new("CloseReaderMenu"))
+                    UIManager:scheduleIn(0.1, function()
+                        _show_styling_dialog(self)
+                    end)
+                end,
+            })
+
+            table.insert(items, {
+                text_func = function()
+                    return "Check for updates (v" .. _installed_version() .. ")"
+                end,
+                keep_menu_open = true,
+                callback = function()
+                    self:_checkForUpdate()
+                end,
+            })
+
+            -- Advanced — kept last
+            table.insert(items, {
+                text = "Advanced",
+                sub_item_table = {
+                    {
+                        text = "Smart rounding for conversion (requires rescan)",
+                        checked_func = function() return self._smart_rounding end,
+                        callback = function()
+                            self._smart_rounding = not self._smart_rounding
+                            G_reader_settings:saveSetting("footcream_smart_rounding",
+                                                          self._smart_rounding)
+                            self:_reapply_settings()
+                        end,
+                    },
+                    {
+                        text = "Original unit as tooltip (only for Convert in Text Mode)",
+                        checked_func = function() return self._show_original end,
+                        callback = function()
+                            self._show_original = not self._show_original
+                            G_reader_settings:saveSetting("footcream_show_original",
+                                                          self._show_original)
+                            local doc = self.ui.document
+                            if doc then
+                                local status = self:_loadReverseMatches(doc)
+                                if self._show_original and status == "missing" then
+                                    -- Reverse-map data is gone (e.g. deleted)
+                                    -- but the book is still converted, so the
+                                    -- toggle would silently do nothing (5.4).
+                                    UIManager:show(InfoMessage:new{
+                                        text = "Original-unit data for this book is missing.\nTo restore it, use 'Remove Footcream data from this book', then convert again via the Mode menu.",
+                                        timeout = 6,
+                                    })
+                                end
+                            end
+                            self._current_boxes = {}
+                            if self.view then
+                                UIManager:setDirty(self.view.dialog, "ui")
+                            end
+                        end,
+                    },
+                    {
+                        text = "Remove Footcream data from this book",
+                        enabled_func = function()
+                            if not self.ui.document then return false end
+                            if _is_metric_mode(self.ui.document.file) then return true end
+                            local fh = io.open(_sidecar_path(self.ui.document.file))
+                            if fh then fh:close(); return true end
+                            return false
+                        end,
+                        callback = function()
+                            local doc = self.ui.document
+                            if not doc then return end
+                            os.remove(_sidecar_path(doc.file))
+                            os.remove(_reverse_path(doc.file))
+                            self._all_matches    = nil
+                            self._reverse_matches = nil
+                            self._current_boxes  = {}
+                            self._scanned        = false  -- sidecar gone (6.1)
+                            if self.view then
+                                UIManager:setDirty(self.view.dialog, "ui")
+                            end
+                            if _is_metric_mode(doc.file) then
+                                self:_revertMetricEdition(doc)
+                            end
+                        end,
+                    },
+                },
+            })
+
+            -- 8. Styling — opens a live-preview dialog for underline appearance
+            return items
+        end,
+    }
+end
+
+return FootFree
