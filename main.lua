@@ -248,11 +248,14 @@ local function _fmt_dist(v, unit)
 end
 
 -- Range version of _fmt_dist: downscales both ends based on the (larger) upper
--- bound, so both endpoints stay in the same unit.
-local function _fmt_dist_range(r1, r2, unit)
+-- bound, so both endpoints stay in the same unit. `conn` is the original
+-- connector (" and "/" or "/" to ", spaces included) so the converted range
+-- reads as prose ("1.2 and 1.5 m") instead of range notation ("1.2–1.5 m") —
+-- this matters most in Convert-in-text mode, where it lands in the sentence.
+local function _fmt_dist_range(r1, r2, unit, conn)
     local sr2, su = _downscale(r2, unit)
     local scale = (su == unit or r2 == 0) and 1 or (sr2 / r2)
-    return _fmt(r1 * scale) .. _ENDASH .. _fmt(sr2) .. " " .. su
+    return _fmt(r1 * scale) .. (conn or _ENDASH) .. _fmt(sr2) .. " " .. su
 end
 
 -- ── Smart Rounding of Converted Units ────────────────────────────────────────
@@ -287,8 +290,9 @@ end
 -- Round v to the coarsest 1-2-5×10^n step whose relative error stays within
 -- _SMART_ROUND_TOLERANCE. Returns v unchanged if even the smallest such step
 -- would overshoot the tolerance.
-local function _nice_round(v)
+local function _nice_round(v, tol)
     if v == 0 then return v end
+    tol = tol or _SMART_ROUND_TOLERANCE
     -- Round the magnitude and reapply the sign, so negative values (sub-zero °C
     -- temperatures, negative range endpoints) round the same way positives do.
     local sign = 1
@@ -302,18 +306,51 @@ local function _nice_round(v)
     for sig = 1, 8 do
         local pow = 10 ^ (digits - sig + 1)
         local rounded = math.floor(v / pow + 0.5) * pow
-        if rounded > 0 and math.abs(rounded - v) / v <= _SMART_ROUND_TOLERANCE then
+        if rounded > 0 and math.abs(rounded - v) / v <= tol then
             return sign * rounded
         end
     end
     return sign * v
 end
 
+-- "Round harder" units (user-selected): a wider tolerance AND rounding even when
+-- the source number looks deliberately precise. Temperature is special-cased to
+-- whole degrees. Plain metres ("m") are deliberately absent here and gated by
+-- magnitude in _smart_round instead, so heights/short lengths stay untouched.
+local _HARSH_TOLERANCE = 0.04   -- 4%
+local _HARSH_TARGETS = {
+    cm = true, kg = true, g = true,
+    ["km/h"] = true, km = true, liters = true, mL = true,
+}
+
+local function _round_to_int(v)
+    if v < 0 then return -math.floor(-v + 0.5) end
+    return math.floor(v + 0.5)
+end
+
 -- Apply smart rounding to a converted value `v`, given the source number `n`
--- it was converted from. Pass force=true for ranges, which are inherently
--- approximate regardless of how the endpoints happen to be written.
-local function _smart_round(v, n, force)
+-- it was converted from and (optionally) the metric `target` unit. Pass
+-- force=true for ranges, which are inherently approximate regardless of how the
+-- endpoints happen to be written.
+local function _smart_round(v, n, force, target)
     if not _smart_rounding_enabled() then return v end
+    -- Temperature: always whole degrees (72°F → 22 °C, not 22.2 °C).
+    if target == "°C" then return _round_to_int(v) end
+    -- Centimetres: collapse to fewest sig-figs within the band first (30.5 → 30,
+    -- 91.4 → 90), then ensure a whole-cm result for anything ≥3 cm (7.6 → 8),
+    -- which the band alone wouldn't reach. Sub-3 cm keeps its decimal so a
+    -- deliberate "0.5 inches → 1.3 cm" isn't flattened to a wrong whole number.
+    if target == "cm" then
+        local r = _nice_round(v, _HARSH_TOLERANCE)
+        if r ~= math.floor(r) and math.abs(r) >= 3 then r = _round_to_int(r) end
+        return r
+    end
+    -- Harsh units: wider band, and round regardless of source precision. Plain
+    -- metres only qualify at distance scale (≥10 m), sparing heights/short lengths.
+    if target and (_HARSH_TARGETS[target]
+                   or (target == "m" and (v >= 10 or v <= -10))) then
+        return _nice_round(v, _HARSH_TOLERANCE)
+    end
     if not force and not _is_approx_num(n) then return v end
     return _nice_round(v)
 end
@@ -397,7 +434,7 @@ local function _conv_dim_to_m_cm(text)
     return nil
 end
 
--- Range factory: "twenty or thirty feet" → "6.1–9.1 m"
+-- Range factory: "twenty or thirty feet" → "6.1 or 9.1 m" (keeps the connector)
 local function _range_conv(factor, offset, target)
     return function(text)
         local s = _display(text):lower()
@@ -410,8 +447,8 @@ local function _range_conv(factor, offset, target)
                     local r1 = n1 * factor + offset
                     local r2 = n2 * factor + offset
                     if r1 > r2 then r1, r2 = r2, r1 end
-                    return _fmt_dist_range(_smart_round(r1, nil, true),
-                                            _smart_round(r2, nil, true), target)
+                    return _fmt_dist_range(_smart_round(r1, nil, true, target),
+                                            _smart_round(r2, nil, true, target), target, sep)
                 end
             end
         end
@@ -419,12 +456,12 @@ local function _range_conv(factor, offset, target)
     end
 end
 
--- "twelve acres" / "200 acres" → "809 372 m²" (whole m², space-grouped thousands)
-local function _conv_acres_to_m2(text)
+-- "twelve acres" / "200 acres" → "4.9 hectares" / "80 hectares"
+local function _conv_acres_to_ha(text)
     local num = _parse_num(text)
     if not num then return nil end
-    local s = string.format("%.0f", _smart_round(num * 4046.86, num))
-    return _group_thousands(s) .. " m" .. _SUP2
+    local disp = _fmt(_smart_round(num * 0.404686, num, false, "ha"))
+    return disp .. (disp == "1" and " hectare" or " hectares")
 end
 
 -- ── Convert a match to display string ────────────────────────────────────────
@@ -449,7 +486,7 @@ local function _convert(r)
             local kg = r._num * 0.453592 + r._num_oz * 0.0283495
             return string.format("%s lbs %s oz = %s kg", _fmt(r._num), _fmt(r._num_oz), _fmt(kg))
         end
-        -- Custom converter (e.g. acres → m²)
+        -- Custom converter (e.g. acres → hectares)
         if r._search.converter then
             local fake   = _fmt(r._num) .. " " .. unit_disp
             local result = r._search.converter(fake)
@@ -459,7 +496,7 @@ local function _convert(r)
         if r._search.factor then
             local result = r._num * r._search.factor + r._search.offset
             return string.format("%s %s = %s", _fmt(r._num), unit_disp,
-                                  _fmt_dist(_smart_round(result, r._num), r._search.target))
+                                  _fmt_dist(_smart_round(result, r._num, false, r._search.target), r._search.target))
         end
         return unit_disp
     end
@@ -474,7 +511,7 @@ local function _convert(r)
     local num = _parse_num(r.matched_text)
     if not num then return disp end
     local result = num * r._search.factor + r._search.offset
-    return string.format("%s = %s", disp, _fmt_dist(_smart_round(result, num), r._search.target))
+    return string.format("%s = %s", disp, _fmt_dist(_smart_round(result, num, false, r._search.target), r._search.target))
 end
 
 -- ── UK Imperial volume overrides ─────────────────────────────────────────────
@@ -541,9 +578,20 @@ local _WEIGHT_WORDS = {
 
 -- ── Metric edition helpers ───────────────────────────────────────────────────
 
--- Directory containing main.lua (and metric_epub.py).
+-- Directory containing main.lua (and metric_epub.lua).
 local _PLUGIN_DIR = (debug.getinfo(1, "S").source or ""):match("@?(.*)/[^/]*$") or "."
-local _METRIC_SCRIPT = _PLUGIN_DIR .. "/metric_epub.py"
+
+-- Pure-Lua EPUB rewriter (libarchive) — replaces the old python3 metric_epub.py
+-- so "Convert directly in the text" works on-device (Kobo etc., no Python).
+-- Loaded lazily and cached; the subprocess fork inherits the loaded module.
+local _metric_mod
+local function _metric_module()
+    if _metric_mod == nil then
+        local ok, mod = pcall(dofile, _PLUGIN_DIR .. "/metric_epub.lua")
+        _metric_mod = (ok and mod) or false
+    end
+    return _metric_mod or nil
+end
 
 -- Return just the converted value (no "original = " prefix).
 -- e.g. "1.8 m" from a match for "six feet".
@@ -573,7 +621,7 @@ local function _metric_only(r)
         local num = r._num or _parse_num(r.matched_text)
         if num then
             local result = num * r._search.factor + r._search.offset
-            return _fmt_dist(_smart_round(result, num), r._search.target)
+            return _fmt_dist(_smart_round(result, num, false, r._search.target), r._search.target)
         end
     end
     return nil
@@ -613,6 +661,53 @@ local function _dev_mode_enabled()
     if fh then fh:close(); return true end
     return false
 end
+
+-- TEMP DIAGNOSTIC: append a timestamped step to a trace file in the (writable)
+-- data dir so we can localize a UI freeze. Remove once the freeze is found.
+-- Monotonic-ish wall clock in fractional seconds, for profiling scan phases.
+local function _now()
+    if ok_ffiutil and ffiutil.gettime then
+        local ok, s, us = pcall(ffiutil.gettime)
+        if ok and s then return s + (us or 0) / 1e6 end
+    end
+    return os.time()
+end
+
+-- Drop the calling process's CPU priority to the minimum. Called inside the
+-- forked scan child so a single-core e-reader keeps cycles for the parent UI
+-- (page turns stay responsive) while the heavy whole-book findAllText runs.
+-- All failure modes are swallowed — niceing is best-effort, never required.
+-- Byte size of a file (cheap: seek to end, no read). Used as a stable proxy for
+-- a book's text volume when estimating scan duration for the progress bar —
+-- stable across font/layout changes, unlike page count.
+local function _file_size(path)
+    local f = path and io.open(path, "rb")
+    if not f then return nil end
+    local sz = f:seek("end")
+    f:close()
+    return sz
+end
+
+-- Seconds of scan time per epub byte, used to estimate the progress-bar ETA.
+-- Self-calibrated after every scan (footcream_scan_rate); this is just the
+-- first-ever-scan fallback, tuned for a slow single-core e-reader. Over-/under-
+-- estimates self-correct on the next book.
+local _DEFAULT_SCAN_RATE = 5.0e-5
+
+local _ffi_ok, _ffi = pcall(require, "ffi")
+local function _nice_self()
+    if not _ffi_ok then return end
+    pcall(function()
+        pcall(_ffi.cdef, "int setpriority(int, int, int);")
+        _ffi.C.setpriority(0, 0, 19)  -- PRIO_PROCESS, self, lowest niceness
+    end)
+end
+
+-- Set to a doc path when "Rescan book" is run on a converted book: after the
+-- revert reloads the document, onReaderReady picks this up and does the rescan +
+-- re-convert. Module-level so it survives the reloadDocument UI teardown that a
+-- scheduled callback on the old instance does not.
+local _pending_rescan = nil
 
 -- ── GitHub auto-update ────────────────────────────────────────────────────────
 local _GITHUB_REPO = "Fank1/foot-cream"
@@ -708,6 +803,12 @@ local function _find_plugin_root(dir)
     end
     p:close()
     return nil
+end
+
+local function _file_exists(path)
+    local f = io.open(path)
+    if f then f:close(); return true end
+    return false
 end
 
 -- Path of the patch record for a given book (defined here so _SIDECAR_DIR is set).
@@ -1234,7 +1335,7 @@ local function _apply_settings_to_matches(matches, distinguish_pounds, use_uk_vo
                 local disp = _display(r.matched_text)
                 local val  = r._num * uk.factor + uk.offset
                 r._converted = string.format("%s = %s %s", disp,
-                                              _fmt(_smart_round(val, r._num)), uk.target)
+                                              _fmt(_smart_round(val, r._num, false, uk.target)), uk.target)
             end
         end
 
@@ -1313,8 +1414,8 @@ local _UNIT_CONV = {
     ["knots"]             = { factor=1.852,    offset=0,       target="km/h", cat="speed"       },
     ["knot"]              = { factor=1.852,    offset=0,       target="km/h", cat="speed"       },
     ["kn"]                = { factor=1.852,    offset=0,       target="km/h", cat="speed"       },
-    ["acres"]             = { converter=_conv_acres_to_m2,     target="m2",   cat="area"        },
-    ["acre"]              = { converter=_conv_acres_to_m2,     target="m2",   cat="area"        },
+    ["acres"]             = { converter=_conv_acres_to_ha,     target="ha",   cat="area"        },
+    ["acre"]              = { converter=_conv_acres_to_ha,     target="ha",   cat="area"        },
 }
 
 -- Longest-first so "miles per hour" matches before "miles", etc.
@@ -1374,7 +1475,7 @@ local function _range_conv_unit(text)
                 if sep == " and " and n1 >= 1 and n2 > 0 and n2 < 1 then
                     local total  = n1 + n2
                     local result = total * info.factor + info.offset
-                    return _fmt_dist(_smart_round(result, total), info.target)
+                    return _fmt_dist(_smart_round(result, total, false, info.target), info.target)
                 end
                 -- Compound number addition: "a hundred and fifty" = 150.
                 -- When n1 is a round hundred/thousand and n2 < n1, it's addition.
@@ -1382,7 +1483,7 @@ local function _range_conv_unit(text)
                     if (n1 >= 100 and n1 % 100 == 0) or (n1 >= 1000 and n1 % 1000 == 0) then
                         local total = n1 + n2
                         local result = total * info.factor + info.offset
-                        return _fmt_dist(_smart_round(result, total), info.target)
+                        return _fmt_dist(_smart_round(result, total, false, info.target), info.target)
                     end
                 end
                 -- Shared-scale correction: "two or three hundred yards" means
@@ -1398,8 +1499,8 @@ local function _range_conv_unit(text)
                 local r1 = n1 * info.factor + info.offset
                 local r2 = n2 * info.factor + info.offset
                 if r1 > r2 then r1, r2 = r2, r1 end
-                return _fmt_dist_range(_smart_round(r1, nil, true),
-                                        _smart_round(r2, nil, true), info.target)
+                return _fmt_dist_range(_smart_round(r1, nil, true, info.target),
+                                        _smart_round(r2, nil, true, info.target), info.target, sep)
             end
         end
     end
@@ -1427,7 +1528,7 @@ local function _conv_hundred_and(text)
     local info = _UNIT_CONV[unit_word]
     if not info or not info.factor then return nil end
     local result = total * info.factor + (info.offset or 0)
-    return _fmt_dist(_smart_round(result, total), info.target)
+    return _fmt_dist(_smart_round(result, total, false, info.target), info.target)
 end
 
 -- ── Scan ──────────────────────────────────────────────────────────────────────
@@ -1502,6 +1603,18 @@ local function _prev_num_words(prev)
     while first > 1 and (#words - first) < 4 and _is_number_word(words[first - 1]) do
         first = first - 1
     end
+    -- "a hundred" / "a thousand" / "a dozen": the article scales the following
+    -- multiplier but isn't a number word on its own, so the walk above stops at
+    -- "hundred". Pull "a"/"an" into the span when it forms a known "a <mult>"
+    -- number (value is unchanged — "a hundred" == "hundred" == 100 — so this
+    -- only widens the match to cover the article, no false positives).
+    if first > 1 then
+        local art = words[first - 1]:lower()
+        if (art == "a" or art == "an")
+           and _parse_num(art .. " " .. table.concat(words, " ", first)) then
+            first = first - 1
+        end
+    end
     local n = _parse_num(table.concat(words, " ", first))
     if n then return n, #words - first + 1 end
     n = _parse_num(words[#words])
@@ -1536,6 +1649,42 @@ local function _lead_compound(next_text)
     return n, "bare"
 end
 
+-- Words a number immediately after "or"/"to" belongs to — so it is NOT a second
+-- inches value. "five foot four or five minutes" must stay a single height, not
+-- become a 5'4"–5'5" range. Length units (feet/miles/yards/pounds) are included
+-- because "or six feet" is a separate measurement; "inch(es)" is deliberately
+-- absent ("five foot five or six inches" reinforces the height reading).
+local _RANGE_TAIL_NOUNS = {
+    minute=true, minutes=true, second=true, seconds=true, hour=true, hours=true,
+    day=true, days=true, week=true, weeks=true, month=true, months=true,
+    year=true, years=true, time=true, times=true, people=true, men=true,
+    women=true, mile=true, miles=true, foot=true, feet=true, yard=true,
+    yards=true, pound=true, pounds=true, ["o'clock"]=true, percent=true,
+    dozen=true, hundred=true, thousand=true, million=true,
+}
+
+-- After a feet+inches compound ("five foot five"), detect an "or/to K" tail that
+-- is a second inches value → a height RANGE ("five foot five or six" = 5'5"–5'6").
+-- `first_inch` is the already-parsed inches number; `next_text` is the text after
+-- the foot unit. Returns (K, connector) — K an integer 1..11, connector "or"/"to"
+-- — or nil. Guarded against a trailing noun the number really belongs to.
+local function _inch_range_tail(next_text, first_inch)
+    if not next_text or not first_inch then return nil end
+    local s = next_text:gsub("^[%s,%.%-]+", "")
+    local tok = s:match("^([%w][%w%.,]*)")           -- the first inch token
+    if not tok then return nil end
+    local rest = s:sub(#tok + 1):gsub("^[%s%-]+", "")
+    local conn, after = rest:match("^(%a+)%s+(.+)$")  -- connector + remainder
+    if conn ~= "or" and conn ~= "to" then return nil end
+    local ktok = after:match("^([%w][%w%-]*)")
+    if not ktok then return nil end
+    local k = _parse_num((ktok:gsub("[%.,]+$", "")))
+    if not k or k ~= math.floor(k) or k < 1 or k > 11 then return nil end
+    local nextword = after:sub(#ktok + 1):gsub("^[%s%-]+", ""):match("^([%a']+)")
+    if nextword and _RANGE_TAIL_NOUNS[nextword:lower()] then return nil end
+    return k, conn
+end
+
 -- Build a "phrase = converted" string for a known numeric value `val`. Used
 -- when matched_text's own _parse_num would disagree (e.g. additive "four and a
 -- half" prefix-parses as just 4), so the cached _converted carries the right value.
@@ -1544,7 +1693,7 @@ local function _value_converted(disp, val, conv, unit)
     if conv.converter then
         rstr = conv.converter(_fmt(val) .. " " .. unit)
     elseif conv.factor then
-        rstr = _fmt_dist(_smart_round(val * conv.factor + (conv.offset or 0), val), conv.target)
+        rstr = _fmt_dist(_smart_round(val * conv.factor + (conv.offset or 0), val, false, conv.target), conv.target)
     end
     return rstr and (disp .. " = " .. rstr) or nil
 end
@@ -1670,7 +1819,11 @@ local function _fast_scan_matches(doc, cat_enabled)
             if i == span then fallback = cand end
             local t = text_of(cand, unit_start)
             local lead = t and t:match("^([%w][%w%.,%-]*)")
-            if lead and _parse_num(lead) == num then return cand end
+            -- Require i >= span before accepting a single-token match, so a
+            -- multi-word number whose LAST word equals the value on its own
+            -- ("one hundred" → "hundred" alone is 100) isn't cut short there:
+            -- the span fallback (the real start, "one") would otherwise be lost.
+            if lead and _parse_num(lead) == num and i >= (span or 1) then return cand end
         end
         return fallback or cand
     end
@@ -1825,6 +1978,26 @@ local function _fast_scan_matches(doc, cat_enabled)
                         -- "six foot four" / "five ft. seven in." → feet+inches height.
                         rec._num, rec._num2 = num, second
                         rec["end"] = extend_end(h["end"], second, kind == "in_abbr" and clear_in)
+                        -- Range tail: "five foot five or six" → 1.65 or 1.68 m.
+                        -- Only for a bare inch, guarded against "or five minutes".
+                        -- Keep the connector word so it reads as prose, not "1.65–1.68".
+                        local kval, kconn
+                        if kind == "bare" then
+                            kval, kconn = _inch_range_tail(h.next_text, second)
+                        end
+                        if kval then
+                            local rend = extend_end(rec["end"], kval)
+                            if rend ~= rec["end"] then
+                                local lo = num * 0.3048 + math.min(second, kval) * 0.0254
+                                local hi = num * 0.3048 + math.max(second, kval) * 0.0254
+                                local mt = text_of(rec.start, rend) or rec.matched_text
+                                rec["end"], rec.matched_text = rend, mt
+                                rec._converted = _display(mt) .. " = "
+                                    .. _fmt_height(lo) .. " " .. kconn .. " "
+                                    .. _fmt_height(hi) .. " m"
+                                rec._num, rec._num2, rec._unit = nil, nil, nil
+                            end
+                        end
                     elseif second and kind == "in_abbr" and unit == "ft" then
                         -- "5 ft 7 in" — accept the abbreviation only with an
                         -- explicit "in" tail; a bare "5 ft 200" is NOT a height.
@@ -1840,6 +2013,7 @@ local function _fast_scan_matches(doc, cat_enabled)
                     -- value we computed (e.g. additive "four and a half" parses
                     -- as just 4), pin the conversion to the right value.
                     if not rec._num2 and not rec._num_stone2 and not rec._num_oz
+                       and not rec._converted
                        and _parse_num(rec.matched_text) ~= num then
                         rec._converted = _value_converted(_display(rec.matched_text), num, conv, unit)
                     end
@@ -1849,6 +2023,7 @@ local function _fast_scan_matches(doc, cat_enabled)
             end
         end
     end
+
 
     -- Prime notation — skip these extra passes ONLY when we can positively
     -- confirm the book has no prime/apostrophe-inch notation. The gate text is
@@ -2020,6 +2195,21 @@ function FootFree:onReaderReady()
         return
     end
 
+    -- "Rescan book" on a converted book reverted it; now that the restored text
+    -- is loaded, rescan it and re-apply the conversion (so it stays converted
+    -- with fresh data). Driven here, not from a post-revert timer, because the
+    -- reload recreated the reader UI.
+    if _pending_rescan == doc.file then
+        _pending_rescan = nil
+        os.remove(_sidecar_path(doc.file))
+        self._after_scan = function()
+            local d2 = self.ui.document
+            if d2 then self:_applyMetricEdition(d2, true) end
+        end
+        self:_startScan(doc)
+        return
+    end
+
     -- ── Load sidecar or wait for user to trigger scan ─────────────────────────
     logger.info(string.format(
         "FootFree: onReaderReady — tap_mode=%d enabled=%s metric_mode=%s lang=%s",
@@ -2041,6 +2231,22 @@ function FootFree:onReaderReady()
         self._current_boxes = {}
         self._scanned       = false
         if self._auto_scan and _is_english(doc) then
+            -- In "Convert directly in the text" mode, offer the conversion
+            -- automatically once this fresh scan finishes — the user enabled
+            -- auto-scan + convert mode and expects the "Convert?" prompt on
+            -- opening a new book, not to toggle Enable in the menu per book.
+            -- Only on a fresh scan (first time a book is scanned): a book that
+            -- was scanned before and left unconverted shouldn't keep re-asking.
+            if self._tap_mode == 3 and self._enabled then
+                self._after_scan = function()
+                    local d = self.ui.document
+                    if d and self._tap_mode == 3 and self._enabled
+                       and not _is_metric_mode(d.file)
+                       and self._all_matches and #self._all_matches > 0 then
+                        self:_applyMetricEdition(d)
+                    end
+                end
+            end
             self:_startScan(doc)
         end
     end
@@ -2134,7 +2340,7 @@ local function _show_conversion_popup(match, box, show_icon)
     -- Right: converted value (large bold)
     local text_col = TextWidget:new{
         text = converted,
-        face = Font:getFace("infofont", sc(22)),
+        face = Font:getFace("infofont", 22),
         bold = true,
     }
 
@@ -2282,7 +2488,7 @@ local function _show_styling_dialog(plugin)
         _show_styling_dialog(plugin)
     end
 
-    local label_face = Font:getFace("infofont", sc(16))
+    local label_face = Font:getFace("infofont", 16)
     local function label(text)
         return TextWidget:new{ text = text, face = label_face }
     end
@@ -2294,7 +2500,7 @@ local function _show_styling_dialog(plugin)
     -- exactly as it would appear when tapped in the book.
     local sample = TextWidget:new{
         text = "Five foot six",
-        face = Font:getFace("infofont", sc(24)),
+        face = Font:getFace("infofont", 24),
     }
     local sample_size = sample:getSize()
     local underline = _UnderlinePreview:new{
@@ -2318,7 +2524,7 @@ local function _show_styling_dialog(plugin)
     local conversion_text = string.format("%s m", _fmt_height(5 * 0.3048 + 6 * 0.0254))
     local tooltip_text = TextWidget:new{
         text = conversion_text,
-        face = Font:getFace("infofont", sc(18)),
+        face = Font:getFace("infofont", 18),
         bold = true,
     }
     local tooltip_row = tooltip_text
@@ -2469,7 +2675,7 @@ local function _show_styling_dialog(plugin)
     -- "PREVIEW" label in the top-left corner of the preview frame.
     local preview_label = TextWidget:new{
         text   = "PREVIEW",
-        face   = Font:getFace("infofont", sc(11)),
+        face   = Font:getFace("infofont", 11),
         fgcolor = Blitbuffer.COLOR_DARK_GRAY,
     }
     preview_label.overlap_offset = { -sc(5), -sc(5) }
@@ -2607,7 +2813,13 @@ function FootFree:_finishScan(doc, all_matches, t_per_pat, t_total, in_subproces
         -- Suppress mid-word false positives: if next_text starts with a letter
         -- immediately (no leading space/punctuation), the match ended inside a
         -- longer word. e.g. "mi" matching the first 2 chars of "minutes".
-        if (r.next_text or ""):match("^[a-zA-Z]") then keep = false end
+        -- Exception: prime/quote matches end in a non-letter symbol (″ ′ " ')
+        -- so they can't be mid-word; "3″ in diameter" legitimately precedes a
+        -- letter and must not be dropped here.
+        local _mt_end1 = r.matched_text:sub(-1)
+        local _ends_prime = _mt_end1 == "'" or _mt_end1 == '"'
+            or r.matched_text:sub(-3) == _PRIME or r.matched_text:sub(-3) == _DPRIME
+        if not _ends_prime and (r.next_text or ""):match("^[a-zA-Z]") then keep = false end
 
         -- NOTE: pounds classifier and UK volume recalculation happen in
         -- _apply_settings_to_matches(), called after _finishScan saves the sidecar.
@@ -2625,7 +2837,14 @@ function FootFree:_finishScan(doc, all_matches, t_per_pat, t_total, in_subproces
                 end
             end
         end
-        if prev:find(_TIMES, 1, true) then
+        -- Suppress the inches-half of a dimension like "4′ × 2″" only when the
+        -- "×" *immediately* precedes this match (prev ends in "× "). Matching
+        -- "×" anywhere in the context window wrongly dropped a separate inch
+        -- measurement that merely followed a dimension — e.g. the 3″ in
+        -- "4′ × 2″. The pipe was 3″ in diameter." (The seen_end/seen_start
+        -- dedup in _fast_scan_matches already blocks the true inches-half, so
+        -- this is a belt-and-suspenders guard for the pat1-didn't-fire case.)
+        if prev:match(_TIMES .. "%s*$") then
             local disp = _display(mt)
             if disp:match("^[0-9]+" .. _DPRIME) or disp:match('^[0-9]+"') then keep = false end
         end
@@ -2680,6 +2899,7 @@ function FootFree:_finishScan(doc, all_matches, t_per_pat, t_total, in_subproces
             text = string.format("Scan complete: %d unit%s found",
                                  n, n == 1 and "" or "s"),
         })
+        self:_runAfterScan()
     end
 end
 
@@ -2700,10 +2920,6 @@ local function _idiom_guard(original)
     if o == "one foot" or o == "a foot" then return _FOOT_IDIOM_NEXT end
     return nil
 end
-local function _json_str(s)
-    return '"' .. s:gsub('\\', '\\\\'):gsub('"', '\\"') .. '"'
-end
-
 function FootFree:_applyMetricEdition(doc, skip_confirm)
     if _is_metric_mode(doc.file) then
         UIManager:show(InfoMessage:new{
@@ -2731,7 +2947,9 @@ function FootFree:_applyMetricEdition(doc, skip_confirm)
             text = "Convert this book's measurements to metric?\n\nThe book's text is rewritten in place. You can undo it any time with 'Remove Footcream data from this book' (Advanced).",
             ok_text     = "Convert",
             cancel_text = "Cancel",
-            ok_callback = function() self:_doApplyMetricEdition(doc) end,
+            ok_callback = function()
+                self:_doApplyMetricEdition(doc)
+            end,
         })
         return
     end
@@ -2766,14 +2984,10 @@ function FootFree:_doApplyMetricEdition(doc)
         if original and metric then
             if not seen[original] then
                 seen[original] = true
-                local entry = '{"from":' .. _json_str(original) .. ',"to":' .. _json_str(metric)
+                local rep = { from = original, to = metric }
                 local guard = _idiom_guard(original)
-                if guard then
-                    local gs = {}
-                    for _, g in ipairs(guard) do gs[#gs + 1] = _json_str(g) end
-                    entry = entry .. ',"guard_next":[' .. table.concat(gs, ",") .. "]"
-                end
-                table.insert(reps, entry .. "}")
+                if guard then rep.guard_next = guard end
+                reps[#reps + 1] = rep
             end
             local info = rev_map[metric]
             if not info then
@@ -2785,92 +2999,116 @@ function FootFree:_doApplyMetricEdition(doc)
     end
     if #reps == 0 then return end
 
-    local json_in = "[" .. table.concat(reps, ",") .. "]"
     local patches = _patches_path(doc.file)
-
-    -- Run Python script
-    local cmd = string.format(
-        'echo %s | python3 %q apply %q %q 2>/dev/null',
-        "'" .. json_in:gsub("'", "'\\''") .. "'",
-        _METRIC_SCRIPT, doc.file, patches)
-    local fh = io.popen(cmd)
-    local result = fh and fh:read("*l") or ""
-    if fh then fh:close() end
-
-    if result:match("^OK:") then
-        local n = tonumber(result:match(":(%d+)")) or 0
-        logger.info("FootFree: metric edition applied, " .. n .. " file(s) modified")
-        -- Preserve the sidecar: rewrite it to update its modification timestamp.
-        -- Without this, the epub (just modified) would be newer than the sidecar,
-        -- causing the mod-time check to discard it on reload — losing scan data.
-        local sp = _sidecar_path(doc.file)
-        local sf = io.open(sp, "r")
-        if sf then
-            local content = sf:read("*a"); sf:close()
-            sf = io.open(sp, "w")
-            if sf then sf:write(content); sf:close() end
-        end
-        -- Persist the converted->original map for the "show original units" feature.
-        _save_reverse_map(doc.file, rev_map)
-        -- Reload document (seamless — keeps xpointer position)
-        self.ui:reloadDocument(nil, true)
-    else
+    local Metric = _metric_module()
+    if not Metric then
         UIManager:show(InfoMessage:new{
-            text = "Could not apply metric edition.\nIs Python 3 available?\n" .. tostring(result),
-            timeout = 5,
+            text = "Could not load the metric converter module.", timeout = 4,
         })
+        return
     end
+
+    -- Run the EPUB rewrite (pure Lua, libarchive) in a dismissable subprocess so
+    -- the UI doesn't freeze — the rewrite takes a few seconds on a real book. The
+    -- rewriter guards partial writes with an .inprogress marker + a backup of the
+    -- original epub, so an interrupted run is safely auto-reverted on next open.
+    local Trapper = require("ui/trapper")
+    Trapper:wrap(function()
+        local completed, result = Trapper:dismissableRunInSubprocess(function()
+            return Metric.apply(doc.file, patches, reps)
+        end, "Converting to metric…", true)
+        if not completed then return end  -- dismissed by the user
+        result = result or ""
+        if result:match("^OK:") then
+            local n = tonumber(result:match(":(%d+)")) or 0
+            logger.info("FootFree: metric edition applied, " .. n .. " file(s) modified")
+            -- Preserve the sidecar: rewrite it to update its modification timestamp.
+            -- Without this, the epub (just modified) would be newer than the sidecar,
+            -- causing the mod-time check to discard it on reload — losing scan data.
+            local sp = _sidecar_path(doc.file)
+            local sf = io.open(sp, "r")
+            if sf then
+                local content = sf:read("*a"); sf:close()
+                sf = io.open(sp, "w")
+                if sf then sf:write(content); sf:close() end
+            end
+            -- Persist the converted->original map for the "show original units" feature.
+            _save_reverse_map(doc.file, rev_map)
+            -- Reload document (seamless — keeps xpointer position)
+            self.ui:reloadDocument(nil, true)
+        else
+            UIManager:show(InfoMessage:new{
+                text = "Could not apply metric edition.\n" .. tostring(result),
+                timeout = 5,
+            })
+        end
+    end)
 end
 
-function FootFree:_revertMetricEdition(doc)
+-- on_done (optional) runs after a successful revert + reload (used by callers
+-- that need to act on the restored text, e.g. rescan).
+function FootFree:_revertMetricEdition(doc, on_done)
     local patches = _patches_path(doc.file)
-    local cmd = string.format(
-        'python3 %q revert %q %q 2>/dev/null',
-        _METRIC_SCRIPT, doc.file, patches)
-    local fh = io.popen(cmd)
-    local result = fh and fh:read("*l") or ""
-    if fh then fh:close() end
-
-    if result == "OK" then
-        logger.info("FootFree: metric edition reverted")
-        -- The revert just modified the epub, so its timestamp is now newer than
-        -- the sidecar. Rewrite the sidecar in-place to update its timestamp;
-        -- otherwise the mod-time check in _load_sidecar_raw discards it on reload.
-        local sp = _sidecar_path(doc.file)
-        local sf = io.open(sp, "r")
-        if sf then
-            local content = sf:read("*a")
-            sf:close()
-            sf = io.open(sp, "w")
-            if sf then sf:write(content); sf:close() end
-        end
-        os.remove(_reverse_path(doc.file))
-        self._reverse_matches = nil
-        -- After a byte-exact revert the restored text is identical to the
-        -- original, so the sidecar's xpointer positions are valid again — no
-        -- rescan needed. (Rescanning a converted book is separately prevented
-        -- in the "Rescan book" handler, which reverts first.)
-        self.ui:reloadDocument(nil, true)
-    elseif result:match("changed since conversion") then
-        -- The on-disk file is no longer the one we converted (it was replaced
-        -- externally — e.g. a re-download or sync of a different edition under
-        -- the same filename). Restoring our saved chapters into it would splice
-        -- unrelated content together. Leave the book untouched and just drop the
-        -- now-stale conversion record so it isn't stuck appearing "converted".
-        os.remove(_patches_path(doc.file))
-        os.remove(_reverse_path(doc.file))
-        self._reverse_matches = nil
-        if self.view then UIManager:setDirty(self.view.dialog, "ui") end
+    local Metric = _metric_module()
+    if not Metric then
         UIManager:show(InfoMessage:new{
-            text = "This book's file changed since Footcream converted it, so the original text can't be restored. Footcream's conversion record has been cleared.",
-            timeout = 6,
+            text = "Could not load the metric converter module.", timeout = 4,
         })
-    else
-        UIManager:show(InfoMessage:new{
-            text = "Could not revert.\n" .. tostring(result),
-            timeout = 4,
-        })
+        return
     end
+
+    -- Run the EPUB restore (pure Lua, libarchive) in a dismissable subprocess so
+    -- the UI doesn't freeze. The rewriter restores the original epub byte-for-byte
+    -- from its backup, refusing if the on-disk file changed since conversion.
+    local Trapper = require("ui/trapper")
+    Trapper:wrap(function()
+        local completed, result = Trapper:dismissableRunInSubprocess(function()
+            return Metric.revert(doc.file, patches)
+        end, "Restoring original text…", true)
+        if not completed then return end  -- dismissed by the user
+        result = result or ""
+        if result == "OK" then
+            logger.info("FootFree: metric edition reverted")
+            -- The revert just modified the epub, so its timestamp is now newer than
+            -- the sidecar. Rewrite the sidecar in-place to update its timestamp;
+            -- otherwise the mod-time check in _load_sidecar_raw discards it on reload.
+            local sp = _sidecar_path(doc.file)
+            local sf = io.open(sp, "r")
+            if sf then
+                local content = sf:read("*a")
+                sf:close()
+                sf = io.open(sp, "w")
+                if sf then sf:write(content); sf:close() end
+            end
+            os.remove(_reverse_path(doc.file))
+            self._reverse_matches = nil
+            -- After a byte-exact revert the restored text is identical to the
+            -- original, so the sidecar's xpointer positions are valid again — no
+            -- rescan needed. (Rescanning a converted book is separately prevented
+            -- in the "Rescan book" handler, which reverts first.)
+            self.ui:reloadDocument(nil, true)
+            if on_done then on_done() end
+        elseif result:match("changed since conversion") then
+            -- The on-disk file is no longer the one we converted (it was replaced
+            -- externally — e.g. a re-download or sync of a different edition under
+            -- the same filename). Restoring our saved chapters into it would splice
+            -- unrelated content together. Leave the book untouched and just drop the
+            -- now-stale conversion record so it isn't stuck appearing "converted".
+            os.remove(_patches_path(doc.file))
+            os.remove(_reverse_path(doc.file))
+            self._reverse_matches = nil
+            if self.view then UIManager:setDirty(self.view.dialog, "ui") end
+            UIManager:show(InfoMessage:new{
+                text = "This book's file changed since Footcream converted it, so the original text can't be restored. Footcream's conversion record has been cleared.",
+                timeout = 6,
+            })
+        else
+            UIManager:show(InfoMessage:new{
+                text = "Could not revert.\n" .. tostring(result),
+                timeout = 4,
+            })
+        end
+    end)
 end
 
 -- Build self._reverse_matches: positions of converted values in the text,
@@ -2914,27 +3152,45 @@ function FootFree:_loadReverseMatches(doc)
     for _, a in ipairs(alts) do esc[#esc + 1] = _re_escape(a) end
     local pat = "(" .. table.concat(esc, "|") .. ")"
 
-    local ok, results = pcall(function()
-        return doc:findAllText(pat, true, 0, 1000, true)
-    end)
-    if not ok or not results then return true end
-
-    local counters = {}
-    local result, cached = {}, {}
-    for _, r in ipairs(_filter_overlapping_matches(results)) do
-        local info = data.map[r.matched_text]
-        if info and info.originals then
-            local idx = (counters[r.matched_text] or 0) + 1
-            counters[r.matched_text] = idx
-            local original = info.originals[idx] or info.originals[#info.originals]
-            table.insert(result, { start = r.start, ["end"] = r["end"],
-                                    _converted = original, _cat = info.cat })
-            table.insert(cached, { start = r.start, ["end"] = r["end"],
-                                    original = original, cat = info.cat })
+    -- First-time scan: run findAllText in a dismissable subprocess so the UI
+    -- doesn't freeze; the resolved positions are then cached so future opens hit
+    -- the instant fast path above. _filter_overlapping_matches runs in the child
+    -- (on the full hit objects); the parent maps each hit to its original.
+    local Trapper = require("ui/trapper")
+    Trapper:wrap(function()
+        local completed, filtered = Trapper:dismissableRunInSubprocess(function()
+            local ok, results = pcall(function()
+                return doc:findAllText(pat, true, 0, 1000, true)
+            end)
+            if not ok or not results then return {} end
+            local out = {}
+            for _, r in ipairs(_filter_overlapping_matches(results)) do
+                out[#out + 1] = { start = r.start, ["end"] = r["end"],
+                                   matched_text = r.matched_text }
+            end
+            return out
+        end, "Loading original units…")
+        if not completed then return end  -- dismissed
+        filtered = filtered or {}
+        local counters = {}
+        local result, cached = {}, {}
+        for _, r in ipairs(filtered) do
+            local info = data.map[r.matched_text]
+            if info and info.originals then
+                local idx = (counters[r.matched_text] or 0) + 1
+                counters[r.matched_text] = idx
+                local original = info.originals[idx] or info.originals[#info.originals]
+                table.insert(result, { start = r.start, ["end"] = r["end"],
+                                        _converted = original, _cat = info.cat })
+                table.insert(cached, { start = r.start, ["end"] = r["end"],
+                                        original = original, cat = info.cat })
+            end
         end
-    end
-    _save_reverse_matches(doc.file, data.map, cached)
-    self._reverse_matches = #result > 0 and result or nil
+        _save_reverse_matches(doc.file, data.map, cached)
+        self._reverse_matches = #result > 0 and result or nil
+        self._current_boxes = {}
+        if self.view then UIManager:setDirty(self.view.dialog, "ui") end
+    end)
     return true
 end
 
@@ -2948,6 +3204,15 @@ function FootFree:_startFastScan(doc)
     self._all_matches   = nil
     self._current_boxes = {}
     self._scan_progress = 0.0  -- show the corner loader while it runs
+    self._scan_poll_n   = 0
+    -- Estimate scan duration so the progress bar advances ~linearly (a true-ish
+    -- ETA) instead of easing exponentially to 90% and stalling there. The rate
+    -- is calibrated from past scans on this device; floor the ETA at 2s.
+    local rate = tonumber(G_reader_settings:readSetting("footcream_scan_rate"))
+                 or _DEFAULT_SCAN_RATE
+    self._scan_size = _file_size(doc.file)
+    self._scan_eta  = math.max(2, (self._scan_size or 0) * rate)
+    self._scan_t0   = _now()
     os.remove(_PARTIAL_SIDECAR)
     if self.view then UIManager:setDirty(self.view.dialog, "ui") end
 
@@ -2959,6 +3224,9 @@ function FootFree:_startFastScan(doc)
         local ok_pid, pid = pcall(function()
             return ffiutil.runInSubProcess(function()
                 -- CHILD: inherits crengine state at fork; no UIManager calls.
+                -- Run at lowest CPU priority so the parent UI stays responsive
+                -- (page turns) on single-core e-readers during the long scan.
+                _nice_self()
                 local matches = _fast_scan_matches(doc, cat_enabled)
                 FootFree._finishScan(nil, doc, matches, {}, 0, true, debug_report)
             end)
@@ -2990,6 +3258,16 @@ end
 
 -- Shared scan-completion: load the saved sidecar into _all_matches, clear the
 -- progress indicator, and notify. Used by both the classic and fast pollers.
+-- Run (once) an action queued to fire after the next scan finishes — used by
+-- "Rescan book" on a converted book to re-apply the conversion with fresh data.
+function FootFree:_runAfterScan()
+    if self._after_scan then
+        local cb = self._after_scan
+        self._after_scan = nil
+        cb()
+    end
+end
+
 function FootFree:_onScanComplete(err)
     logger.info("FootFree: subprocess complete")
     if self._scan_indicator then
@@ -2999,6 +3277,19 @@ function FootFree:_onScanComplete(err)
     local doc = self._scan_doc
     self._scan_pid = nil
     self._scan_doc = nil
+
+    -- Calibrate the per-byte scan rate from this run so the next book's ETA is
+    -- accurate. Blend 50/50 with the previous rate so one odd book (e.g. heavy
+    -- images) doesn't skew it. Only trust runs long enough to be meaningful.
+    if self._scan_t0 and self._scan_size and self._scan_size > 0 then
+        local dur = _now() - self._scan_t0
+        if dur > 1.0 then
+            local new_rate = dur / self._scan_size
+            local old = tonumber(G_reader_settings:readSetting("footcream_scan_rate"))
+            local rate = old and (old * 0.5 + new_rate * 0.5) or new_rate
+            G_reader_settings:saveSetting("footcream_scan_rate", rate)
+        end
+    end
 
     local raw = doc and _load_sidecar_raw(doc.file)
     if raw then
@@ -3020,6 +3311,7 @@ function FootFree:_onScanComplete(err)
     self._scan_progress = nil
     os.remove(_SCAN_PROGRESS_FILE)
     os.remove(_PARTIAL_SIDECAR)
+    self:_runAfterScan()
 end
 
 -- Poll the fast-scan subprocess. It's a single opaque pass (no per-step
@@ -3038,9 +3330,28 @@ function FootFree:_pollFastScan()
     if done then
         self:_onScanComplete(err)
     else
-        local p = self._scan_progress or 0
-        self._scan_progress = p + (0.9 - p) * 0.18
-        if self.view then UIManager:setDirty(self.view.dialog, "fast") end
+        -- Linear, time-based progress against the estimated ETA — "true-ish"
+        -- rather than a fast ease that stalls at 90%. Clamp to 0.97 so we never
+        -- claim done early; completion snaps it to 100% / closes the loader.
+        local elapsed = _now() - (self._scan_t0 or _now())
+        local eta = self._scan_eta or 30
+        self._scan_progress = math.min(0.97, eta > 0 and (elapsed / eta) or 0.9)
+        self._scan_poll_n = (self._scan_poll_n or 0) + 1
+        -- Animate the corner loader ~3×/s, refreshing ONLY its small top-left
+        -- region with a gentle partial ("ui") refresh. Never "fast" (leaves
+        -- e-ink ghosting over a long scan) and never "full" (hard black flash —
+        -- the thing the user was seeing). The page body is never touched, so the
+        -- scan no longer flashes or ghosts; the user's own page turns refresh it.
+        if self.view and self._scan_poll_n % 3 == 0 then
+            local Screen = require("device").screen
+            local sz = Screen:scaleBySize(_LOADER_PX) + Screen:scaleBySize(8)
+            local region = Geom:new{
+                x = 0, y = 0,
+                w = math.floor(Screen:getWidth() / 3) + sz,
+                h = sz,
+            }
+            UIManager:setDirty(self.view.dialog, "ui", region)
+        end
         UIManager:scheduleIn(0.12, function() self:_pollFastScan() end)
     end
 end
@@ -3058,6 +3369,36 @@ function FootFree:_reapply_settings()
     self._all_matches   = #applied > 0 and applied or nil
     self._current_boxes = {}
     if self.view then UIManager:setDirty(self.view.dialog, "ui") end
+end
+
+-- Debug (Advanced › Debug): jump forward in document order to the next imperial
+-- unit and announce its position — "Unit A of B in book". Wraps to the first
+-- unit once past the last.
+function FootFree:_gotoNextUnit()
+    local doc = self.ui.document
+    if not doc then return end
+    if not self._all_matches or #self._all_matches == 0 then
+        UIManager:show(Notification:new{ text = "No units found in this book." })
+        return
+    end
+    -- Units in reading order (same key the convert/report paths use).
+    local ordered = {}
+    for _, m in ipairs(self._all_matches) do ordered[#ordered + 1] = m end
+    table.sort(ordered, function(a, b)
+        return _xp_key_less(_xp_numkey(a.start), _xp_numkey(b.start))
+    end)
+    local total = #ordered
+    -- First unit strictly after the current page top; wrap to the first.
+    local cur, idx = doc:getXPointer(), 1
+    for i, m in ipairs(ordered) do
+        if cur and doc:compareXPointers(cur, m.start) == 1 then idx = i; break end
+    end
+    local target = ordered[idx]
+    if self.ui.link then self.ui.link:addCurrentLocationToStack() end
+    self.ui:handleEvent(Event:new("GotoXPointer", target.start, target.start))
+    UIManager:show(Notification:new{
+        text = string.format("Unit %d of %d in book", idx, total),
+    })
 end
 
 -- ── Draw ──────────────────────────────────────────────────────────────────────
@@ -3213,12 +3554,17 @@ end
 
 function FootFree:_runUpdateCheck(Trapper)
     local InfoMessage = require("ui/widget/infomessage")
-    Trapper:info("Checking for updates…")
-    local body, err = _http_fetch(
-        "https://api.github.com/repos/" .. _GITHUB_REPO .. "/releases/latest")
-    Trapper:clear()
-    if not body then
-        UIManager:show(InfoMessage:new{ text = "Update check failed:\n" .. tostring(err) })
+    local api = "https://api.github.com/repos/" .. _GITHUB_REPO .. "/releases/latest"
+    -- Fetch in a subprocess so the UI stays responsive and the message is
+    -- dismissable (returns the JSON body, or "ERR:<reason>" on failure).
+    local completed, body = Trapper:dismissableRunInSubprocess(function()
+        local b, err = _http_fetch(api)
+        return b or ("ERR:" .. tostring(err))
+    end, "Checking for updates…", true)
+    if not completed then return end  -- dismissed by the user
+    if not body or body:match("^ERR:") then
+        UIManager:show(InfoMessage:new{
+            text = "Update check failed:\n" .. ((body or "no response"):gsub("^ERR:", "")) })
         return
     end
     local rel = _json_decode(body)
@@ -3258,47 +3604,53 @@ end
 
 function FootFree:_installUpdate(Trapper, asset_url, tag)
     local InfoMessage = require("ui/widget/infomessage")
-    local tmp_zip = _SIDECAR_DIR .. "/update.zip"
-    local tmp_dir = _SIDECAR_DIR .. "/update"
-    os.remove(tmp_zip)
+    local tmp_zip   = _SIDECAR_DIR .. "/update.zip"
+    local tmp_dir   = _SIDECAR_DIR .. "/update"
+    local plugin_dir = _PLUGIN_DIR
+    local backup    = plugin_dir .. ".bak"
 
-    Trapper:info("Downloading " .. tag .. "…")
-    local ok, err = _http_fetch(asset_url, tmp_zip)
-    if not ok then
-        Trapper:clear()
-        UIManager:show(InfoMessage:new{ text = "Download failed:\n" .. tostring(err) })
+    -- Do the whole download → unzip → install in ONE subprocess so the UI never
+    -- freezes and the "Updating…" message stays dismissable. Returns "OK" or
+    -- "ERR:<reason>". (No UIManager use inside — not allowed in the subprocess.)
+    local completed, result = Trapper:dismissableRunInSubprocess(function()
+        os.execute('rm -rf "' .. tmp_dir .. '" "' .. tmp_zip .. '" "' .. backup .. '"')
+        local ok, err = _http_fetch(asset_url, tmp_zip)
+        if not ok then return "ERR:Download failed: " .. tostring(err) end
+        os.execute('mkdir -p "' .. tmp_dir .. '"')
+        os.execute('unzip -o "' .. tmp_zip .. '" -d "' .. tmp_dir .. '" >/dev/null 2>&1')
+        local src = _find_plugin_root(tmp_dir)
+        if not src then return "ERR:Update package didn't contain the plugin files." end
+        os.execute('cp -rf "' .. plugin_dir .. '" "' .. backup .. '"')
+        os.execute('cp -rf "' .. src .. '/." "' .. plugin_dir .. '/"')
+        if not _file_exists(plugin_dir .. "/main.lua") then
+            os.execute('rm -rf "' .. plugin_dir .. '" && mv "' .. backup .. '" "' .. plugin_dir .. '"')
+            os.execute('rm -rf "' .. tmp_dir .. '" "' .. tmp_zip .. '"')
+            return "ERR:Install failed — restored the previous version."
+        end
+        os.execute('rm -rf "' .. backup .. '" "' .. tmp_dir .. '" "' .. tmp_zip .. '"')
+        return "OK"
+    end, "Updating to " .. tag .. "…", true)
+
+    if not completed then
+        -- Dismissed → the subprocess was SIGKILLed. If it died mid-copy, restore
+        -- from the backup so we never leave a broken plugin; then clean debris.
+        if _file_exists(backup .. "/main.lua") and not _file_exists(plugin_dir .. "/main.lua") then
+            os.execute('rm -rf "' .. plugin_dir .. '" && mv "' .. backup .. '" "' .. plugin_dir .. '"')
+        end
+        os.execute('rm -rf "' .. backup .. '" "' .. tmp_dir .. '" "' .. tmp_zip .. '"')
         return
     end
-
-    Trapper:info("Installing " .. tag .. "…")
-    os.execute('rm -rf "' .. tmp_dir .. '" && mkdir -p "' .. tmp_dir .. '"')
-    os.execute('unzip -o "' .. tmp_zip .. '" -d "' .. tmp_dir .. '" >/dev/null 2>&1')
-    local src = _find_plugin_root(tmp_dir)
-    if not src then
-        Trapper:clear()
-        os.execute('rm -rf "' .. tmp_dir .. '"'); os.remove(tmp_zip)
-        UIManager:show(InfoMessage:new{ text = "Update package didn't contain the plugin files." })
-        return
+    if result == "OK" then
+        UIManager:show(ConfirmBox:new{
+            text = string.format("Updated to %s.\nRestart KOReader now to load it?", tag),
+            ok_text = "Restart",
+            ok_callback = function() UIManager:restartKOReader() end,
+            cancel_text = "Later",
+        })
+    else
+        UIManager:show(InfoMessage:new{
+            text = (type(result) == "string" and result:gsub("^ERR:", "")) or "Update failed." })
     end
-
-    -- Back up the current folder, copy the new files over it, verify, restore on failure.
-    local backup = _PLUGIN_DIR .. ".bak"
-    os.execute('rm -rf "' .. backup .. '" && cp -rf "' .. _PLUGIN_DIR .. '" "' .. backup .. '"')
-    os.execute('cp -rf "' .. src .. '/." "' .. _PLUGIN_DIR .. '/"')
-    Trapper:clear()
-
-    local vfh = io.open(_PLUGIN_DIR .. "/main.lua")
-    if not vfh then
-        os.execute('rm -rf "' .. _PLUGIN_DIR .. '" && cp -rf "' .. backup .. '" "' .. _PLUGIN_DIR .. '"')
-        os.execute('rm -rf "' .. backup .. '" "' .. tmp_dir .. '"'); os.remove(tmp_zip)
-        UIManager:show(InfoMessage:new{ text = "Install failed — restored the previous version." })
-        return
-    end
-    vfh:close()
-    os.execute('rm -rf "' .. backup .. '" "' .. tmp_dir .. '"'); os.remove(tmp_zip)
-
-    UIManager:show(InfoMessage:new{
-        text = string.format("Updated to %s.\nPlease restart KOReader to load it.", tag) })
 end
 
 -- ── Menu ──────────────────────────────────────────────────────────────────────
@@ -3373,14 +3725,20 @@ function FootFree:addToMainMenu(menu_items)
                 callback = function()
                     local doc = self.ui.document
                     if self._tap_mode == 3 then
-                        -- Mode 3: toggle applies or reverts the metric edition
-                        if doc and _is_metric_mode(doc.file) then
-                            logger.info("Footcream: Enable toggled OFF → reverting")
-                            self:_revertMetricEdition(doc)
-                        elseif doc then
-                            logger.info("Footcream: Enable toggled ON → applying")
-                            self:_applyMetricEdition(doc)
-                        end
+                        -- Mode 3: toggle applies or reverts the metric edition.
+                        -- Close the menu first (and let it settle) so the convert
+                        -- confirmation / progress isn't drawn over the open menu —
+                        -- that "ghost popup" swallowed the first tap.
+                        self.ui:handleEvent(Event:new("CloseReaderMenu"))
+                        UIManager:scheduleIn(0.3, function()
+                            if doc and _is_metric_mode(doc.file) then
+                                logger.info("Footcream: Enable toggled OFF → reverting")
+                                self:_revertMetricEdition(doc)
+                            elseif doc then
+                                logger.info("Footcream: Enable toggled ON → applying")
+                                self:_applyMetricEdition(doc)
+                            end
+                        end)
                     else
                         -- Mode 1: toggle hints on/off
                         self._enabled = not self._enabled
@@ -3500,22 +3858,21 @@ function FootFree:addToMainMenu(menu_items)
                         self.ui:handleEvent(Event:new("CloseReaderMenu"))
                         UIManager:show(ConfirmBox:new{
                             text = "This book is currently converted to metric. " ..
-                                   "Footcream will restore the original text first, " ..
-                                   "then rescan it.\n\nYou can re-convert afterward via " ..
-                                   "the Mode menu. Continue?",
-                            ok_text     = "Restore & scan",
+                                   "Footcream will restore the original text, rescan " ..
+                                   "it, then re-apply the conversion with the fresh " ..
+                                   "data.\n\nContinue?",
+                            ok_text     = "Rescan & reconvert",
                             cancel_text = "Cancel",
                             ok_callback = function()
-                                -- Revert reloads the document; once it settles the
-                                -- restored text is in place, then scan it.
+                                -- Revert runs async now; once it finishes and
+                                -- reloads, scan the restored text (a short delay
+                                -- lets the reload settle first).
+                                -- Flag the book; onReaderReady (after the revert's
+                                -- reload) does the rescan + re-convert. A timer here
+                                -- is unreliable — reloadDocument recreates the reader
+                                -- UI, so self.ui.document is gone by the time it fires.
+                                _pending_rescan = doc.file
                                 self:_revertMetricEdition(doc)
-                                UIManager:scheduleIn(1.0, function()
-                                    local d = self.ui.document
-                                    if d then
-                                        os.remove(_sidecar_path(d.file))
-                                        self:_startScan(d)
-                                    end
-                                end)
                             end,
                         })
                         return
@@ -3549,17 +3906,26 @@ function FootFree:addToMainMenu(menu_items)
                 text = "Advanced",
                 sub_item_table = {
                     {
-                        text = "Smart rounding for conversion (requires rescan)",
+                        text = "Smart rounding for conversions",
                         checked_func = function() return self._smart_rounding end,
                         callback = function()
                             self._smart_rounding = not self._smart_rounding
                             G_reader_settings:saveSetting("footcream_smart_rounding",
                                                           self._smart_rounding)
-                            self:_reapply_settings()
+                            -- Conversions are computed at scan time, so a fresh
+                            -- scan is needed to apply the change. Auto-rescan when
+                            -- a scan exists and the book isn't converted-in-place
+                            -- (mode 3 bakes values into the text — re-convert there).
+                            local doc = self.ui.document
+                            if doc and doc.file and not _is_metric_mode(doc.file)
+                               and _file_exists(_sidecar_path(doc.file)) then
+                                os.remove(_sidecar_path(doc.file))
+                                self:_startScan(doc)
+                            end
                         end,
                     },
                     {
-                        text = "Original unit as tooltip (only for Convert in Text Mode)",
+                        text = "Show original unit in tooltip (Convert in Text Mode)",
                         checked_func = function() return self._show_original end,
                         callback = function()
                             self._show_original = not self._show_original
@@ -3609,6 +3975,22 @@ function FootFree:addToMainMenu(menu_items)
                                 self:_revertMetricEdition(doc)
                             end
                         end,
+                    },
+                    {
+                        text = "Debug",
+                        sub_item_table = {
+                            {
+                                text = "Go to next unit",
+                                enabled_func = function()
+                                    return self.ui.document ~= nil
+                                        and self._all_matches ~= nil
+                                        and #self._all_matches > 0
+                                end,
+                                callback = function()
+                                    self:_gotoNextUnit()
+                                end,
+                            },
+                        },
                     },
                 },
             })
