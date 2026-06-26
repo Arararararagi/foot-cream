@@ -768,7 +768,13 @@ local function _http_fetch(url, dest_path, depth)
         sink = ltn12.sink.table(body)
     end
 
-    socketutil:set_timeout(15, 120)
+    -- KOReader's standard short timeouts (10s/op, 30s total) — socketutil has
+    -- globally overridden socket.tcp, so these bound connect/read. Our old 120s
+    -- total could leave the network task hanging for two minutes on a bad
+    -- connection. (DNS getaddrinfo still isn't bounded by these — it's a
+    -- pre-socket system call — so a momentary DNS hiccup can still briefly
+    -- block; that's a device/network state issue, not ours.)
+    socketutil:set_timeout(socketutil.LARGE_BLOCK_TIMEOUT, socketutil.LARGE_TOTAL_TIMEOUT)
     local ok, code, headers = requester.request{
         url     = url,
         method  = "GET",
@@ -778,7 +784,15 @@ local function _http_fetch(url, dest_path, depth)
     }
     socketutil:reset_timeout()
 
-    if not ok then return nil, "network error: " .. tostring(code) end
+    if not ok then
+        -- DNS/host-resolution failures surface as "host or service not provided"
+        -- — make that actionable rather than cryptic.
+        local msg = tostring(code)
+        if msg:find("host or service", 1, true) or msg:find("not known", 1, true) then
+            msg = "couldn't reach GitHub (network/DNS) — check WiFi and try again"
+        end
+        return nil, "network error: " .. msg
+    end
     code = tonumber(code)
     if code and code >= 300 and code < 400 then
         local loc = headers and (headers.location or headers.Location)
@@ -3415,6 +3429,78 @@ function FootFree:_gotoNextUnit()
     })
 end
 
+-- Debug (Advanced › Debug › "Units in book"): a scrollable modal listing every
+-- unit found — its converted value and the surrounding sentence — for quickly
+-- auditing discovery + conversion. Tap an entry to jump to it in the book;
+-- long-press to read the full (untruncated) entry.
+function FootFree:_showUnitList()
+    local doc = self.ui.document
+    if not doc then return end
+    if not self._all_matches or #self._all_matches == 0 then
+        UIManager:show(InfoMessage:new{ text = "No units found in this book yet." })
+        return
+    end
+    local Menu         = require("ui/widget/menu")
+    local Screen       = require("device").screen
+    local GestureRange = require("ui/gesturerange")
+    local BD           = require("ui/bidi")
+
+    -- Reading order (same key the convert/report paths use).
+    local ordered = {}
+    for _, m in ipairs(self._all_matches) do ordered[#ordered + 1] = m end
+    table.sort(ordered, function(a, b)
+        return _xp_key_less(_xp_numkey(a.start), _xp_numkey(b.start))
+    end)
+
+    local items = {}
+    for i, r in ipairs(ordered) do
+        local unit = _display(r.matched_text or "")
+        local conv = _metric_only(r) or "?"
+        local ctx  = (r.prev_text or "") .. (r.matched_text or "") .. (r.next_text or "")
+        ctx = ctx:gsub("%s+", " "):gsub("^%s+", ""):gsub("%s+$", "")
+        items[i] = {
+            text      = string.format("%d. %s  →  %s\n…%s…", i, unit, conv, ctx),
+            mandatory = r._cat or "",
+            _xp       = r.start,
+        }
+    end
+
+    local plugin = self
+    local menu
+    menu = Menu:new{
+        title         = string.format("Units in book (%d)", #items),
+        item_table    = items,
+        is_borderless = true,
+        is_popout     = false,
+        single_line   = false,
+        multilines_show_more_text = true,
+        items_max_lines = 3,
+        items_per_page  = 7,
+        covers_fullscreen = true,
+        line_color    = Blitbuffer.COLOR_WHITE,
+        on_close_ges  = {
+            GestureRange:new{
+                ges   = "two_finger_swipe",
+                range = Geom:new{ x = 0, y = 0, w = Screen:getWidth(), h = Screen:getHeight() },
+                direction = BD.flipDirectionIfMirroredUILayout("east"),
+            },
+        },
+    }
+    function menu:onMenuSelect(item)
+        UIManager:close(menu)
+        if item._xp then
+            if plugin.ui.link then plugin.ui.link:addCurrentLocationToStack() end
+            plugin.ui:handleEvent(Event:new("GotoXPointer", item._xp, item._xp))
+        end
+    end
+    function menu:onMenuHold(item)
+        UIManager:show(InfoMessage:new{ text = item.text })  -- full, untruncated
+        return true
+    end
+    menu.close_callback = function() UIManager:close(menu) end
+    UIManager:show(menu)
+end
+
 -- ── Draw ──────────────────────────────────────────────────────────────────────
 
 -- Digit matches include a leading boundary char (the [^0-9,] the _ND pattern
@@ -3993,6 +4079,17 @@ function FootFree:addToMainMenu(menu_items)
                     {
                         text = "Debug",
                         sub_item_table = {
+                            {
+                                text = "Units in book (list)",
+                                enabled_func = function()
+                                    return self.ui.document ~= nil
+                                        and self._all_matches ~= nil
+                                        and #self._all_matches > 0
+                                end,
+                                callback = function()
+                                    self:_showUnitList()
+                                end,
+                            },
                             {
                                 text = "Go to next unit",
                                 enabled_func = function()
