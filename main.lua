@@ -3022,6 +3022,20 @@ function FootFree:_doApplyMetricEdition(doc)
         if result:match("^OK:") then
             local n = tonumber(result:match(":(%d+)")) or 0
             logger.info("FootFree: metric edition applied, " .. n .. " file(s) modified")
+            if n == 0 then
+                -- Had measurements to convert, but the in-place rewrite matched
+                -- NONE of them in the book's raw markup — i.e. the scanner's text
+                -- and the file's bytes diverge (unusual markup/format). Surface it
+                -- instead of silently reloading unchanged (which looks like the
+                -- convert "refused"). This is the diagnostic for the Kobo report.
+                UIManager:show(InfoMessage:new{
+                    text = string.format(
+                        "Couldn't convert this book in place.\n\n%d measurement%s were found, but none could be matched in the book's text — its markup/format may not be supported for in-text conversion.\n\nUnderline & tap mode still works for this book.",
+                        #reps, #reps == 1 and "" or "s"),
+                    timeout = 10,
+                })
+                return
+            end
             -- Preserve the sidecar: rewrite it to update its modification timestamp.
             -- Without this, the epub (just modified) would be newer than the sidecar,
             -- causing the mod-time check to discard it on reload — losing scan data.

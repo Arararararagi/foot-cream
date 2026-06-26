@@ -20,8 +20,21 @@ local M = {}
 
 local HTML_EXTS = { xhtml = true, html = true, htm = true }
 
-local function ext_of(name)
-    return (name:match("%.([%a]+)$") or ""):lower()
+-- Is this zip entry an (X)HTML document we should rewrite? A recognised
+-- extension is the fast path; otherwise sniff the content for an <html> root.
+-- The sniff is essential because some tools name chapters in ways the extension
+-- check misses — e.g. Calibre's split output "chapter.html_split_000" (ends in
+-- digits, so `%.([%a]+)$` yields ""), which made whole books silently convert
+-- nothing (OK:0). Sniffing safely skips css/opf/ncx/images — none contain "<html".
+local function is_html(name, data)
+    local ext = (name:match("%.([%a]+)$") or ""):lower()
+    if HTML_EXTS[ext] then return true end
+    if data then
+        local head = data:sub(1, 2048):lower()
+        return head:find("<html", 1, true) ~= nil
+            or head:find("<!doctype html", 1, true) ~= nil
+    end
+    return false
 end
 
 local function file_exists(p)
@@ -185,7 +198,7 @@ function M.apply(epub_path, record_path, reps)
     -- Apply replacements to html/xhtml entries.
     local modified, changed = {}, {}
     for _, name in ipairs(order) do
-        if HTML_EXTS[ext_of(name)] then
+        if is_html(name, content[name]) then
             local text, total = content[name], 0
             for _, rep in ipairs(reps) do
                 local new, n = apply_one(text, rep.from, rep.to, rep.guard_next)
