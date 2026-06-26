@@ -646,6 +646,10 @@ local _CAT_ICONS = {
 local _SIDECAR_DIR         = DataStorage:getDataDir() .. "/footcream"
 local _SCAN_PROGRESS_FILE  = _SIDECAR_DIR .. "/scan_progress"
 local _PARTIAL_SIDECAR     = _SIDECAR_DIR .. "/scan_partial.lua"
+-- Append-only log of conversions the reader flags as wrong (Debug › Units in
+-- book › long-press › Flag). Kept as plain text so it can be pulled off the
+-- device over USB and discussed/fixed on a computer.
+local _FLAG_FILE           = _SIDECAR_DIR .. "/flagged_errors.txt"
 os.execute("mkdir -p " .. _SIDECAR_DIR)
 
 -- Developer marker: if this file exists, dev-only features turn on (currently the
@@ -3452,16 +3456,60 @@ function FootFree:_showUnitList()
         return _xp_key_less(_xp_numkey(a.start), _xp_numkey(b.start))
     end)
 
+    -- Re-extract the surrounding sentence fresh from each match's (possibly
+    -- extended) start/end xpointers, rather than concatenating the saved
+    -- prev_text/matched/next_text. For compound and range matches the start/end
+    -- were widened after the original 8-word context was captured, so that
+    -- concatenation overlapped the widened span — the source of the doubled
+    -- words. before = text(start-N words, start) and after = text(end, end+N
+    -- words) are disjoint from the matched span by construction, so they can't
+    -- double, and N can be larger for a fuller sentence.
+    local CTX_WORDS = 12
+    local function text_of(a, b)
+        if not a or not b then return nil end
+        local ok, t = pcall(function() return doc:getTextFromXPointers(a, b) end)
+        if ok and t then return t end
+        return nil
+    end
+    local function walk(xp, n, fwd)
+        local cand = xp
+        for _ = 1, n do
+            local ok, nxt = pcall(function()
+                return fwd and doc:getNextVisibleWordEnd(cand)
+                            or doc:getPrevVisibleWordStart(cand)
+            end)
+            if not ok or not nxt or nxt == cand then break end
+            cand = nxt
+        end
+        return cand
+    end
+    local function context_of(r, unit)
+        local before = text_of(walk(r.start, CTX_WORDS, false), r.start) or ""
+        local after  = r["end"] and (text_of(r["end"], walk(r["end"], CTX_WORDS, true)) or "") or ""
+        local ctx = before .. " [" .. unit .. "] " .. after
+        ctx = ctx:gsub("%s+", " "):gsub("^%s+", ""):gsub("%s+$", "")
+        -- Extraction failed (no end xp, or both sides empty) — fall back to the
+        -- saved context so the row is never blank.
+        if not r["end"] or (before == "" and after == "") then
+            ctx = ((r.prev_text or "") .. (r.matched_text or "") .. (r.next_text or ""))
+                :gsub("%s+", " "):gsub("^%s+", ""):gsub("%s+$", "")
+        end
+        return ctx
+    end
+
     local items = {}
     for i, r in ipairs(ordered) do
         local unit = _display(r.matched_text or "")
         local conv = _metric_only(r) or "?"
-        local ctx  = (r.prev_text or "") .. (r.matched_text or "") .. (r.next_text or "")
-        ctx = ctx:gsub("%s+", " "):gsub("^%s+", ""):gsub("%s+$", "")
+        local ctx  = context_of(r, unit)
         items[i] = {
             text      = string.format("%d. %s  →  %s\n…%s…", i, unit, conv, ctx),
             mandatory = r._cat or "",
             _xp       = r.start,
+            _unit     = unit,
+            _conv     = conv,
+            _ctx      = ctx,
+            _loc      = r.start,
         }
     end
 
@@ -3474,8 +3522,9 @@ function FootFree:_showUnitList()
         is_popout     = false,
         single_line   = false,
         multilines_show_more_text = true,
-        items_max_lines = 3,
-        items_per_page  = 7,
+        items_font_size = 14,   -- compact: fit more of each sentence per row
+        items_max_lines = 4,
+        items_per_page  = 8,
         covers_fullscreen = true,
         line_color    = Blitbuffer.COLOR_WHITE,
         on_close_ges  = {
@@ -3493,12 +3542,98 @@ function FootFree:_showUnitList()
             plugin.ui:handleEvent(Event:new("GotoXPointer", item._xp, item._xp))
         end
     end
+    -- Long-press → flag this conversion as wrong (tagging what's off) or jump to
+    -- it. Flags are appended to flagged_errors.txt for later off-device review.
     function menu:onMenuHold(item)
-        UIManager:show(InfoMessage:new{ text = item.text })  -- full, untruncated
+        local ButtonDialog = require("ui/widget/buttondialog")
+        local dialog
+        local function flag(issue)
+            UIManager:close(dialog)
+            plugin:_flagError(item, issue)
+        end
+        dialog = ButtonDialog:new{
+            title       = item.text,
+            title_align = "left",
+            buttons = {
+                {{ text = "⚑ Wrong conversion",   callback = function() flag("wrong conversion") end }},
+                {{ text = "⚑ Missed / wrong span", callback = function() flag("missed or wrong span") end }},
+                {{ text = "⚑ False positive",      callback = function() flag("false positive") end }},
+                {{ text = "Go to in book", callback = function()
+                    UIManager:close(dialog)
+                    UIManager:close(menu)
+                    if item._xp then
+                        if plugin.ui.link then plugin.ui.link:addCurrentLocationToStack() end
+                        plugin.ui:handleEvent(Event:new("GotoXPointer", item._xp, item._xp))
+                    end
+                end }},
+                {{ text = "Close", callback = function() UIManager:close(dialog) end }},
+            },
+        }
+        UIManager:show(dialog)
         return true
     end
     menu.close_callback = function() UIManager:close(menu) end
     UIManager:show(menu)
+end
+
+-- Append a flagged conversion to flagged_errors.txt — a plain-text, USB-pullable
+-- record (book title, what was detected, what it became, the sentence, and the
+-- xpointer) so faulty units can be discussed/fixed on a computer.
+function FootFree:_flagError(item, issue)
+    local doc = self.ui.document
+    local title = "(unknown book)"
+    if doc then
+        local okp, props = pcall(function() return doc:getProps() end)
+        if okp and props and props.title and props.title ~= "" then
+            title = props.title
+        elseif doc.file then
+            title = doc.file:match("([^/]+)$") or doc.file
+        end
+    end
+    local f = io.open(_FLAG_FILE, "a")
+    if not f then
+        UIManager:show(InfoMessage:new{ text = "Couldn't write the flag file." })
+        return
+    end
+    f:write(string.format(
+        "[%s]  %s\n  issue:      %s\n  detected:   %s\n  converted:  %s\n  sentence:   %s\n  loc:        %s\n\n",
+        os.date("%Y-%m-%d %H:%M"), title, issue,
+        item._unit or "?", item._conv or "?", item._ctx or "?",
+        tostring(item._loc or "?")))
+    f:close()
+    UIManager:show(Notification:new{ text = "Flagged: " .. issue })
+end
+
+-- Debug › "View flagged errors": show the accumulated flag log on-device.
+function FootFree:_showFlaggedErrors()
+    local f = io.open(_FLAG_FILE, "r")
+    local data = f and f:read("*a") or nil
+    if f then f:close() end
+    if not data or data:gsub("%s", "") == "" then
+        UIManager:show(InfoMessage:new{ text = "No flagged errors yet." })
+        return
+    end
+    local TextViewer = require("ui/widget/textviewer")
+    UIManager:show(TextViewer:new{
+        title = "Flagged errors",
+        text  = data,
+    })
+end
+
+-- Debug › "Clear flagged errors": delete the log after it's been pulled off.
+function FootFree:_clearFlaggedErrors()
+    if not _file_exists(_FLAG_FILE) then
+        UIManager:show(InfoMessage:new{ text = "No flagged errors to clear." })
+        return
+    end
+    UIManager:show(ConfirmBox:new{
+        text = "Delete all flagged errors?",
+        ok_text = "Delete",
+        ok_callback = function()
+            os.remove(_FLAG_FILE)
+            UIManager:show(Notification:new{ text = "Flagged errors cleared." })
+        end,
+    })
 end
 
 -- ── Draw ──────────────────────────────────────────────────────────────────────
@@ -4099,6 +4234,19 @@ function FootFree:addToMainMenu(menu_items)
                                 end,
                                 callback = function()
                                     self:_gotoNextUnit()
+                                end,
+                            },
+                            {
+                                text = "View flagged errors",
+                                separator = true,
+                                callback = function()
+                                    self:_showFlaggedErrors()
+                                end,
+                            },
+                            {
+                                text = "Clear flagged errors",
+                                callback = function()
+                                    self:_clearFlaggedErrors()
                                 end,
                             },
                         },
