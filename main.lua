@@ -28,7 +28,7 @@ local _ENDASH = "\226\128\147"   -- –  U+2013
 local _TIMES  = "\195\151"       -- ×  U+00D7
 local _SUP2   = "\194\178"       -- ²  U+00B2 (superscript two)
 
-local CACHE_VERSION = 19  -- bumped: sub-km distances shown in meters (0.4 km -> 400 m)
+local CACHE_VERSION = 20  -- bumped: word-boundary fix + idiom/material/currency/range filters
 local _REVERSE_VERSION = 2  -- v2: ordered originals per converted string (position-aware reverse lookup)
 
 -- ── Number prefixes ───────────────────────────────────────────────────────────
@@ -849,6 +849,31 @@ local function _reverse_path(doc_path)
     return _SIDECAR_DIR .. "/reverse_" .. key .. ".lua"
 end
 
+-- Path of the tiny file recording which scanner (CACHE_VERSION) produced a
+-- book's in-text conversion. On open, a converted book compares this with the
+-- current CACHE_VERSION; if the scanner has since improved, it can revert +
+-- rescan + reconvert so the conversion isn't stuck on stale logic.
+local function _metric_ver_path(doc_path)
+    local key = doc_path:gsub("[/\\]", "_"):gsub("[^%w%-%._]", "_")
+    if #key > 180 then key = key:sub(-180) end
+    return _SIDECAR_DIR .. "/metric_ver_" .. key
+end
+
+local function _write_metric_version(doc_path)
+    local f = io.open(_metric_ver_path(doc_path), "w")
+    if f then f:write(tostring(CACHE_VERSION)); f:close() end
+end
+
+-- The scanner version a converted book was made with, or nil if unknown (an
+-- older conversion predating this record — treated as stale so it updates once).
+local function _read_metric_version(doc_path)
+    local f = io.open(_metric_ver_path(doc_path))
+    if not f then return nil end
+    local v = tonumber((f:read("*a") or ""):match("%d+"))
+    f:close()
+    return v
+end
+
 -- Escape ERE metacharacters so a converted string (e.g. "1.8 m") can be used
 -- as a literal alternative inside a findAllText regex pattern.
 local _RE_MAGIC = {
@@ -1481,7 +1506,10 @@ local function _range_conv_unit(text)
     local info = unit and _UNIT_CONV[unit]
     if not info or not info.factor then return nil end
     local s = _display(text):lower()
-    for _, sep in ipairs({" and ", " or ", " to "}) do
+    -- En/em dashes are range separators too ("five–six miles"); see
+    -- _detect_back_range. They're displayed as " to " (matching the word-range
+    -- output) rather than echoed back as a bare dash.
+    for _, sep in ipairs({" and ", " or ", " to ", _ENDASH, _EMDASH}) do
         local p = s:find(sep, 1, true)
         if p then
             local n1 = _parse_num(s:sub(1, p - 1))
@@ -1517,8 +1545,9 @@ local function _range_conv_unit(text)
                 local r1 = n1 * info.factor + info.offset
                 local r2 = n2 * info.factor + info.offset
                 if r1 > r2 then r1, r2 = r2, r1 end
+                local out_conn = (sep == _ENDASH or sep == _EMDASH) and " to " or sep
                 return _fmt_dist_range(_smart_round(r1, nil, true, info.target),
-                                        _smart_round(r2, nil, true, info.target), info.target, sep)
+                                        _smart_round(r2, nil, true, info.target), info.target, out_conn)
             end
         end
     end
@@ -1643,6 +1672,12 @@ end
 -- Parse a leading "<number> [inches|ounces]" or bare "<number>" from next_text
 -- (the tail of a compound). Returns (value, "inch"|"oz"|"bare") or nil.
 local function _lead_compound(next_text)
+    -- A sentence boundary is NOT a compound separator. "Ten feet. Five." is a
+    -- countdown, not "ten feet five inches" — reading the next number as inches
+    -- produced "3.17 m". A period followed by whitespace + a capital letter is a
+    -- new sentence; an abbreviation dot ("5 ft. 4 in") is followed by a digit,
+    -- so it is still read as a compound.
+    if (next_text or ""):match("^%s*%.%s+%u") then return nil end
     -- Strip leading spaces/commas/hyphens AND a stray period (from an abbreviated
     -- "ft." before the inches number), so the second number is found.
     local s = (next_text or ""):gsub("^[%s,%.%-]+", "")
@@ -1688,6 +1723,7 @@ local _RANGE_TAIL_NOUNS = {
 -- — or nil. Guarded against a trailing noun the number really belongs to.
 local function _inch_range_tail(next_text, first_inch)
     if not next_text or not first_inch then return nil end
+    if next_text:match("^%s*%.%s+%u") then return nil end  -- new sentence, not a range tail
     local s = next_text:gsub("^[%s,%.%-]+", "")
     local tok = s:match("^([%w][%w%.,]*)")           -- the first inch token
     if not tok then return nil end
@@ -1721,10 +1757,16 @@ end
 -- prev_text. Returns (n1, n2, span-from-N-to-unit) or nil. "and" only ranges
 -- when M >= 1 — "N and a half" is the additive form handled in _prev_num_words.
 local function _detect_back_range(prev, unit)
-    for _, conn in ipairs({" to ", " or ", " and "}) do
+    -- Word connectors plus typographic range dashes (en/em). A dash forms a range
+    -- only between two numbers — the `n1 and n2` check below enforces that, so
+    -- "five-foot" (number→unit hyphen) can't become a range. The ASCII hyphen is
+    -- deliberately NOT a connector: it collides with spelled compound numbers
+    -- ("twenty-five" would wrongly split into 20 and 5). En/em dashes (used for
+    -- ranges like "five–six miles") don't have that ambiguity.
+    for _, conn in ipairs({" to ", " or ", " and ", _ENDASH, _EMDASH}) do
         local before, mtok = prev:match("^(.-)" .. conn .. "([%w%-][%w%-%.,°]*)%s*$")
         if before and mtok then
-            local n2 = _parse_num((mtok:gsub("[%.,]+$", "")))
+            local n2 = _parse_num((mtok:gsub("[%.,%-]+$", "")))
             local n1, n1span = _prev_num_words(before)
             local extra = 0
             -- "N unit <conn> M unit" form: N is followed by the unit word, so
@@ -1991,7 +2033,12 @@ local function _fast_scan_matches(doc, cat_enabled)
                     }
                     -- Forward compound: "6 foot 4" (height) / "nine stone four".
                     local second, kind, clear_in = _lead_compound(h.next_text)
-                    if second and (kind == "bare" or kind == "in_abbr")
+                    -- An inches component is always < 12 (12+ would be another
+                    -- foot). Capping it stops a bare trailing number that isn't
+                    -- really inches from being absorbed — e.g. "ten feet, twenty"
+                    -- (a metaphor) was read as 10 ft 20 in = 3.56 m; now it stays
+                    -- "ten feet". Legit "5 feet, 4 inches" (4 < 12) is untouched.
+                    if second and second < 12 and (kind == "bare" or kind == "in_abbr")
                        and (unit == "foot" or unit == "feet") then
                         -- "six foot four" / "five ft. seven in." → feet+inches height.
                         rec._num, rec._num2 = num, second
@@ -2016,12 +2063,12 @@ local function _fast_scan_matches(doc, cat_enabled)
                                 rec._num, rec._num2, rec._unit = nil, nil, nil
                             end
                         end
-                    elseif second and kind == "in_abbr" and unit == "ft" then
+                    elseif second and second < 12 and kind == "in_abbr" and unit == "ft" then
                         -- "5 ft 7 in" — accept the abbreviation only with an
                         -- explicit "in" tail; a bare "5 ft 200" is NOT a height.
                         rec._num, rec._num2 = num, second
                         rec["end"] = extend_end(h["end"], second, clear_in)
-                    elseif second and kind == "bare" and unit == "stone" then
+                    elseif second and second < 14 and kind == "bare" and unit == "stone" then
                         rec._num, rec._num_stone2 = num, second
                         rec["end"] = extend_end(h["end"], second)
                     end
@@ -2226,6 +2273,46 @@ function FootFree:onReaderReady()
         end
         self:_startScan(doc)
         return
+    end
+
+    -- A converted (mode-3) book whose in-text conversion was produced by an older
+    -- scanner. The matching/idiom logic improves over releases, but the metric
+    -- text baked into the EPUB is frozen — so those improvements would otherwise
+    -- never reach already-converted books (the worry that prompted this). The
+    -- conversion is stamped with the CACHE_VERSION that made it; a lower (or
+    -- absent) stamp means it's stale. With auto-scan on we refresh it
+    -- automatically (revert → rescan → reconvert); otherwise we offer to. Guarded
+    -- per-session so a failed/declined refresh doesn't re-fire on the same open.
+    -- (If we reached here in metric mode, tap_mode is already 3 — the ~= 3 case
+    -- reverted and returned above.)
+    if _is_metric_mode(doc.file) then
+        self._metric_update_tried = self._metric_update_tried or {}
+        local stamped = _read_metric_version(doc.file)
+        if (not stamped or stamped < CACHE_VERSION)
+           and not self._metric_update_tried[doc.file] then
+            self._metric_update_tried[doc.file] = true
+            local function refresh()
+                _pending_rescan = doc.file
+                self:_revertMetricEdition(doc)
+            end
+            if self._auto_scan and _is_english(doc) then
+                UIManager:show(Notification:new{
+                    text = "Footcream improved — updating this book's conversions…",
+                })
+                UIManager:scheduleIn(0.2, refresh)
+            else
+                UIManager:show(ConfirmBox:new{
+                    text = "Footcream's converter has improved since this book was "
+                        .. "converted to metric.\n\nUpdate the in-text conversions "
+                        .. "now? This restores the original text, rescans it, then "
+                        .. "re-applies the conversion with the new logic.",
+                    ok_text     = "Update now",
+                    cancel_text = "Not now",
+                    ok_callback = refresh,
+                })
+            end
+            return
+        end
     end
 
     -- ── Load sidecar or wait for user to trigger scan ─────────────────────────
@@ -2765,8 +2852,51 @@ local function _show_styling_dialog(plugin)
 end
 
 function FootFree:_finishScan(doc, all_matches, t_per_pat, t_total, in_subprocess, debug_report)
-    local _STONE_NOUNS = { "step", "wall", "slab", "floor", "path", "block", "arch",
-                            "building", "pillar", "stair", "bridge", "column", "chip" }
+    -- Words that may follow a *weight* "N stone" — anything else following it
+    -- (a concrete noun: cuffs, spheres, foundation, wall) marks it as the rock,
+    -- not the unit. A number ("twelve stone six") or clause end also keep it.
+    local _STONE_KEEP_FOLLOWERS = {
+        ["and"]=true, ["or"]=true, ["odd"]=true, ["exactly"]=true, ["now"]=true,
+        ["then"]=true, ["of"]=true, ["in"]=true, ["heavier"]=true, ["lighter"]=true,
+        ["more"]=true, ["less"]=true, ["plus"]=true, ["each"]=true, ["apiece"]=true,
+        ["per"]=true, ["but"]=true, ["so"]=true, ["to"]=true, ["soaking"]=true,
+        ["dripping"]=true, ["at"]=true, ["when"]=true, ["nothing"]=true, ["over"]=true,
+    }
+    -- Verbs that precede money sums in "£" (currency "pounds", not weight).
+    -- "lost"/"lose" are intentionally absent — you can lose weight.
+    local _MONEY_VERBS = {
+        cost=true, costs=true, costing=true, paid=true, pay=true, pays=true,
+        paying=true, spent=true, spend=true, spends=true, spending=true,
+        worth=true, won=true, win=true, wins=true, winning=true, owe=true,
+        owes=true, owed=true, owing=true, earn=true, earns=true, earned=true,
+        earning=true, fetch=true, fetched=true, fetches=true, save=true,
+        saved=true, saves=true, saving=true,
+    }
+    -- Currency context for "£ pounds" — pre-decimal coin units and transaction
+    -- nouns. Unlike the verbs (checked tight, just before the number) these are
+    -- scanned across the whole context window: they essentially never co-occur
+    -- with a weight, so a cue a few words off still resolves it as money
+    -- ("…lost in the bargain five thousand pounds"). Ambiguous words are left
+    -- out on purpose: "sterling" (sterling silver), "crown"/"sovereign" (regalia/
+    -- monarch), "fine" (adjective).
+    local _CURRENCY_WORDS = {
+        shilling=true, shillings=true, pence=true, penny=true, pennies=true,
+        farthing=true, farthings=true, guinea=true, guineas=true, sixpence=true,
+        threepence=true, florin=true, halfpenny=true, quid=true, sovereigns=true,
+        bargain=true, bargained=true, fortune=true, sum=true, salary=true,
+        wage=true, wages=true, rent=true, debt=true, debts=true, dowry=true,
+        inheritance=true, ransom=true, bribe=true, allowance=true, pension=true,
+        legacy=true, bequest=true, annuity=true, banknote=true, banknotes=true,
+        fee=true, fees=true,
+    }
+    -- Body-action verbs before "foot"/"feet" that mark it as a body part/idiom.
+    local _FOOT_PREV_VERBS = {
+        own=true, lifted=true, lift=true, raise=true, raised=true, raising=true,
+        hop=true, hopping=true, hopped=true, balance=true, balanced=true,
+        balancing=true, plant=true, planted=true, planting=true, stamp=true,
+        stamped=true, stamping=true, tap=true, tapped=true, tapping=true,
+        shuffle=true, shuffling=true,
+    }
     local filtered = {}
     for _, r in ipairs(all_matches) do
         local keep = true
@@ -2774,12 +2904,15 @@ function FootFree:_finishScan(doc, all_matches, t_per_pat, t_total, in_subproces
         local prev = (r.prev_text or ""):lower()
         local nxt  = (r.next_text or ""):lower()
 
+        -- "stone" as rock/material, not the weight unit: an ordinary word follows
+        -- it. Kept as weight when followed by a number ("twelve stone six"), a
+        -- clause end / period ("weighs twelve stone."), or a weight-continuation
+        -- word (and/odd/exactly/…). The %s* (not skipping ".") means a sentence
+        -- end leaves nw nil → kept, which is the correct reading for a weight.
         if r._search.target == "kg" and mt:find("stone") then
-            local nw = nxt:match("^%s*(%a+)")
-            if nw then
-                for _, noun in ipairs(_STONE_NOUNS) do
-                    if nw:sub(1, #noun) == noun then keep = false; break end
-                end
+            local nw = nxt:match("^%s*([%a']+)")
+            if nw and not _is_number_word(nw) and not _STONE_KEEP_FOLLOWERS[nw:lower()] then
+                keep = false
             end
         end
         if mt:find("nine") and mt:find("yard") and prev:find("whole") then keep = false end
@@ -2789,23 +2922,63 @@ function FootFree:_finishScan(doc, all_matches, t_per_pat, t_total, in_subproces
         -- "prize" can precede (space form) or follow (hyphenated adjective form).
         if r._search.target == "kg" and mt:find("pound") and
            (prev:find("prize", 1, true) or nxt:find("prize", 1, true)) then keep = false end
+        -- "pounds" as currency (£): a money verb (cost/paid/spent/worth/won/owe/
+        -- earned) sits just before the amount. Scan the last few words of prev,
+        -- since the verb may be separated from the number ("cost him fifty
+        -- pounds"). "lost"/"lose" are excluded — you can lose weight.
+        if r._search.target == "kg" and mt:find("pound") then
+            local tail = prev:match("((%a+%A+){0,3}%a*)$") or prev
+            for w in tail:gmatch("%a+") do
+                if _MONEY_VERBS[w] then keep = false; break end
+            end
+        end
+        -- Currency nouns/units anywhere in the surrounding context → it's £, not lb.
+        if keep and r._search.target == "kg" and mt:find("pound") then
+            for w in (prev .. " " .. nxt):gmatch("%a+") do
+                if _CURRENCY_WORDS[w] then keep = false; break end
+            end
+        end
         -- "N-mile-an-hour" is a speed expressed as a compound adjective, not a distance.
         if r._search.target == "km" and mt:find("mile") and nxt:match("^%s*an%s+hour") then keep = false end
         -- Suppress numeric tail of a hyphenated compound number when prev_text reaches
         -- back far enough to expose the "-and-" connector (short compounds only).
         -- "five-hundred-and-eleven-foot" is accepted as an imperfect match (rare form).
         if prev:match("%-and%s*$") then keep = false end
-        if mt:find("one") and mt:find("foot") then
-            if nxt:find("in front", 1, true)                      or
-               nxt:match("^%s*into ")                             or
-               nxt:match("^%s*over ")                             or
-               nxt:match("^%s*forward")                           or
-               nxt:match("^%s*grounded")                          or
-               nxt:match("^%s*braced")                            or
-               nxt:match("^%s*firmly")                            or
-               (nxt:match("^%s*on ") and not nxt:match("on%s*%d")) then
-                keep = false
+        -- "foot"/"feet" as a body part or idiom, not a measurement.
+        if mt:find("foot") or mt:find("feet") then
+            local pw = prev:match("([%a]+)%s*$")   -- last word before the number
+            local drop_foot =
+                nxt:find("in front", 1, true)        or
+                nxt:match("^%s*into ")               or
+                nxt:match("^%s*over ")               or
+                nxt:match("^%s*forward")             or
+                nxt:match("^%s*grounded")            or
+                nxt:match("^%s*braced")              or
+                nxt:match("^%s*firmly")              or
+                nxt:match("^%s*out of")              or
+                nxt:match("^%s*in the stirrup")      or
+                nxt:match("^%s*in the water")        or
+                nxt:match("^%s*in the door")         or
+                nxt:match("^%s*in the grave")        or
+                nxt:match("^%s*shuffl")              or
+                nxt:match("^%s*clomp")               or
+                nxt:match("^%s*padd")                or
+                nxt:match("^%s*dangl")               or
+                nxt:match("^%s*stomp")               or
+                nxt:match("^%s*scrambl")             or
+                nxt:match("^%s*tapp")                or
+                nxt:match("^%s*pacing")              or
+                nxt:match("^%s*kick")                or
+                (nxt:match("^%s*on ") and not nxt:match("on%s*%d"))
+            -- "(his/your) own two feet"; "lifted/raised/hopping/… one foot".
+            if pw and _FOOT_PREV_VERBS[pw] then drop_foot = true end
+            -- "with one foot" / "on one foot" (hopping/standing), but keep a real
+            -- "with one foot of clearance".
+            if mt:find("one") and (pw == "with" or pw == "on")
+               and not nxt:match("^%s*of ") then
+                drop_foot = true
             end
+            if drop_foot then keep = false end
         end
         if mt:find("one") and mt:find("stone") and prev:find("with") then keep = false end
         if r._search.target == "cm" then
@@ -2838,6 +3011,30 @@ function FootFree:_finishScan(doc, all_matches, t_per_pat, t_total, in_subproces
         local _ends_prime = _mt_end1 == "'" or _mt_end1 == '"'
             or r.matched_text:sub(-3) == _PRIME or r.matched_text:sub(-3) == _DPRIME
         if not _ends_prime and (r.next_text or ""):match("^[a-zA-Z]") then keep = false end
+
+        -- Mirror of the guard above, for the LEFT boundary. crengine's \b
+        -- doesn't honor a leading word boundary either, so the unit alternation
+        -- matches an alias glued to the END of a longer word: "ft" in "left"/
+        -- "aft"/"swift", "mile"/"mi" in "smile"/"semi"/"Naomi", "pt" in "except"/
+        -- "Sept", "pound" in "compound". The unit token is the trailing token of
+        -- matched_text; reject when the character right before it is a letter. A
+        -- real measurement has a digit, space, hyphen, prime or punctuation there
+        -- ("6ft", "6 ft", "six-foot"), so this never drops a genuine unit.
+        if keep and not _ends_prime then
+            local best
+            for _, u in ipairs(_UNIT_SUFFIXES) do
+                if u ~= "°F" then
+                    local ul = u:lower()
+                    if #ul > 0 and mt:sub(-#ul) == ul and (not best or #ul > #best) then
+                        best = ul
+                    end
+                end
+            end
+            if best then
+                local before = mt:sub(-#best - 1, -#best - 1)
+                if before:match("%a") then keep = false end
+            end
+        end
 
         -- NOTE: pounds classifier and UK volume recalculation happen in
         -- _apply_settings_to_matches(), called after _finishScan saves the sidecar.
@@ -2873,6 +3070,14 @@ function FootFree:_finishScan(doc, all_matches, t_per_pat, t_total, in_subproces
         -- Product model numbers: a comma between the number and the unit (e.g.
         -- "VTS989, kn") never appears in real measurements.
         if r.matched_text:match("%d,%s*%a") then keep = false end
+        -- Mangled vulgar fraction: some EPUBs render "¾" as "3 4'" — a lone digit,
+        -- a space, then a digit with a prime — so "4'" looks like 4 feet. The
+        -- giveaway is a lone digit + space immediately before, and an "s" (the
+        -- "…ths") immediately after. Never a real measurement.
+        if r.matched_text:match("^%s*%d['\226]") and prev:match("%d%s*$")
+           and nxt:match("^s%A") then
+            keep = false
+        end
         if keep then table.insert(filtered, r) end
     end
 
@@ -3066,6 +3271,9 @@ function FootFree:_doApplyMetricEdition(doc)
             end
             -- Persist the converted->original map for the "show original units" feature.
             _save_reverse_map(doc.file, rev_map)
+            -- Stamp the scanner version into the book's conversion, so a later
+            -- CACHE_VERSION bump is detected on open and the book can refresh.
+            _write_metric_version(doc.file)
             -- Reload document (seamless — keeps xpointer position)
             self.ui:reloadDocument(nil, true)
         else
@@ -3113,6 +3321,7 @@ function FootFree:_revertMetricEdition(doc, on_done)
                 if sf then sf:write(content); sf:close() end
             end
             os.remove(_reverse_path(doc.file))
+            os.remove(_metric_ver_path(doc.file))
             self._reverse_matches = nil
             -- After a byte-exact revert the restored text is identical to the
             -- original, so the sidecar's xpointer positions are valid again — no
@@ -3128,6 +3337,7 @@ function FootFree:_revertMetricEdition(doc, on_done)
             -- now-stale conversion record so it isn't stuck appearing "converted".
             os.remove(_patches_path(doc.file))
             os.remove(_reverse_path(doc.file))
+            os.remove(_metric_ver_path(doc.file))
             self._reverse_matches = nil
             if self.view then UIManager:setDirty(self.view.dialog, "ui") end
             UIManager:show(InfoMessage:new{
@@ -4199,6 +4409,7 @@ function FootFree:addToMainMenu(menu_items)
                             if not doc then return end
                             os.remove(_sidecar_path(doc.file))
                             os.remove(_reverse_path(doc.file))
+                            os.remove(_metric_ver_path(doc.file))
                             self._all_matches    = nil
                             self._reverse_matches = nil
                             self._current_boxes  = {}
