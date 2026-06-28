@@ -1506,10 +1506,10 @@ local function _range_conv_unit(text)
     local info = unit and _UNIT_CONV[unit]
     if not info or not info.factor then return nil end
     local s = _display(text):lower()
-    -- En/em dashes are range separators too ("five–six miles"); see
-    -- _detect_back_range. They're displayed as " to " (matching the word-range
-    -- output) rather than echoed back as a bare dash.
-    for _, sep in ipairs({" and ", " or ", " to ", _ENDASH, _EMDASH}) do
+    -- En/em dashes and a comma+space are range separators too ("five–six miles",
+    -- "seven, eight feet"); see _detect_back_range. They're displayed as " to "
+    -- (matching the word-range output) rather than echoed back verbatim.
+    for _, sep in ipairs({" and ", " or ", " to ", _ENDASH, _EMDASH, ", "}) do
         local p = s:find(sep, 1, true)
         if p then
             local n1 = _parse_num(s:sub(1, p - 1))
@@ -1545,7 +1545,7 @@ local function _range_conv_unit(text)
                 local r1 = n1 * info.factor + info.offset
                 local r2 = n2 * info.factor + info.offset
                 if r1 > r2 then r1, r2 = r2, r1 end
-                local out_conn = (sep == _ENDASH or sep == _EMDASH) and " to " or sep
+                local out_conn = (sep == _ENDASH or sep == _EMDASH or sep == ", ") and " to " or sep
                 return _fmt_dist_range(_smart_round(r1, nil, true, info.target),
                                         _smart_round(r2, nil, true, info.target), info.target, out_conn)
             end
@@ -1757,13 +1757,14 @@ end
 -- prev_text. Returns (n1, n2, span-from-N-to-unit) or nil. "and" only ranges
 -- when M >= 1 — "N and a half" is the additive form handled in _prev_num_words.
 local function _detect_back_range(prev, unit)
-    -- Word connectors plus typographic range dashes (en/em). A dash forms a range
-    -- only between two numbers — the `n1 and n2` check below enforces that, so
-    -- "five-foot" (number→unit hyphen) can't become a range. The ASCII hyphen is
-    -- deliberately NOT a connector: it collides with spelled compound numbers
-    -- ("twenty-five" would wrongly split into 20 and 5). En/em dashes (used for
-    -- ranges like "five–six miles") don't have that ambiguity.
-    for _, conn in ipairs({" to ", " or ", " and ", _ENDASH, _EMDASH}) do
+    -- Word connectors, typographic range dashes (en/em), and a comma (the
+    -- colloquial "seven, eight feet" = 7–8). A connector forms a range only
+    -- between two numbers — the `n1 and n2` check below enforces that, so
+    -- "five-foot" / "the giant, eight feet" can't become ranges. The ASCII hyphen
+    -- is deliberately NOT a connector: it collides with spelled compound numbers
+    -- ("twenty-five" → 20 and 5). The comma form requires a trailing SPACE (", ")
+    -- so a thousands separator ("5,000 feet") isn't read as "5 to 000".
+    for _, conn in ipairs({" to ", " or ", " and ", _ENDASH, _EMDASH, ", "}) do
         local before, mtok = prev:match("^(.-)" .. conn .. "([%w%-][%w%-%.,°]*)%s*$")
         if before and mtok then
             local n2 = _parse_num((mtok:gsub("[%.,%-]+$", "")))
@@ -2862,6 +2863,12 @@ function FootFree:_finishScan(doc, all_matches, t_per_pat, t_total, in_subproces
         ["per"]=true, ["but"]=true, ["so"]=true, ["to"]=true, ["soaking"]=true,
         ["dripping"]=true, ["at"]=true, ["when"]=true, ["nothing"]=true, ["over"]=true,
     }
+    -- A definite/demonstrative determiner right before "stone" marks it as the
+    -- rock, not the unit ("to the stone", "this stone"). A weight is always
+    -- "<number> stone". "a"/"an" are excluded — "half a stone" is a real weight.
+    local _STONE_ROCK_DET = {
+        the=true, this=true, that=true, these=true, those=true,
+    }
     -- Verbs that precede money sums in "£" (currency "pounds", not weight).
     -- "lost"/"lose" are intentionally absent — you can lose weight.
     local _MONEY_VERBS = {
@@ -2914,6 +2921,9 @@ function FootFree:_finishScan(doc, all_matches, t_per_pat, t_total, in_subproces
             if nw and not _is_number_word(nw) and not _STONE_KEEP_FOLLOWERS[nw:lower()] then
                 keep = false
             end
+            -- Rock, not weight: "…to the stone", "this stone" (vs "<number> stone").
+            local before_stone = mt:match("(%a+)%s+stone") or prev:match("(%a+)%s*$")
+            if before_stone and _STONE_ROCK_DET[before_stone:lower()] then keep = false end
         end
         if mt:find("nine") and mt:find("yard") and prev:find("whole") then keep = false end
         -- "one pounds" is the verb "to pound" (3rd-person singular); never a measurement.
