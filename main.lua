@@ -28,7 +28,7 @@ local _ENDASH = "\226\128\147"   -- –  U+2013
 local _TIMES  = "\195\151"       -- ×  U+00D7
 local _SUP2   = "\194\178"       -- ²  U+00B2 (superscript two)
 
-local CACHE_VERSION = 22  -- bumped: foot-idiom prev-word fix (own/with), en-dash & scaled ranges
+local CACHE_VERSION = 23  -- bumped: idioms (one's/to-the-other/fingers), coords, screen-inch, drink-pint, leading-and span
 local _REVERSE_VERSION = 2  -- v2: ordered originals per converted string (position-aware reverse lookup)
 
 -- ── Number prefixes ───────────────────────────────────────────────────────────
@@ -1781,6 +1781,13 @@ local function _prev_num_words(prev)
           and not words[first - 1]:find(",", 1, true) do
         first = first - 1
     end
+    -- A clause-joining "and" must not START the span: "…feet long and four
+    -- hundred and fifty feet" — the leading "and" connects two measurements, it
+    -- is not part of this number. (Internal "and", as in "four hundred AND
+    -- fifty", is kept — the walk merely stopped here, it didn't start here.)
+    while first < #words and words[first]:lower() == "and" do
+        first = first + 1
+    end
     -- "a hundred" / "a thousand" / "a dozen": the article scales the following
     -- multiplier but isn't a number word on its own, so the walk above stops at
     -- "hundred". Pull "a"/"an" into the span when it forms a known "a <mult>"
@@ -1901,7 +1908,16 @@ local function _detect_back_range(prev, unit)
         -- captured; _parse_num prefix-reads its leading number. _range_conv_unit
         -- re-parses matched_text and decides range vs additive ("a hundred and
         -- fifty") and applies the shared-scale fix ("two or three hundred").
-        local before, mtok = prev:match("^(.-)" .. conn .. "(%S.*)$")
+        -- EXCEPTION: the comma is the colloquial "seven, eight feet" form, which
+        -- takes a SINGLE second number — a multi-word second operand there would
+        -- read a height+weight ("five feet nine, two hundred thirty pounds") as a
+        -- 9–230 range instead of two separate measurements.
+        local before, mtok
+        if conn == ", " then
+            before, mtok = prev:match("^(.-), ([%w%-][%w%-%.,°]*)%s*$")
+        else
+            before, mtok = prev:match("^(.-)" .. conn .. "(%S.*)$")
+        end
         if before and mtok then
             local n2 = _parse_num(mtok)
             local n1, n1span = _prev_num_words(before)
@@ -3058,6 +3074,22 @@ function FootFree:_finishScan(doc, all_matches, t_per_pat, t_total, in_subproces
         legacy=true, bequest=true, annuity=true, banknote=true, banknotes=true,
         fee=true, fees=true,
     }
+    -- Screens/TVs are conventionally sized in inches and readers expect that, so
+    -- an inch measurement near one of these is left unconverted.
+    local _SCREEN_WORDS = {
+        tv=true, tvs=true, television=true, televisions=true, screen=true,
+        screens=true, display=true, displays=true, monitor=true, monitors=true,
+        plasma=true, lcd=true, led=true, oled=true, projector=true,
+        laptop=true, tablet=true, ["smart-tv"]=true,
+    }
+    -- Drink/serving context where a pint→litre conversion erases the reader's
+    -- sense of "how many glasses": keep pints for milk/blood/etc., drop them here.
+    local _DRINK_WORDS = {
+        glass=true, glasses=true, beer=true, beers=true, ale=true, lager=true,
+        stout=true, cider=true, guinness=true, jameson=true, ["jameson's"]=true,
+        whiskey=true, whisky=true, drink=true, drinks=true, drank=true,
+        drunk=true, pub=true, bar=true, tankard=true, mug=true, pitcher=true,
+    }
     -- Body-action verbs before "foot"/"feet" that mark it as a body part/idiom.
     local _FOOT_PREV_VERBS = {
         own=true, lifted=true, lift=true, raise=true, raised=true, raising=true,
@@ -3148,6 +3180,16 @@ function FootFree:_finishScan(doc, all_matches, t_per_pat, t_total, in_subproces
             -- "with one foot of clearance".
             if mt:find("one") and (pw == "with" or pw == "on")
                and not nxt:match("^%s*of ") then
+                drop_foot = true
+            end
+            -- "one's feet" / "one's foot" — possessive, never a count. The number
+            -- "one" is glued to an apostrophe-s (straight ' or curly ’ = U+2019).
+            if mt:find("one'") or mt:find("one\226\128\153") then drop_foot = true end
+            -- "shifting/swaying weight from one foot to the other" — idiom, not a
+            -- distance. Anchored on "the other" so "one foot to the left" survives.
+            if nxt:match("^%s*to the other") then drop_foot = true end
+            -- "count … on the fingers/toes of one foot" — joke, not a measurement.
+            if prev:find("fingers of", 1, true) or prev:find("toes of", 1, true) then
                 drop_foot = true
             end
             if drop_foot then keep = false end
@@ -3242,18 +3284,46 @@ function FootFree:_finishScan(doc, all_matches, t_per_pat, t_total, in_subproces
         -- Product model numbers: a comma between the number and the unit (e.g.
         -- "VTS989, kn") never appears in real measurements.
         if r.matched_text:match("%d,%s*%a") then keep = false end
+        -- Geographic coordinates ("37°18'32\" N 115°36'52\" W"): the degree
+        -- symbol leads the match because the degrees figure sits before it, so a
+        -- length match never begins with ° (a real prime height like 5'9" starts
+        -- with a digit). Drop anything whose matched_text opens with ° (U+00B0).
+        if r.matched_text:match("^\194\176") then keep = false end
+        -- Screen/TV sizes: inches near a screen word stay imperial (readers think
+        -- of TVs in inches). Scan the surrounding context for a screen noun.
+        if keep and r._search.target == "cm" and mt:find("inch") then
+            for w in (prev .. " " .. nxt):gmatch("[%w'\226\128\153%-]+") do
+                if _SCREEN_WORDS[w:lower()] then keep = false; break end
+            end
+        end
+        -- Pints in a drink/serving context: drop, to preserve "number of glasses".
+        if keep and r._search.target == "liters" and mt:find("pint") then
+            for w in (prev .. " " .. nxt):gmatch("[%w'\226\128\153%-]+") do
+                if _DRINK_WORDS[w:lower()] then keep = false; break end
+            end
+        end
         -- Mangled vulgar fraction: some EPUBs render "¾" as "3 4'" — a lone
-        -- numerator digit, a space, then a single-digit "foot" prime (the
-        -- denominator). The trailing "…'s"/"ths" is NOT reliably in next_text
-        -- (crengine folds "4's" into one token, so next_text starts at the word
-        -- after), so key off the digit/digit signature with numerator < denominator
-        -- (¾, ⅔, ½ …). Real prose almost never writes a lone digit immediately
-        -- before a single-digit foot-prime.
+        -- numerator digit, a space, then a single-digit "foot" prime (denominator).
+        -- crengine DROPS the lone "3" from prev_text (it's saved as "…still ", no
+        -- digit), so read the few chars immediately before the match span instead.
+        -- Numerator < denominator (¾, ⅔, ½ …) confirms the fraction; real prose
+        -- almost never writes a lone digit immediately before a single-digit prime.
         do
             local denom = r.matched_text:match("^%s*(%d)['\226]")
-            local numer = prev:match("%f[%d](%d)%s*$")
-            if denom and numer and tonumber(numer) < tonumber(denom) then
-                keep = false
+            if denom and doc then
+                local pfx, off = _xpointer_offset(r.start)
+                local numer
+                if pfx ~= r.start and off and off > 0 then
+                    local pre_xp = pfx .. tostring(math.max(0, off - 4))
+                    local okp, pre = pcall(function()
+                        return doc:getTextFromXPointers(pre_xp, r.start)
+                    end)
+                    if okp and pre then numer = pre:match("%f[%d](%d)%s*$") end
+                end
+                numer = numer or prev:match("%f[%d](%d)%s*$")  -- in case it IS in prev
+                if numer and tonumber(numer) < tonumber(denom) then
+                    keep = false
+                end
             end
         end
         if keep then table.insert(filtered, r) end
