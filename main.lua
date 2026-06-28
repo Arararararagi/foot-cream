@@ -28,7 +28,7 @@ local _ENDASH = "\226\128\147"   -- –  U+2013
 local _TIMES  = "\195\151"       -- ×  U+00D7
 local _SUP2   = "\194\178"       -- ²  U+00B2 (superscript two)
 
-local CACHE_VERSION = 20  -- bumped: word-boundary fix + idiom/material/currency/range filters
+local CACHE_VERSION = 21  -- bumped: stone determiner + comma ranges (1.2.6) + spelled-number composer
 local _REVERSE_VERSION = 2  -- v2: ordered originals per converted string (position-aware reverse lookup)
 
 -- ── Number prefixes ───────────────────────────────────────────────────────────
@@ -178,6 +178,62 @@ local function _display(text)
     return text
 end
 
+-- Spelled-out cardinal composition. _parse_num's _WORD_NUMS table is a flat
+-- prefix-match, so a multi-part number like "five thousand five hundred" matched
+-- only its first chunk (→ 5000) and "six and a half" lost the half. This composes
+-- the number properly from the START of the text, stopping at the first
+-- non-number token (prefix semantics). Hyphen/dash-joined forms ("six-and-a-half",
+-- "five-thousand-five-hundred") work via normalising the joiners to spaces; a
+-- comma ends the number (a measurement boundary, e.g. "…nine, two hundred thirty
+-- pounds"). Returns value, value-token-count, had_fraction — or nil. Multiplicative
+-- fractions ("two fifths", "three quarters") bail so the _WORD_NUMS table (which
+-- knows them) handles them. Callers engage this only for ≥2 value tokens or an
+-- additive fraction, so single words keep their exact _WORD_NUMS values.
+local _NUM_UNIT = {
+    zero=0, one=1, two=2, three=3, four=4, five=5, six=6, seven=7, eight=8, nine=9,
+    ten=10, eleven=11, twelve=12, thirteen=13, fourteen=14, fifteen=15,
+    sixteen=16, seventeen=17, eighteen=18, nineteen=19,
+}
+local _NUM_TEN = {
+    twenty=20, thirty=30, forty=40, fifty=50, sixty=60, seventy=70, eighty=80, ninety=90,
+}
+local _NUM_SCALE = { thousand=1000, million=1000000, billion=1000000000 }
+local _NUM_FRAC  = { half=0.5, quarter=0.25, third=1/3 }
+
+local function _compose_spelled(text)
+    local s = text:lower():gsub("[%-\226\128\147\226\128\148]", " ")
+    local total, cur, frac = 0, 0, 0
+    local ntok, started, await_frac = 0, false, false
+    for raw in s:gmatch("%S+") do
+        local hard_stop = raw:find(",", 1, true) ~= nil   -- comma = number boundary
+        local w = raw:gsub("[^%a]", "")
+        if w == "and" then
+            -- connector, ignore
+        elseif w == "a" or w == "an" then
+            await_frac = true                              -- "a half" vs "a hundred"
+        elseif _NUM_UNIT[w] then
+            cur = cur + _NUM_UNIT[w]; ntok = ntok + 1; started = true; await_frac = false
+        elseif _NUM_TEN[w] then
+            cur = cur + _NUM_TEN[w]; ntok = ntok + 1; started = true; await_frac = false
+        elseif w == "hundred" then
+            cur = (cur == 0 and 1 or cur) * 100; ntok = ntok + 1; started = true; await_frac = false
+        elseif _NUM_SCALE[w] then
+            total = total + (cur == 0 and 1 or cur) * _NUM_SCALE[w]
+            cur = 0; ntok = ntok + 1; started = true; await_frac = false
+        elseif _NUM_FRAC[w] then
+            -- additive fraction only ("six and a half"); a multiplicative form
+            -- ("two fifths") has a number right before with no "a" → bail.
+            if not started or not await_frac then return nil end
+            frac = frac + _NUM_FRAC[w]; await_frac = false
+        else
+            break                                          -- non-number token: stop
+        end
+        if hard_stop then break end
+    end
+    if not started then return nil end
+    return total + cur + frac, ntok, frac > 0
+end
+
 local function _parse_num(text)
     local s_start, _, s = text:find("([0-9][0-9,.]*)")
     if s then
@@ -193,6 +249,12 @@ local function _parse_num(text)
             return n
         end
     end
+    -- Compose multi-word / additive-fraction spelled numbers ("five thousand five
+    -- hundred" = 5500, "six and a half" = 6.5) the flat table below can't. Gated
+    -- to ≥2 number tokens or a fraction, so single words and multiplicative
+    -- fractions ("two fifths") still resolve via _WORD_NUMS.
+    local cval, ctok, cfrac = _compose_spelled(text)
+    if cval and (ctok >= 2 or cfrac) then return cval end
     -- Strip leading punctuation/space so a paren- or quote-attached word number
     -- still prefix-matches ("(three" → "three", "  ten" → "ten").
     local lower = text:lower():gsub("^[^%w]+", "")
@@ -1647,7 +1709,11 @@ local function _prev_num_words(prev)
     for w in s:gmatch("%S+") do words[#words + 1] = w end
     if #words == 0 or not _is_number_word(words[#words]) then return nil end
     local first = #words
-    while first > 1 and (#words - first) < 4 and _is_number_word(words[first - 1]) do
+    -- Stop at a comma-terminated word: it belongs to a previous measurement, not
+    -- this one ("five feet nine, two hundred thirty pounds" — the weight's number
+    -- is "two hundred thirty", not "nine, two hundred thirty").
+    while first > 1 and (#words - first) < 4 and _is_number_word(words[first - 1])
+          and not words[first - 1]:find(",", 1, true) do
         first = first - 1
     end
     -- "a hundred" / "a thousand" / "a dozen": the article scales the following
@@ -3722,13 +3788,18 @@ function FootFree:_showUnitList()
         local unit = _display(r.matched_text or "")
         local conv = _metric_only(r) or "?"
         local ctx  = context_of(r, unit)
+        -- The parsed numeric value of the leading number ("four hundred" → 400) —
+        -- shows what the scanner read before converting, to spot mis-parses.
+        local num    = _parse_num(unit)
+        local numstr = num and _fmt(num) or "?"
         items[i] = {
-            text      = string.format("%d. %s  →  %s\n…%s…", i, unit, conv, ctx),
+            text      = string.format("%d. %s  →  %s\nvalue: %s\n…%s…", i, unit, conv, numstr, ctx),
             mandatory = r._cat or "",
             _xp       = r.start,
             _unit     = unit,
             _conv     = conv,
             _ctx      = ctx,
+            _numval   = numstr,
             _loc      = r.start,
         }
     end
@@ -3816,9 +3887,9 @@ function FootFree:_flagError(item, issue)
         return
     end
     f:write(string.format(
-        "[%s]  %s\n  issue:      %s\n  detected:   %s\n  converted:  %s\n  sentence:   %s\n  loc:        %s\n\n",
+        "[%s]  %s\n  issue:      %s\n  detected:   %s\n  value:      %s\n  converted:  %s\n  sentence:   %s\n  loc:        %s\n\n",
         os.date("%Y-%m-%d %H:%M"), title, issue,
-        item._unit or "?", item._conv or "?", item._ctx or "?",
+        item._unit or "?", item._numval or "?", item._conv or "?", item._ctx or "?",
         tostring(item._loc or "?")))
     f:close()
     UIManager:show(Notification:new{ text = "Flagged: " .. issue })
