@@ -28,7 +28,7 @@ local _ENDASH = "\226\128\147"   -- –  U+2013
 local _TIMES  = "\195\151"       -- ×  U+00D7
 local _SUP2   = "\194\178"       -- ²  U+00B2 (superscript two)
 
-local CACHE_VERSION = 23  -- bumped: idioms (one's/to-the-other/fingers), coords, screen-inch, drink-pint, leading-and span
+local CACHE_VERSION = 26  -- bumped: cross-node span extension (number/unit split by <span>/<br>/<i>)
 local _REVERSE_VERSION = 2  -- v2: ordered originals per converted string (position-aware reverse lookup)
 
 -- ── Number prefixes ───────────────────────────────────────────────────────────
@@ -165,6 +165,7 @@ local _UMINUS = "\226\136\146"
 -- Other dashes books use as a leading minus before a number ("–10°F", "—10°F").
 local _ENDASH = "\226\128\147"   -- – U+2013
 local _EMDASH = "\226\128\148"   -- — U+2014
+local _APPROX = "\226\137\136"   -- ≈ U+2248 (prefix for vague-quantifier bands)
 -- All four dash forms, longest-byte-safe, treated as a leading minus sign.
 local _NEG_SIGNS = { ["-"] = true, [_UMINUS] = true, [_ENDASH] = true, [_EMDASH] = true }
 
@@ -220,6 +221,11 @@ local function _compose_spelled(text)
             cur = cur + _NUM_TEN[w]; ntok = ntok + 1; started = true; await_frac = false
         elseif w == "hundred" then
             cur = (cur == 0 and 1 or cur) * 100; ntok = ntok + 1; started = true; await_frac = false
+        elseif w == "dozen" then
+            -- "two dozen" = 24, "a dozen" = 12. Without this branch the composer
+            -- stopped at "dozen", mis-reading "two dozen" as 2 and leaving the
+            -- Units-list value blank ("?") even though _WORD_NUMS knew dozen=12.
+            cur = (cur == 0 and 1 or cur) * 12; ntok = ntok + 1; started = true; await_frac = false
         elseif _NUM_SCALE[w] then
             total = total + (cur == 0 and 1 or cur) * _NUM_SCALE[w]
             cur = 0; ntok = ntok + 1; started = true; await_frac = false
@@ -542,6 +548,20 @@ local function _conv_dim_to_m_cm(text)
         return _fmt(tonumber(f) * 0.3048) .. " m by " .. _fmt(tonumber(i) * 2.54) .. " cm"
     end
     return nil
+end
+
+-- "10x10 feet" / "10×10 ft" → "3 × 3 m": two same-unit dimensions joined by
+-- x/X/× (no spaces — the spaced form "10 x 10 feet" only spans "10 feet"). Both
+-- numbers convert with the unit's own factor/target; nil if it isn't this shape.
+local function _conv_nxn(text, factor, target)
+    local clean = _display(text)
+    local a, b = clean:match("^%s*(%d+%.?%d*)%s*[xX\195\151]%s*(%d+%.?%d*)")
+    if not (a and b) then return nil end
+    local na, nb = tonumber(a), tonumber(b)
+    if not (na and nb) then return nil end
+    local ra = _smart_round(na * factor, na, false, target)
+    local rb = _smart_round(nb * factor, nb, false, target)
+    return _fmt(ra) .. " \195\151 " .. _fmt_dist(rb, target)
 end
 
 -- Range factory: "twenty or thirty feet" → "6.1 or 9.1 m" (keeps the connector)
@@ -1326,6 +1346,9 @@ local function _save_sidecar(doc_path, matches)
             " prev_text=%q, next_text=%q",
             r.start, r["end"], r.matched_text, _convert(r), r._cat or "",
             r.prev_text or "", r.next_text or ""))
+        -- Vague-quantifier band ("a few hundred pounds"): flag it so Mode 3
+        -- knows to skip it after a reload (the band can't be rewritten inline).
+        if r._vague then fh:write(", vague=true") end
         -- For simple factor/offset matches: store raw unit+num+factor so
         -- UK volume recalculation can happen without a rescan.
         if r._unit and r._search and r._search.factor and not r._search.converter then
@@ -1371,6 +1394,7 @@ local function _load_sidecar_raw(doc_path)
             _num         = m.num,         -- numeric value (nil for compound matches)
             _factor      = m.factor,      -- US/default factor (nil for compound)
             _offset      = m.offset,      -- offset (nil for compound)
+            _vague       = m.vague,       -- vague-quantifier band → Mode 3 skips it
         })
     end
     return matches
@@ -1937,7 +1961,57 @@ local function _detect_back_range(prev, unit)
             -- connector is followed by two tokens ("a half"), not the single
             -- token mtok matches. _range_conv_unit sorts out range vs additive.
             if n1 and n2 then
+                -- The comma form is a colloquial consecutive estimate ("seven,
+                -- eight feet") — the two values are always close. A large gap
+                -- means it isn't a range at all, e.g. "aged about forty-four, six
+                -- feet" (age, then height). Cap the comma range at a 3× ratio.
+                if conn == ", " then
+                    local hi = math.max(math.abs(n1), math.abs(n2))
+                    local lo = math.min(math.abs(n1), math.abs(n2))
+                    if lo == 0 or hi / lo > 3 then return nil end
+                end
                 return n1, n2, (n1span or 1) + 2 + extra
+            end
+        end
+    end
+    return nil
+end
+
+-- Vague quantified amounts: "a few hundred pounds", "some dozen feet". The
+-- WRITTEN number is just the multiplier (hundred/thousand/dozen), so a single
+-- point conversion is false precision — the real quantity is the multiplier
+-- scaled by an indefinite band ("a few" ≈ 2–5×). We convert it as a metric band
+-- instead. Multiplier words whose bare value (and nothing more) carries the
+-- amount; "score"/archaic forms deliberately omitted.
+local _VAGUE_MULTIPLIERS = { dozen = 12, hundred = 100, thousand = 1000, million = 1000000 }
+-- Quantifier → {low, high} multiplier band. low==high renders as a single "≈ X".
+local _VAGUE_BANDS = {
+    ["a couple of"] = {2, 2}, ["a couple"] = {2, 2}, ["couple of"] = {2, 2},
+    ["couple"] = {2, 2}, ["a few"] = {2, 5}, ["several"] = {3, 7},
+    ["some"] = {1, 1}, ["few"] = {2, 5},
+}
+-- Longest-first so "a couple of" beats "couple", "a few" beats "few".
+local _VAGUE_ORDER = {
+    "a couple of", "a couple", "couple of", "several", "a few", "couple", "some", "few",
+}
+
+-- Given the lowercased prev_text (which ends with the multiplier word, the
+-- written number for these matches), return {qlow, qhigh, qword, mult} when it
+-- is a vague-quantified amount, else nil. Engages ONLY when the written number
+-- is a BARE multiplier ("a few hundred", not "a few two hundred") preceded by a
+-- vague quantifier — so precise amounts ("two hundred pounds") are untouched.
+local function _detect_vague(prev)
+    local p = (prev or ""):lower():gsub("%s+$", "")
+    local mword = p:match("([%a]+)$")
+    local mult = mword and _VAGUE_MULTIPLIERS[mword]
+    if not mult then return nil end
+    p = p:sub(1, #p - #mword):gsub("%s+$", "")     -- drop the multiplier word itself
+    for _, q in ipairs(_VAGUE_ORDER) do
+        if #p >= #q and p:sub(-#q) == q then
+            local bch = p:sub(-#q - 1, -#q - 1)     -- char before the quantifier
+            if bch == "" or bch:match("%s") then
+                local band = _VAGUE_BANDS[q]
+                return band[1], band[2], q, mult
             end
         end
     end
@@ -2056,6 +2130,55 @@ local function _fast_scan_matches(doc, cat_enabled)
                         local lead = t and t:match("^([%w][%w%.,%-]*)")
                         if lead and _parse_num(lead) == num then return cand2 end
                     end
+                end
+                -- Cross-node fallback: the number lives in one or more text nodes
+                -- BEFORE the unit's node — the unit was wrapped in an inline
+                -- element (<span>/<i>), or a <br/>/soft-break split the compound
+                -- across nodes. Same-node offset math (above) can't reach a prior
+                -- node, and the word walker stalls at the first hyphen. So step
+                -- back NODE by NODE: at each earlier node, read its text up to the
+                -- unit and look for the known number surface (numtext). Accept the
+                -- LAST occurrence (the one adjacent to the unit), re-validated by
+                -- text — a wrong guess is simply not returned.
+                -- The number's first token ("five" of "five-thousand-…", "four"
+                -- of "four-and-a-half"). Searched literally; the FULL value is
+                -- then confirmed by parsing the text from that point to the unit,
+                -- which tolerates an internal break char a <br/> may inject (a
+                -- newline splits the tokens but _parse_num composes them anyway).
+                local head = numtext:match("^([%w]+)") or numtext
+                local probe, seen = unit_start, {}
+                for _ = 1, 10 do
+                    local pfx, poff = _xpointer_offset(probe)
+                    if pfx == probe or not poff then break end
+                    if seen[pfx] then break end
+                    seen[pfx] = true
+                    local nodestart = pfx .. "0"
+                    local okf, full = pcall(function()
+                        return doc:getTextFromXPointers(nodestart, unit_start)
+                    end)
+                    if okf and full then
+                        -- All start offsets of `head` in this node, latest first
+                        -- (the occurrence adjacent to the unit is the right one;
+                        -- "five-thousand-five-hundred" has two — the earlier
+                        -- validates, the later "five-hundred" doesn't).
+                        local positions, p = {}, full:find(head, 1, true)
+                        while p do positions[#positions + 1] = p; p = full:find(head, p + 1, true) end
+                        for i = #positions, 1, -1 do
+                            local k = positions[i] - 1
+                            if k >= 0 then
+                                local cand2 = pfx .. tostring(k)
+                                local t = text_of(cand2, unit_start)
+                                if t and _parse_num(t) == num then return cand2 end
+                            end
+                        end
+                    end
+                    -- Step into the previous node: one visible-word step back from
+                    -- this node's start crosses the boundary.
+                    local okx, ws = pcall(function()
+                        return doc:getPrevVisibleWordStart(nodestart)
+                    end)
+                    if not okx or not ws or ws == nodestart or ws == probe then break end
+                    probe = ws
                 end
             end
         end
@@ -2204,7 +2327,41 @@ local function _fast_scan_matches(doc, cat_enabled)
 
             if not range_done and not merged then
                 local num, span = _prev_num_words(h.prev_text)
-                if num then
+                local vlo, vhi, vword, vmult = _detect_vague(h.prev_text)
+                if num and vlo and vmult == num and conv.factor then
+                    -- Vague quantified amount ("a few hundred pounds") → convert
+                    -- as a metric BAND ("≈ 90–230 kg") rather than a false-precise
+                    -- point. Always rounded (vagueness demands it, regardless of
+                    -- the Smart Rounding toggle). Flagged _vague so Mode 3 skips it
+                    -- — "a few hundred pounds" can't be cleanly rewritten in place.
+                    local qstart = extend_start(h.start, num, span, h.prev_text)
+                    local qwc = select(2, vword:gsub("%S+", ""))
+                    for _ = 1, qwc do
+                        local okx, nx = pcall(function() return doc:getPrevVisibleWordStart(qstart) end)
+                        if okx and nx and nx ~= qstart then qstart = nx else break end
+                    end
+                    local full = text_of(qstart, h["end"])
+                    if not (full and full:lower():find(vword, 1, true)) then
+                        qstart = extend_start(h.start, num, span, h.prev_text)
+                        full = text_of(qstart, h["end"]) or (vword .. " " .. h.matched_text)
+                    end
+                    local lo_m = _nice_round(vlo * num * conv.factor + (conv.offset or 0), _HARSH_TOLERANCE)
+                    local hi_m = _nice_round(vhi * num * conv.factor + (conv.offset or 0), _HARSH_TOLERANCE)
+                    local band
+                    if vlo == vhi then
+                        band = _APPROX .. " " .. _fmt_dist(lo_m, conv.target)
+                    else
+                        if lo_m > hi_m then lo_m, hi_m = hi_m, lo_m end
+                        band = _APPROX .. " " .. _fmt_dist_range(lo_m, hi_m, conv.target, _ENDASH)
+                    end
+                    out[#out + 1] = {
+                        start = qstart, ["end"] = h["end"],
+                        matched_text = full, prev_text = h.prev_text, next_text = h.next_text,
+                        _search = conv, _cat = conv.cat, _vague = true,
+                        _converted = _display(full) .. " = " .. band,
+                    }
+                    seen_end[h["end"]] = true
+                elseif num then
                     local rec = {
                         start = extend_start(h.start, num, span, h.prev_text), ["end"] = h["end"],
                         prev_text = h.prev_text, next_text = h.next_text,
@@ -2253,6 +2410,15 @@ local function _fast_scan_matches(doc, cat_enabled)
                     end
                     rec.matched_text = text_of(rec.start, rec["end"])
                         or (_fmt(num) .. " " .. h.matched_text)
+                    -- "10x10 feet" → "3 × 3 m": NxN dimension, both values
+                    -- converted (vs the single-value path that ignored the x10).
+                    if not rec._converted and conv.factor and conv.target then
+                        local nxn = _conv_nxn(rec.matched_text, conv.factor, conv.target)
+                        if nxn then
+                            rec._converted = _display(rec.matched_text) .. " = " .. nxn
+                            rec._unit = nil
+                        end
+                    end
                     -- If matched_text's own _parse_num would disagree with the
                     -- value we computed (e.g. additive "four and a half" parses
                     -- as just 4), pin the conversion to the right value.
@@ -3452,6 +3618,13 @@ function FootFree:_doApplyMetricEdition(doc)
     for _, r in ipairs(ordered) do
         local original = _display(r.matched_text)
         local metric   = _metric_only(r)
+        -- Vague quantities ("a few hundred pounds") are left as the original
+        -- imperial text in Mode 3: an inline "≈ 90–230 kg" reads as an awkward
+        -- parenthetical, not natural prose. They still show their band on tap in
+        -- Mode 1. (Skipping here also avoids the old "over a few 45 kg" break.)
+        if r._vague then
+            original = nil
+        end
         if original and metric then
             if not seen[original] then
                 seen[original] = true
