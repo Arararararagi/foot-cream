@@ -28,7 +28,7 @@ local _ENDASH = "\226\128\147"   -- –  U+2013
 local _TIMES  = "\195\151"       -- ×  U+00D7
 local _SUP2   = "\194\178"       -- ²  U+00B2 (superscript two)
 
-local CACHE_VERSION = 21  -- bumped: stone determiner + comma ranges (1.2.6) + spelled-number composer
+local CACHE_VERSION = 22  -- bumped: foot-idiom prev-word fix (own/with), en-dash & scaled ranges
 local _REVERSE_VERSION = 2  -- v2: ordered originals per converted string (position-aware reverse lookup)
 
 -- ── Number prefixes ───────────────────────────────────────────────────────────
@@ -201,7 +201,10 @@ local _NUM_SCALE = { thousand=1000, million=1000000, billion=1000000000 }
 local _NUM_FRAC  = { half=0.5, quarter=0.25, third=1/3 }
 
 local function _compose_spelled(text)
-    local s = text:lower():gsub("[%-\226\128\147\226\128\148]", " ")
+    -- Only the ASCII hyphen joins parts of ONE number ("twenty-three",
+    -- "six-and-a-half"). En/em dashes separate two numbers (a range, "five–six"),
+    -- so they are NOT normalised here — otherwise "five–six" would compose to 11.
+    local s = text:lower():gsub("%-", " ")
     local total, cur, frac = 0, 0, 0
     local ntok, started, await_frac, used = 0, false, false, 0
     for raw in s:gmatch("%S+") do
@@ -1718,6 +1721,23 @@ local function _is_number_word(w)
     return _parse_num(w) ~= nil
 end
 
+-- A match's prev_text is the context before the UNIT, so it ends with the
+-- measurement's own number ("…his own two" for "two feet"). To test the word
+-- BEFORE the number — for idioms like "own two feet" / "with one foot" — strip
+-- the trailing number word(s) first, then return the last remaining word.
+local function _word_before_number(prev)
+    local p = (prev or ""):gsub("%s+$", "")
+    while true do
+        local w = p:match("([%w]+)%s*$")
+        if w and _is_number_word(w) then
+            p = p:gsub("[%w]+%s*$", ""):gsub("%s+$", "")
+        else
+            break
+        end
+    end
+    return p:match("([%a]+)%s*$")
+end
+
 -- The number phrase immediately before the unit, and how many words it spans.
 -- Walks back ONLY over consecutive number words, so "stood 5 feet 3" yields just
 -- "3" (1 word) — not "5 feet 3" — and "a hundred" yields 2 words.
@@ -1876,9 +1896,14 @@ local function _detect_back_range(prev, unit)
     -- ("twenty-five" → 20 and 5). The comma form requires a trailing SPACE (", ")
     -- so a thousands separator ("5,000 feet") isn't read as "5 to 000".
     for _, conn in ipairs({" to ", " or ", " and ", _ENDASH, _EMDASH, ", "}) do
-        local before, mtok = prev:match("^(.-)" .. conn .. "([%w%-][%w%-%.,°]*)%s*$")
+        -- The second operand is the rest after the connector (not just one token)
+        -- so a scaled endpoint like "three–four hundred" (→ "four hundred") is
+        -- captured; _parse_num prefix-reads its leading number. _range_conv_unit
+        -- re-parses matched_text and decides range vs additive ("a hundred and
+        -- fifty") and applies the shared-scale fix ("two or three hundred").
+        local before, mtok = prev:match("^(.-)" .. conn .. "(%S.*)$")
         if before and mtok then
-            local n2 = _parse_num((mtok:gsub("[%.,%-]+$", "")))
+            local n2 = _parse_num(mtok)
             local n1, n1span = _prev_num_words(before)
             local extra = 0
             -- "N unit <conn> M unit" form: N is followed by the unit word, so
@@ -1982,7 +2007,7 @@ local function _fast_scan_matches(doc, cat_enabled)
     -- "six-foot-four" would otherwise stop the underline at "-foot-"). Returns
     -- the position where the text begins with `num`; falls back to the plain
     -- word-count position if no exact text match is found.
-    local function extend_start(unit_start, num, span)
+    local function extend_start(unit_start, num, span, prev_text)
         local cand, fallback = unit_start, nil
         for i = 1, 6 do
             local okx, nxt = pcall(function() return doc:getPrevVisibleWordStart(cand) end)
@@ -1996,6 +2021,27 @@ local function _fast_scan_matches(doc, cat_enabled)
             -- ("one hundred" → "hundred" alone is 100) isn't cut short there:
             -- the span fallback (the real start, "one") would otherwise be lost.
             if lead and _parse_num(lead) == num and i >= (span or 1) then return cand end
+        end
+        -- Offset fallback: when the unit was matched as a SUBSTRING of a
+        -- hyphen-fused token ("five-thousand-five-hundred-mile"), the unit's
+        -- start is mid-word and getPrevVisibleWordStart can't step back through
+        -- it, so the loop above gives up at "-mile". The number and unit share one
+        -- text node, so jump straight back by the length of the trailing number
+        -- text in prev_text and confirm by re-reading the text (a wrong guess
+        -- simply isn't accepted). Tries a couple of connector widths ("-"/none).
+        if prev_text then
+            local numtext = prev_text:match("([%w][%w%.,%-]*)%s*$")
+            if numtext and _parse_num(numtext) == num then
+                local prefix, off = _xpointer_offset(unit_start)
+                if prefix ~= unit_start then
+                    for gap = 0, 2 do
+                        local cand2 = prefix .. tostring(off - #numtext - gap)
+                        local t = text_of(cand2, unit_start)
+                        local lead = t and t:match("^([%w][%w%.,%-]*)")
+                        if lead and _parse_num(lead) == num then return cand2 end
+                    end
+                end
+            end
         end
         return fallback or cand
     end
@@ -2058,9 +2104,14 @@ local function _fast_scan_matches(doc, cat_enabled)
             -- the range string verbatim (UK-volume recalc would otherwise
             -- collapse it to a single value).
             local range_done = false
-            local rn1, _, rspan = _detect_back_range(p, ulow)
+            local rn1 = _detect_back_range(p, ulow)
             if rn1 then
-                local rstart = extend_start(h.start, rn1, rspan)
+                -- Extend back to the FIRST position whose text parses to rn1
+                -- (span = 1). A fixed span miscounts when the connector isn't a
+                -- word: "seven, eight feet" puts "seven" one step nearer than
+                -- "five to ten" does, and the old span overshot past it, so the
+                -- range collapsed to just "eight feet".
+                local rstart = extend_start(h.start, rn1, 1)
                 local mt = text_of(rstart, h["end"])
                 -- Restore a dropped leading minus: extend_start can land AFTER a
                 -- U+2212/"−" it couldn't text-validate, so mt would read "10°F"
@@ -2139,7 +2190,7 @@ local function _fast_scan_matches(doc, cat_enabled)
                 local num, span = _prev_num_words(h.prev_text)
                 if num then
                     local rec = {
-                        start = extend_start(h.start, num, span), ["end"] = h["end"],
+                        start = extend_start(h.start, num, span, h.prev_text), ["end"] = h["end"],
                         prev_text = h.prev_text, next_text = h.next_text,
                         _search = conv, _cat = conv.cat, _unit = unit,
                     }
@@ -3067,9 +3118,9 @@ function FootFree:_finishScan(doc, all_matches, t_per_pat, t_total, in_subproces
         if prev:match("%-and%s*$") then keep = false end
         -- "foot"/"feet" as a body part or idiom, not a measurement.
         if mt:find("foot") or mt:find("feet") then
-            local pw = prev:match("([%a]+)%s*$")   -- last word before the number
+            local pw = _word_before_number(prev)   -- word BEFORE the number ("own", "with")
             local drop_foot =
-                nxt:find("in front", 1, true)        or
+                nxt:match("^%s*in front")            or  -- "one foot in front of the other" (anchored: not "…foot tower in front of the cabin")
                 nxt:match("^%s*into ")               or
                 nxt:match("^%s*over ")               or
                 nxt:match("^%s*forward")             or
@@ -3191,13 +3242,19 @@ function FootFree:_finishScan(doc, all_matches, t_per_pat, t_total, in_subproces
         -- Product model numbers: a comma between the number and the unit (e.g.
         -- "VTS989, kn") never appears in real measurements.
         if r.matched_text:match("%d,%s*%a") then keep = false end
-        -- Mangled vulgar fraction: some EPUBs render "¾" as "3 4'" — a lone digit,
-        -- a space, then a digit with a prime — so "4'" looks like 4 feet. The
-        -- giveaway is a lone digit + space immediately before, and an "s" (the
-        -- "…ths") immediately after. Never a real measurement.
-        if r.matched_text:match("^%s*%d['\226]") and prev:match("%d%s*$")
-           and nxt:match("^s%A") then
-            keep = false
+        -- Mangled vulgar fraction: some EPUBs render "¾" as "3 4'" — a lone
+        -- numerator digit, a space, then a single-digit "foot" prime (the
+        -- denominator). The trailing "…'s"/"ths" is NOT reliably in next_text
+        -- (crengine folds "4's" into one token, so next_text starts at the word
+        -- after), so key off the digit/digit signature with numerator < denominator
+        -- (¾, ⅔, ½ …). Real prose almost never writes a lone digit immediately
+        -- before a single-digit foot-prime.
+        do
+            local denom = r.matched_text:match("^%s*(%d)['\226]")
+            local numer = prev:match("%f[%d](%d)%s*$")
+            if denom and numer and tonumber(numer) < tonumber(denom) then
+                keep = false
+            end
         end
         if keep then table.insert(filtered, r) end
     end
