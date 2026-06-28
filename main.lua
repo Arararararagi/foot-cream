@@ -203,7 +203,7 @@ local _NUM_FRAC  = { half=0.5, quarter=0.25, third=1/3 }
 local function _compose_spelled(text)
     local s = text:lower():gsub("[%-\226\128\147\226\128\148]", " ")
     local total, cur, frac = 0, 0, 0
-    local ntok, started, await_frac = 0, false, false
+    local ntok, started, await_frac, used = 0, false, false, 0
     for raw in s:gmatch("%S+") do
         local hard_stop = raw:find(",", 1, true) ~= nil   -- comma = number boundary
         local w = raw:gsub("[^%a]", "")
@@ -228,10 +228,12 @@ local function _compose_spelled(text)
         else
             break                                          -- non-number token: stop
         end
+        used = used + 1                                    -- words consumed by this number
         if hard_stop then break end
     end
     if not started then return nil end
-    return total + cur + frac, ntok, frac > 0
+    -- 4th result: words consumed (lets a caller walk multiple numbers in a phrase).
+    return total + cur + frac, ntok, frac > 0, used
 end
 
 local function _parse_num(text)
@@ -284,6 +286,49 @@ local function _fmt(v)
         s = string.format("%.1f", v):gsub("%.0$", "")
     end
     return _group_thousands(s)
+end
+
+-- A readable view of the source number(s) a match detected, for the debug Units
+-- list: "three feet" → "3", "four hundred feet" → "400", "five to six miles" →
+-- "5–6", "six foot four" → "6, 4", "5'6\"" → "5, 6". Digit forms are read
+-- directly; spelled forms are composed left to right, one maximal number at a
+-- time, so ranges and compounds both surface all their numbers.
+local function _detected_value_str(text)
+    local s = _display(text or "")
+    local low = s:lower()
+    -- Range separators join two DISTINCT numbers, unlike an intra-number hyphen
+    -- ("twenty-three", "six-and-a-half"). Split on them first so each endpoint is
+    -- parsed on its own — otherwise "five–six" composes to 11.
+    local is_range = low:find(" to ", 1, true) or low:find(" or ", 1, true)
+        or s:find(_ENDASH, 1, true) or s:find(_EMDASH, 1, true) or s:find(", ", 1, true)
+    local split = s:gsub(_ENDASH, "\1"):gsub(_EMDASH, "\1")
+        :gsub(" to ", "\1"):gsub(" or ", "\1"):gsub(", ", "\1")
+    local vals = {}
+    for seg in (split .. "\1"):gmatch("(.-)\1") do
+        if seg:match("%S") then
+            local had = false
+            for d in seg:gmatch("%d[%d.,]*") do
+                local n = tonumber((d:gsub(",", "")))
+                if n then vals[#vals + 1] = _fmt(n); had = true end
+            end
+            if not had then  -- spelled: compose each maximal number run (hyphens = joiners)
+                local words = {}
+                for w in seg:lower():gmatch("%S+") do words[#words + 1] = w end
+                local i = 1
+                while i <= #words do
+                    local val, _, _, consumed = _compose_spelled(table.concat(words, " ", i))
+                    if val and consumed and consumed >= 1 then
+                        vals[#vals + 1] = _fmt(val); i = i + consumed
+                    else
+                        i = i + 1
+                    end
+                end
+            end
+        end
+    end
+    if #vals == 0 then return "?" end
+    if #vals == 1 then return vals[1] end
+    return table.concat(vals, is_range and _ENDASH or ", ")
 end
 
 -- For compound feet+inches heights, _fmt's 1-decimal rounding loses too much
@@ -3788,18 +3833,18 @@ function FootFree:_showUnitList()
         local unit = _display(r.matched_text or "")
         local conv = _metric_only(r) or "?"
         local ctx  = context_of(r, unit)
-        -- The parsed numeric value of the leading number ("four hundred" → 400) —
-        -- shows what the scanner read before converting, to spot mis-parses.
-        local num    = _parse_num(unit)
-        local numstr = num and _fmt(num) or "?"
+        -- The detected source number(s) in parentheses after the unit ("three
+        -- feet (3)"), so a mis-parse stands out. Handles ranges ("5–6") and
+        -- compounds ("6, 4"), not just the leading number.
+        local valstr = _detected_value_str(r.matched_text or unit)
         items[i] = {
-            text      = string.format("%d. %s  →  %s\nvalue: %s\n…%s…", i, unit, conv, numstr, ctx),
+            text      = string.format("%d. %s (%s)  →  %s\n…%s…", i, unit, valstr, conv, ctx),
             mandatory = r._cat or "",
             _xp       = r.start,
             _unit     = unit,
             _conv     = conv,
             _ctx      = ctx,
-            _numval   = numstr,
+            _numval   = valstr,
             _loc      = r.start,
         }
     end
