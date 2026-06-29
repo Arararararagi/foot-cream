@@ -55,6 +55,16 @@ local function copy_file(src, dst)
     return true
 end
 
+-- Whole-file byte comparison (used by revert to detect a stale record whose
+-- apply never actually modified the book).
+local function files_identical(a, b)
+    local fa = io.open(a, "rb"); if not fa then return false end
+    local fb = io.open(b, "rb"); if not fb then fa:close(); return false end
+    local da = fa:read("*a"); fa:close()
+    local db = fb:read("*a"); fb:close()
+    return da == db
+end
+
 -- ── entity-encoded fallback ───────────────────────────────────────────────────
 -- Some epubs store non-ASCII punctuation (°, ′, ″, ', ", ×, dashes) as numeric
 -- character references in the markup, even though crengine decodes them before
@@ -145,6 +155,20 @@ local function apply_one(text, src, dst, guards)
     return text, 0
 end
 
+-- Count the post-guard occurrences of `src` in `text` (the number of
+-- replacements apply_one WOULD make), trying the decoded form then the
+-- entity-encoded fallback. Used by the homonym (currency/weight) guard.
+local function count_one(text, src, guards)
+    local _, n = replace_one(text, src, "", guards)
+    if n > 0 then return n end
+    local src_ent, has_special = entity_variant(src)
+    if has_special then
+        local _, n2 = replace_one(text, src_ent, "", guards)
+        return n2
+    end
+    return 0
+end
+
 -- ── record (backup pointer) file ──────────────────────────────────────────────
 local function write_record(path, rec)
     local f = io.open(path, "w")
@@ -195,14 +219,36 @@ function M.apply(epub_path, record_path, reps)
     end
     reader:close()
 
+    -- Homonym guard (currency/weight): a rep carrying `.expected` (the number
+    -- of positions the scanner kept it as a genuine measurement) must not be
+    -- applied if the book contains MORE textual occurrences than that — the
+    -- extras were suppressed by the scanner as a different sense (sterling £).
+    -- Count occurrences across ALL html entries first (the replacement is
+    -- global, so the decision has to be too), then mark over-counted reps to
+    -- skip. (Counting < expected is fine — markup/entity divergence just means
+    -- the rewriter sees fewer; we never suppress in that direction.)
+    for _, rep in ipairs(reps) do
+        if rep.expected then
+            local found = 0
+            for _, name in ipairs(order) do
+                if is_html(name, content[name]) then
+                    found = found + count_one(content[name], rep.from, rep.guard_next)
+                end
+            end
+            if found > rep.expected then rep.skip = true end
+        end
+    end
+
     -- Apply replacements to html/xhtml entries.
     local modified, changed = {}, {}
     for _, name in ipairs(order) do
         if is_html(name, content[name]) then
             local text, total = content[name], 0
             for _, rep in ipairs(reps) do
-                local new, n = apply_one(text, rep.from, rep.to, rep.guard_next)
-                if n > 0 then text = new; total = total + n end
+                if not rep.skip then
+                    local new, n = apply_one(text, rep.from, rep.to, rep.guard_next)
+                    if n > 0 then text = new; total = total + n end
+                end
             end
             if total > 0 then
                 modified[name] = text
@@ -211,6 +257,16 @@ function M.apply(epub_path, record_path, reps)
         end
     end
     if #changed == 0 then return "OK:0" end
+
+    -- Fail fast (and cleanly) if we can't write next to the book — e.g. the
+    -- containing folder is read-only to this user (a 9p/SMB share owned by
+    -- another uid, as on the test VM's /mnt/macos/.../gutenberg/). Probe BEFORE
+    -- creating any backup/record: otherwise we'd leave a stale "converted"
+    -- record that makes every later open try (and fail) to auto-revert.
+    local probe = epub_path .. ".footcream_wtest"
+    local pf = io.open(probe, "wb")
+    if not pf then return "ERROR:cannot convert — the book's folder is read-only" end
+    pf:close(); os.remove(probe)
 
     -- Back up the original epub (whole-file, byte-exact) for revert.
     local backup_path = record_path .. ".orig"
@@ -227,7 +283,10 @@ function M.apply(epub_path, record_path, reps)
     local tmp = epub_path .. ".footcream_tmp"
     local writer = Archiver.Writer:new()
     if not writer:open(tmp, "epub") then
-        os.remove(marker); return "ERROR:cannot open writer"
+        -- Roll back the artifacts we just created so no stale "converted" record
+        -- is left behind to break later opens.
+        os.remove(marker); os.remove(backup_path); os.remove(record_path)
+        return "ERROR:cannot open writer"
     end
     writer:setZipCompression("store")
     if content["mimetype"] then
@@ -244,7 +303,9 @@ function M.apply(epub_path, record_path, reps)
     -- Atomic replace (rename over the open file is fine on Linux; the reader
     -- reloads afterwards and picks up the new inode).
     if not os.rename(tmp, epub_path) then
-        os.remove(marker); return "ERROR:cannot replace epub"
+        os.remove(marker); os.remove(tmp)
+        os.remove(backup_path); os.remove(record_path)
+        return "ERROR:cannot replace epub"
     end
 
     -- Record the converted size for the revert external-change check, then clear
@@ -277,8 +338,20 @@ function M.revert(epub_path, record_path)
     end
 
     local tmp = epub_path .. ".footcream_tmp"
-    if not copy_file(backup, tmp) then return "ERROR:cannot stage restore" end
-    if not os.rename(tmp, epub_path) then return "ERROR:cannot replace epub" end
+    if not copy_file(backup, tmp) then
+        -- Can't stage the restore (folder read-only?). If the on-disk epub is
+        -- already byte-identical to the backup, the apply never actually
+        -- modified it — this is a stale record from a half-failed apply. Clear
+        -- it and report success so the book opens normally instead of erroring
+        -- on every open.
+        if files_identical(epub_path, backup) then
+            os.remove(backup); os.remove(record_path)
+            os.remove(record_path .. ".inprogress")
+            return "OK"
+        end
+        return "ERROR:cannot stage restore"
+    end
+    if not os.rename(tmp, epub_path) then os.remove(tmp); return "ERROR:cannot replace epub" end
 
     os.remove(backup)
     os.remove(record_path)

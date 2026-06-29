@@ -28,7 +28,7 @@ local _ENDASH = "\226\128\147"   -- –  U+2013
 local _TIMES  = "\195\151"       -- ×  U+00D7
 local _SUP2   = "\194\178"       -- ²  U+00B2 (superscript two)
 
-local CACHE_VERSION = 26  -- bumped: cross-node span extension (number/unit split by <span>/<br>/<i>)
+local CACHE_VERSION = 44  -- bumped: FIX scan crash — article-form "a mile or two" range tail truncated _distance_or_tail's connector via the `a and f() or nil` idiom, leaving conn=nil and crashing the subprocess (no sidecar → looked like a freeze)
 local _REVERSE_VERSION = 2  -- v2: ordered originals per converted string (position-aware reverse lookup)
 
 -- ── Number prefixes ───────────────────────────────────────────────────────────
@@ -200,6 +200,42 @@ local _NUM_TEN = {
 }
 local _NUM_SCALE = { thousand=1000, million=1000000, billion=1000000000 }
 local _NUM_FRAC  = { half=0.5, quarter=0.25, third=1/3 }
+-- Unicode "vulgar fraction" glyphs (their UTF-8 bytes) → decimal value, so
+-- "18½ miles" reads 18.5 and "½ mile" reads 0.5. The ½/¼/¾ live in Latin-1
+-- (2 bytes); the ⅓-family in U+215x (3 bytes).
+local _VULGAR_FRAC = {
+    ["\194\189"]     = 0.5,    -- ½
+    ["\194\188"]     = 0.25,   -- ¼
+    ["\194\190"]     = 0.75,   -- ¾
+    ["\226\133\147"] = 1/3,    -- ⅓
+    ["\226\133\148"] = 2/3,    -- ⅔
+    ["\226\133\149"] = 0.2,    -- ⅕
+    ["\226\133\155"] = 0.125,  -- ⅛
+    ["\226\133\156"] = 0.375,  -- ⅜
+    ["\226\133\157"] = 0.625,  -- ⅝
+    ["\226\133\158"] = 0.875,  -- ⅞
+}
+
+-- Spelled multiplicative fractions: "three quarters" = 0.75, "three tenths" = 0.3,
+-- "two thirds" ≈ 0.667, "a quarter" = 0.25. The denominator word maps to its
+-- divisor; the numerator must be a small number word strictly below it (so
+-- "three quarters" but not "five quarters", and not unrelated "<n> <noun>" pairs).
+local _FRAC_DENOM = {
+    half=2, halves=2, third=3, thirds=3, quarter=4, quarters=4,
+    fourth=4, fourths=4, fifth=5, fifths=5, sixth=6, sixths=6,
+    seventh=7, sevenths=7, eighth=8, eighths=8, ninth=9, ninths=9,
+    tenth=10, tenths=10, twelfth=12, twelfths=12, sixteenth=16, sixteenths=16,
+}
+local function _word_fraction(text)
+    local s = (text or ""):lower():gsub("%-", " "):gsub("^%s+", "")
+    local nw, dw = s:match("^(%a+)%s+(%a+)")
+    if not nw then return nil end
+    local denom = _FRAC_DENOM[dw]
+    if not denom then return nil end
+    local numer = (nw == "a" or nw == "an") and 1 or _NUM_UNIT[nw]
+    if not numer or numer < 1 or numer >= denom then return nil end
+    return numer / denom
+end
 
 local function _compose_spelled(text)
     -- Only the ASCII hyphen joins parts of ONE number ("twenty-three",
@@ -208,6 +244,12 @@ local function _compose_spelled(text)
     local s = text:lower():gsub("%-", " ")
     local total, cur, frac = 0, 0, 0
     local ntok, started, await_frac, used = 0, false, false, 0
+    -- Within one sub-hundred group there is at most one tens word and one units
+    -- word ("eighty-five"). A second tens or units word means a NEW number, not a
+    -- continuation — "eighty-five and ninety" is 85 then 90 (a range/list), NOT
+    -- 175. These flags reset on hundred / dozen / a scale word (which open a fresh
+    -- group), so "one hundred and twelve" still composes 100 + 12 = 112.
+    local have_ten, have_unit = false, false
     for raw in s:gmatch("%S+") do
         local hard_stop = raw:find(",", 1, true) ~= nil   -- comma = number boundary
         local w = raw:gsub("[^%a]", "")
@@ -216,19 +258,26 @@ local function _compose_spelled(text)
         elseif w == "a" or w == "an" then
             await_frac = true                              -- "a half" vs "a hundred"
         elseif _NUM_UNIT[w] then
-            cur = cur + _NUM_UNIT[w]; ntok = ntok + 1; started = true; await_frac = false
+            if have_unit then break end                    -- "five six" → two numbers
+            cur = cur + _NUM_UNIT[w]; have_unit = true
+            ntok = ntok + 1; started = true; await_frac = false
         elseif _NUM_TEN[w] then
-            cur = cur + _NUM_TEN[w]; ntok = ntok + 1; started = true; await_frac = false
+            if have_ten or have_unit then break end        -- "eighty-five and ninety" → 85, then stop
+            cur = cur + _NUM_TEN[w]; have_ten = true
+            ntok = ntok + 1; started = true; await_frac = false
         elseif w == "hundred" then
-            cur = (cur == 0 and 1 or cur) * 100; ntok = ntok + 1; started = true; await_frac = false
+            cur = (cur == 0 and 1 or cur) * 100; have_ten, have_unit = false, false
+            ntok = ntok + 1; started = true; await_frac = false
         elseif w == "dozen" then
             -- "two dozen" = 24, "a dozen" = 12. Without this branch the composer
             -- stopped at "dozen", mis-reading "two dozen" as 2 and leaving the
             -- Units-list value blank ("?") even though _WORD_NUMS knew dozen=12.
-            cur = (cur == 0 and 1 or cur) * 12; ntok = ntok + 1; started = true; await_frac = false
+            cur = (cur == 0 and 1 or cur) * 12; have_ten, have_unit = false, false
+            ntok = ntok + 1; started = true; await_frac = false
         elseif _NUM_SCALE[w] then
             total = total + (cur == 0 and 1 or cur) * _NUM_SCALE[w]
-            cur = 0; ntok = ntok + 1; started = true; await_frac = false
+            cur = 0; have_ten, have_unit = false, false
+            ntok = ntok + 1; started = true; await_frac = false
         elseif _NUM_FRAC[w] then
             -- additive fraction only ("six and a half"); a multiplicative form
             -- ("two fifths") has a number right before with no "a" → bail.
@@ -246,10 +295,14 @@ local function _compose_spelled(text)
 end
 
 local function _parse_num(text)
-    local s_start, _, s = text:find("([0-9][0-9,.]*)")
+    local s_start, s_end, s = text:find("([0-9][0-9,.]*)")
     if s then
         local n = tonumber((s:gsub(",", "")))
         if n then
+            -- A vulgar-fraction glyph fused to the digits ("18½") adds its value.
+            local tail = text:sub(s_end + 1, s_end + 3)
+            local vf = _VULGAR_FRAC[tail:sub(1, 2)] or _VULGAR_FRAC[tail:sub(1, 3)]
+            if vf then n = n + vf end
             -- Honor a minus sign immediately before the digits — ASCII hyphen
             -- OR any of the Unicode dashes books use (U+2212 −, U+2013 –,
             -- U+2014 —) — so "−10°F"/"–10°F"/"—10°F" parse as -10, not 10.
@@ -260,18 +313,33 @@ local function _parse_num(text)
             return n
         end
     end
+    -- A standalone vulgar-fraction glyph ("½ mile" → 0.5), after any leading space.
+    local lead = text:gsub("^%s+", "")
+    local vf0 = _VULGAR_FRAC[lead:sub(1, 2)] or _VULGAR_FRAC[lead:sub(1, 3)]
+    if vf0 then return vf0 end
     -- Compose multi-word / additive-fraction spelled numbers ("five thousand five
     -- hundred" = 5500, "six and a half" = 6.5) the flat table below can't. Gated
     -- to ≥2 number tokens or a fraction, so single words and multiplicative
     -- fractions ("two fifths") still resolve via _WORD_NUMS.
     local cval, ctok, cfrac = _compose_spelled(text)
     if cval and (ctok >= 2 or cfrac) then return cval end
+    -- Spelled multiplicative fraction ("three quarters" = 0.75, "three tenths" =
+    -- 0.3) — before the flat _WORD_NUMS lookup, which would prefix-match just the
+    -- numerator ("three" → 3).
+    local wf = _word_fraction(text)
+    if wf then return wf end
     -- Strip leading punctuation/space so a paren- or quote-attached word number
     -- still prefix-matches ("(three" → "three", "  ten" → "ten").
     local lower = text:lower():gsub("^[^%w]+", "")
     for _, entry in ipairs(_WORD_NUMS) do
         local word = entry[1]
-        if lower:sub(1, #word) == word then return entry[2] end
+        if lower:sub(1, #word) == word then
+            -- Require a word boundary after the match so "tentacles" isn't read as
+            -- "ten", "only" as "one", etc. A following letter means it's a longer,
+            -- non-number word; digits/spaces/punctuation are fine.
+            local nextc = lower:sub(#word + 1, #word + 1)
+            if nextc == "" or not nextc:match("%a") then return entry[2] end
+        end
     end
     return nil
 end
@@ -329,6 +397,12 @@ local function _detected_value_str(text)
                     if val and consumed and consumed >= 1 then
                         vals[#vals + 1] = _fmt(val); i = i + consumed
                     else
+                        -- The composer can't start on a leading fraction word
+                        -- ("half a gallon", "three quarters of a mile"), but
+                        -- _parse_num knows these via _WORD_NUMS — so the Units
+                        -- list shows "0.5"/"0.75" instead of "?".
+                        local pv = _parse_num(table.concat(words, " ", i))
+                        if pv then vals[#vals + 1] = _fmt(pv) end
                         i = i + 1
                     end
                 end
@@ -467,8 +541,28 @@ local function _smart_round(v, n, force, target)
                    or (target == "m" and (v >= 10 or v <= -10))) then
         return _nice_round(v, _HARSH_TOLERANCE)
     end
+    -- Sub-metre lengths display as centimetres (via _downscale at format time),
+    -- so round them on the cm scale to ~2 sig figs — otherwise the metre value's
+    -- 1-decimal format leaks odd precision once downscaled ("three feet" →
+    -- 0.9144 m → "91.4 cm"; now → 0.90 m → "90 cm"). Mirrors the cm branch above.
+    if target == "m" and v > -1 and v < 1 then
+        local cm = _nice_round(v * 100, _HARSH_TOLERANCE)
+        if cm ~= math.floor(cm) and math.abs(cm) >= 3 then cm = _round_to_int(cm) end
+        return cm / 100
+    end
     if not force and not _is_approx_num(n) then return v end
     return _nice_round(v)
+end
+
+-- Whole-number distance for "not <n> <unit>" — the negation signals a vague,
+-- approximate distance, so a round number reads more honestly ("not two miles" →
+-- "3 km", not "3.2 km"). Smart-round first (nice 1-2-5 value, e.g. half a mile →
+-- 0.8 km → 800 m), THEN drop any remaining decimal in the display unit, so "not"
+-- never reads LESS round than the plain conversion would.
+local function _round_whole_dist(v, n, target)
+    local rv = _smart_round(v, n, true, target)
+    local sv, su = _downscale(rv, target)
+    return _fmt(_round_to_int(sv)) .. " " .. su
 end
 
 -- ── Compound converters ───────────────────────────────────────────────────────
@@ -665,46 +759,166 @@ local _UNIT_CONV_UK = {
 -- ── Pounds context classifier (weight vs. £ currency) ────────────────────────
 -- Always on now. Checks the prev/next context words that findAllText already
 -- returns — no extra document scan needed.
-local _CURRENCY_WORDS = {
-    paid=true, pay=true, paying=true, pays=true,
+-- Pound disambiguation (spelled "pound(s)" only — "lb"/"lbs" is unambiguously
+-- weight). Two tiers feed ONE weighted decision (see _pound_* helpers below):
+--   _CURRENCY_HARD — words with NO plausible weight reading (coin denominations,
+--                    "sterling"). Their presence suppresses the match outright,
+--                    at scan time, like the £ symbol.
+--   _CURRENCY_SOFT — money cues that CAN sit beside a real weight ("the crate,
+--                    worth a fortune, weighed two hundred pounds"). These only
+--                    *vote*: currency suppresses only when its cues outnumber the
+--                    weight cues, so a weighty context rescues the match.
+-- gold/silver are deliberately in NEITHER list — "ten pounds of gold/silver" is a
+-- real weight (see the Around-the-World "in gold" flag); treating them as money
+-- would suppress genuine weights.
+local _CURRENCY_HARD = {
+    shilling=true, shillings=true, pence=true, penny=true, pennies=true,
+    farthing=true, farthings=true, guinea=true, guineas=true, sixpence=true,
+    threepence=true, fourpence=true, florin=true, florins=true,
+    halfpenny=true, halfpence=true, groat=true, groats=true, quid=true,
+    sovereign=true, sovereigns=true, sterling=true,
+}
+local _CURRENCY_SOFT = {
+    -- transaction verbs
+    paid=true, pay=true, paying=true, pays=true, repaid=true,
     cost=true, costs=true, costing=true,
-    worth=true, value=true, valued=true,
+    worth=true, valued=true,
     earned=true, earn=true, earns=true, earning=true,
     owed=true, owe=true, owes=true, owing=true,
-    spent=true, spend=true, spending=true,
+    spent=true, spend=true, spends=true, spending=true,
+    charged=true, charge=true, charges=true, charging=true,
+    bought=true, buy=true, buys=true, buying=true,
+    sold=true, sell=true, sells=true, selling=true,
+    lent=true, lend=true, lends=true, lending=true,
+    borrowed=true, borrow=true, borrows=true, borrowing=true,
+    won=true, win=true, wins=true, winning=true,
+    bet=true, bets=true, betting=true, wager=true, wagers=true, wagered=true,
+    offered=true, offer=true, offers=true, offering=true,
+    purchase=true, purchased=true, purchases=true,
+    stole=true, steal=true, steals=true, stolen=true, stealing=true,
+    robbed=true, robbery=true, robber=true, robbers=true,
+    deposit=true, deposited=true, deposits=true,
+    saved=true, save=true, saves=true, saving=true,
+    fetch=true, fetched=true, fetches=true,
+    pocketed=true, pocket=true, pockets=true,
+    -- money nouns
     price=true, priced=true, prices=true,
-    fee=true, fees=true, fine=true, fined=true,
+    fee=true, fees=true, fine=true, fined=true, fines=true,
     salary=true, wage=true, wages=true,
-    charged=true, charge=true, charges=true,
-    bought=true, buy=true, buying=true,
-    sold=true, sell=true, selling=true,
-    lent=true, lend=true, borrowed=true, borrow=true,
     debt=true, debts=true, sum=true, sums=true,
-    shilling=true, shillings=true, sterling=true,
-    advance=true, advanced=true,
-    income=true, payment=true, payments=true,
-    rent=true, rents=true, fortune=true, money=true,
-    -- "three hundred pounds in gold ... seven hundred in notes" — pounds is £,
-    -- not weight. These lean monetary (gold/silver do have a weight sense, but
-    -- "<N> pounds in gold/notes" is overwhelmingly currency).
-    gold=true, silver=true, notes=true, note=true, banknotes=true,
-    coin=true, coins=true, guinea=true, guineas=true,
-    sovereign=true, sovereigns=true, cash=true,
+    rent=true, rents=true, fortune=true, money=true, monies=true,
+    income=true, payment=true, payments=true, advance=true, advanced=true,
+    ransom=true, dowry=true, bribe=true, bribed=true, allowance=true,
+    pension=true, legacy=true, bequest=true, annuity=true, inheritance=true,
+    reward=true, rewards=true, rewarded=true,
+    cheque=true, cheques=true, receipt=true, receipts=true,
+    banker=true, bankers=true, banknote=true, banknotes=true,
+    notes=true, cash=true, coin=true, coins=true,
+    bargain=true, bargained=true,
+    -- financial nouns surfaced by the Gutenberg-corpus measurement (P&P/Verne):
+    -- "to the amount of", "interest of", "per annum", "per cent", a marriage
+    -- "settlement", "inherited", "expenses". Each has no weight sense.
+    inherited=true, inherits=true, inheriting=true,
+    amount=true, amounts=true, interest=true,
+    annum=true, cent=true, cents=true, percent=true,
+    settlement=true, settlements=true, settled=true,
+    expenses=true, expense=true,
+    -- inheritance / estate vocabulary (P&P "a legacy of …", "his estate",
+    -- "bequeathed"): money words with no weight sense.
+    estate=true, estates=true, bequeathed=true, bequeath=true, bequeaths=true,
+    acquisition=true, acquisitions=true,
+}
+-- Currency PHRASES (multi-word; checked as bounded substrings). "in gold" /
+-- "in silver" mark money ("twenty thousand pounds in gold"), while the weight
+-- reading uses "of gold" ("ten pounds of gold") — so the phrase disambiguates
+-- without the bare word "gold"/"silver" wrongly suppressing genuine weights.
+-- "left <pron> <sum>" is the inheritance/will idiom ("her father … had left her
+-- four thousand pounds"). A bounded phrase keeps it from firing on "left" alone
+-- (turn left / left behind). If a real weight sits nearby ("left her ten pounds
+-- lighter") the weight cue ties and keeps it.
+local _CURRENCY_PHRASES = {
+    "in gold", "in silver",
+    "left her", "left him", "left them", "left me", "left us",
 }
 local _WEIGHT_WORDS = {
     weighed=true, weighs=true, weigh=true, weighing=true,
     weight=true, weights=true,
     heavy=true, heavier=true, heaviest=true,
     lighter=true, lightest=true,
-    lifted=true, lift=true, lifting=true,
-    carried=true, carry=true, carrying=true,
-    load=true, loaded=true, loading=true,
+    massive=true, bulky=true, hefty=true, ponderous=true,
+    lifted=true, lift=true, lifts=true, lifting=true,
+    carried=true, carry=true, carries=true, carrying=true,
+    hauled=true, haul=true, hauls=true, hauling=true,
+    hoisted=true, hoist=true, hoists=true, hoisting=true,
+    heaved=true, heave=true, heaves=true, heaving=true,
+    load=true, loaded=true, loads=true, loading=true,
     bag=true, bags=true, sack=true, sacks=true,
-    crate=true, crates=true,
-    gained=true, gain=true, gaining=true,
-    stone=true, ounce=true, ounces=true,
-    kilogram=true, kilograms=true,
+    crate=true, crates=true, barrel=true, barrels=true,
+    keg=true, kegs=true, cask=true, casks=true,
+    bale=true, bales=true, bundle=true, bundles=true,
+    cargo=true, freight=true, ballast=true,
+    boulder=true, anvil=true,
+    gained=true, gain=true, gains=true, gaining=true,
+    muscle=true, overweight=true,
+    stone=true, ounce=true, ounces=true, ton=true, tons=true,
+    tonne=true, tonnes=true, kilogram=true, kilograms=true, kilo=true, kilos=true,
 }
+-- Pound classifier helpers (pure; unit-tested in builder/lua_helper_tests.lua).
+-- `window` is the lowercased prev+next context around a spelled-"pound(s)" match.
+-- A hard currency cue (coin denomination / "sterling") means money, full stop.
+local function _pound_hard_currency(window)
+    for word in window:gmatch("%a+") do
+        if _CURRENCY_HARD[word] then return true end
+    end
+    return false
+end
+-- Soft decision: currency "wins" (suppress) only when its cues OUTNUMBER the
+-- weight cues, so a genuinely weighty context keeps the match even with a money
+-- word nearby. Ties keep (lean toward converting). `num` (optional) is the
+-- pound amount, used for the magnitude prior below.
+local function _pound_currency_wins(window, num)
+    local cscore, wscore = 0, 0
+    for word in window:gmatch("%a+") do
+        if _CURRENCY_SOFT[word] then cscore = cscore + 1 end
+        if _WEIGHT_WORDS[word]  then wscore = wscore + 1 end
+    end
+    -- Phrase cues vote on the currency side. %f[%a]…%f[%A] frontiers keep them
+    -- whole-word ("in gold", not "thin gold" / "in golden").
+    for _, ph in ipairs(_CURRENCY_PHRASES) do
+        if window:find("%f[%a]" .. ph .. "%f[%A]") then cscore = cscore + 1 end
+    end
+    -- Magnitude prior: in prose, amounts of a thousand pounds or more are almost
+    -- always money — a person or object weighing ≥1000 lb (450 kg) is absurd
+    -- (Pride & Prejudice: "twenty thousand pounds", "her fortune of thirty
+    -- thousand pounds"…). Worth ONE currency vote — not more — so a single
+    -- genuine weight cue ("the anchor weighed two thousand pounds") still ties
+    -- and keeps the conversion. Hundreds are NOT boosted: 200–800 lb are real
+    -- weights for people/loads (the CH30 "two/three hundred pounds" cases rely
+    -- on this).
+    if num and num >= 1000 then cscore = cscore + 1 end
+    return cscore > wscore
+end
+
+-- Window-truncation helpers. The scan stores 15 context words each side (the
+-- pound currency classifier needs the wide view), but the number/range/idiom
+-- logic and the legacy filters are tuned for 8 — these trim back to the 8 words
+-- nearest the match so that behaviour is unchanged for everything but pounds.
+local function _last_words(s, n)
+    if not s then return s end
+    local w = {}
+    for tok in s:gmatch("%S+") do w[#w + 1] = tok end
+    if #w <= n then return s end
+    return table.concat(w, " ", #w - n + 1)
+end
+local function _first_words(s, n)
+    if not s then return s end
+    local w = {}
+    for tok in s:gmatch("%S+") do
+        w[#w + 1] = tok
+        if #w >= n then break end
+    end
+    return table.concat(w, " ")
+end
 
 -- ── Metric edition helpers ───────────────────────────────────────────────────
 
@@ -1029,6 +1243,13 @@ local function _xpointer_offset(xp)
     if not prefix then return xp, 0 end
     return prefix, tonumber(num)
 end
+
+-- A match whose xpointer path runs through a heading element (h1–h6) lives in a
+-- chapter title or the book title, never body prose. crengine renders headings
+-- as "/h2/span/text()" etc., so the path contains "/hN" followed by "/" or "[".
+-- Such matches are dropped at scan time → never underlined, never rewritten.
+-- (Inlined at the two scan chokepoints as `(xp or ""):find("/h[1-6][%[/]")` to
+-- stay under Lua's 200-locals-per-chunk limit — no top-level helper slot.)
 
 -- Numeric document-order key for an xpointer: the sequence of integers it
 -- contains (DocFragment index, element indices, char offset). Comparing these
@@ -1525,12 +1746,7 @@ local function _apply_settings_to_matches(matches, distinguish_pounds, use_uk_vo
             local mt = (r.matched_text or ""):lower()
             if mt:find("pound") then
                 local window = ((r.prev_text or "") .. " " .. (r.next_text or "")):lower()
-                local cscore, wscore = 0, 0
-                for word in window:gmatch("%a+") do
-                    if _CURRENCY_WORDS[word] then cscore = cscore + 1 end
-                    if _WEIGHT_WORDS[word]   then wscore = wscore + 1 end
-                end
-                if cscore > wscore then keep = false end
+                if _pound_currency_wins(window, r._num) then keep = false end
             end
         end
 
@@ -1562,6 +1778,11 @@ local _UNIT_CONV = {
     ["fathom"]            = { factor=1.8288,   offset=0,       target="m",    cat="length"      },
     ["furlongs"]          = { factor=201.168,  offset=0,       target="m",    cat="length"      },
     ["furlong"]           = { factor=201.168,  offset=0,       target="m",    cat="length"      },
+    -- Land league = 3 statute miles (4.828 km). Common in 19th-c. prose
+    -- (Frankenstein, Verne). The nautical league (5.556 km) is rarer; land is
+    -- the safe default for general fiction.
+    ["leagues"]           = { factor=4.82803,  offset=0,       target="km",   cat="length"      },
+    ["league"]            = { factor=4.82803,  offset=0,       target="km",   cat="length"      },
     ["pounds"]            = { factor=0.453592, offset=0,       target="kg",   cat="weight"      },
     ["pound"]             = { factor=0.453592, offset=0,       target="kg",   cat="weight"      },
     ["lbs"]               = { factor=0.453592, offset=0,       target="kg",   cat="weight"      },
@@ -1602,6 +1823,7 @@ local _UNIT_SUFFIXES = {
     "fluid ounces", "fluid ounce",
     "miles per hour", "miles an hour",
     "fl oz", "fathoms", "fathom", "furlongs", "furlong",
+    "leagues", "league",
     "gallons", "gallon", "quarts", "quart",
     "knots", "knot", "pounds", "pound",
     "ounces", "ounce", "pints", "pint",
@@ -1774,6 +1996,17 @@ local function _prev_num_words(prev)
     -- "two thirds of a" = 2/3). Span includes the trailing "of a" (2 words).
     local before_of = s:match("^(.-)%s+of%s+an?$")
     if before_of and before_of ~= "" then
+        -- Nested multiplicative fraction: "half a quarter of a mile" = ½ × ¼ = ⅛.
+        -- The "<f1> a/an <f2>" shape means f1 OF a f2, so the values multiply
+        -- (½ of ¼ mile, not ½ + ¼). Both parts must be sub-1 fractions.
+        local f1w, f2w = before_of:match("([%w%-]+)%s+an?%s+([%w%-]+)%s*$")
+        if f1w then
+            local f1, f2 = _parse_num(f1w), _parse_num(f2w)
+            if f1 and f2 and f1 > 0 and f1 < 1 and f2 > 0 and f2 < 1 then
+                -- span covers "<f1> a <f2> of a" = 5 words.
+                return f1 * f2, 5
+            end
+        end
         local fwords = {}
         for w in before_of:gmatch("%S+") do fwords[#fwords + 1] = w end
         for span = math.min(3, #fwords), 1, -1 do
@@ -1782,17 +2015,36 @@ local function _prev_num_words(prev)
         end
     end
     -- Additive "N and a/<frac> [unit]" form ("four and a half feet",
-    -- "three and a third feet"): value = whole N + fraction. Returned with a
-    -- third result `true` so the caller pins the conversion (matched_text's own
-    -- _parse_num would prefix-match just N).
-    local int_part, frac_part = s:match("([%w%-]+)%s+and%s+(.+)$")
-    if int_part and frac_part then
-        local iv, fv = _parse_num(int_part), _parse_num(frac_part)
-        if iv and fv and iv >= 1 and iv == math.floor(iv) and fv > 0 and fv < 1 then
-            local nw = 0
-            for _ in (int_part .. " and " .. frac_part):gmatch("%S+") do nw = nw + 1 end
-            return iv + fv, nw, true
+    -- "one and three-quarter leagues"): value = whole N + fraction. The fraction
+    -- must sit at the END of prev (adjacent to the unit) and be only 1–2 words —
+    -- otherwise a distant "…seven and a half yards … thirty-five" would wrongly
+    -- bind "thirty-five" to that far-off fraction. Greedy `(.*)` takes the "and"
+    -- closest to the unit. Returned with a third result `true` so the caller pins
+    -- the conversion (matched_text's own _parse_num would prefix-match just N).
+    local pre, frac_part = s:match("^(.*)%s+and%s+(.+)$")
+    if pre and frac_part then
+        local fw = 0
+        for _ in frac_part:gmatch("%S+") do fw = fw + 1 end
+        local int_part = pre:match("([%w%-]+)%s*$")
+        if int_part and fw <= 2 then
+            local iv, fv = _parse_num(int_part), _parse_num(frac_part)
+            if iv and fv and iv >= 1 and iv == math.floor(iv) and fv > 0 and fv < 1 then
+                return iv + fv, 2 + fw, true   -- span: <int> and <frac words>
+            end
         end
+    end
+    -- Leading-article fraction adjacent to the unit ("half a foot", "half an
+    -- inch", "a quarter mile"): the trailing article ("a"/"an") breaks the
+    -- number-word walk below, which needs the LAST word to be a number word, so
+    -- it would bail. Parse the 2-word tail directly. Only a genuine sub-1
+    -- fraction counts (½, ¼, ⅓), so the bare "a foot"/"an inch" idiom (value 1)
+    -- is untouched, and "two and a half feet" still takes the additive path
+    -- above first. This is what lets foot/inch (absent from _ART_DIST_UNITS)
+    -- convert "half a foot" = ~15 cm, matching the "six inches" it equals.
+    local frac2 = s:match("([%a]+%s+[%a]+)%s*$")
+    if frac2 then
+        local fv = _parse_num(frac2)
+        if fv and fv > 0 and fv < 1 then return fv, 2 end
     end
     local words = {}
     for w in s:gmatch("%S+") do words[#words + 1] = w end
@@ -1800,8 +2052,10 @@ local function _prev_num_words(prev)
     local first = #words
     -- Stop at a comma-terminated word: it belongs to a previous measurement, not
     -- this one ("five feet nine, two hundred thirty pounds" — the weight's number
-    -- is "two hundred thirty", not "nine, two hundred thirty").
-    while first > 1 and (#words - first) < 4 and _is_number_word(words[first - 1])
+    -- is "two hundred thirty", not "nine, two hundred thirty"). The window is
+    -- wide enough for a long spelled compound ("seven thousand five hundred and
+    -- twenty-four" = 6 words); the comma guard still bounds runaway reads.
+    while first > 1 and (#words - first) < 7 and _is_number_word(words[first - 1])
           and not words[first - 1]:find(",", 1, true) do
         first = first - 1
     end
@@ -1823,6 +2077,14 @@ local function _prev_num_words(prev)
            and _parse_num(art .. " " .. table.concat(words, " ", first)) then
             first = first - 1
         end
+    end
+    -- Two adjacent but uncombinable numbers ("one fifteen feet" — "one [shark],
+    -- fifteen feet") leave a leading number the composer can't fold in. Keep the
+    -- UNIT-ADJACENT (rightmost) number: advance until the span composes whole.
+    while first < #words do
+        local _, _, _, used = _compose_spelled(table.concat(words, " ", first))
+        if used and used >= (#words - first + 1) then break end
+        first = first + 1
     end
     local n = _parse_num(table.concat(words, " ", first))
     if n then return n, #words - first + 1 end
@@ -1901,6 +2163,50 @@ local function _inch_range_tail(next_text, first_inch)
     return k, conn
 end
 
+-- Forward "or/to M" range tail with NO repeated unit: "a mile or two",
+-- "one mile or two". The second operand must be a bare number NOT followed by a
+-- unit/noun it belongs to (so "three miles, or four miles" stays two separate
+-- matches, and "a mile or so" — _parse_num fails on "so" — is left as a single).
+-- Returns (M, connector "or"/"to") or nil.
+local function _distance_or_tail(next_text)
+    if not next_text then return nil end
+    if next_text:match("^%s*%.%s+%u") then return nil end   -- new sentence
+    local s = next_text:gsub("^[%s,%.]+", "")
+    local conn, mtok = s:match("^(%a+)%s+([%w][%w%-]*)")
+    if conn ~= "or" and conn ~= "to" then return nil end
+    -- A thousands-separated continuation ("…miles, or 5,250 French leagues") is a
+    -- restatement in another unit, NOT an "or two"-style range endpoint. The comma
+    -- truncates mtok to "5", so detect the ",<digit>" right after it and bail.
+    if s:match("^%a+%s+[%w][%w%-]*,%d") then return nil end
+    local m = _parse_num((mtok:gsub("[%.,]+$", "")))
+    if not m then return nil end
+    local after = s:gsub("^%a+%s+[%w%-]+", "", 1):gsub("^[%s%-]+", "")
+    local nextword = after:match("^([%a']+)")
+    if nextword and _RANGE_TAIL_NOUNS[nextword:lower()] then return nil end
+    return m, conn
+end
+
+-- Forward "by M" dimension tail: "twenty feet by ten" → a 20×10 two-axis
+-- measurement in the SAME unit (the second number is bare). Rejected when the
+-- second number carries an inch/foot/yard unit of its own ("feet by ten inches"
+-- is the feet-by-inches path) or a noun it belongs to. Returns (M, phrase) or nil.
+local function _dim_by_tail(next_text)
+    if not next_text then return nil end
+    local s = next_text:lower():gsub("^[%s,]+", "")
+    local mtok = s:match("^by%s+([%w%-]+)")
+    if not mtok then return nil end
+    local m = _parse_num((mtok:gsub("[%.,]+$", "")))
+    if not m then return nil end
+    local after = s:gsub("^by%s+[%w%-]+", "", 1):gsub("^[%s%-]+", "")
+    local nextword = after:match("^([%a']+)")
+    local unit_after = {
+        inch=true, inches=true, foot=true, feet=true, ft=true,
+        yard=true, yards=true, yd=true, yds=true,
+    }
+    if nextword and (unit_after[nextword] or _RANGE_TAIL_NOUNS[nextword]) then return nil end
+    return m, "by " .. mtok
+end
+
 -- Build a "phrase = converted" string for a known numeric value `val`. Used
 -- when matched_text's own _parse_num would disagree (e.g. additive "four and a
 -- half" prefix-parses as just 4), so the cached _converted carries the right value.
@@ -1914,11 +2220,159 @@ local function _value_converted(disp, val, conv, unit)
     return rstr and (disp .. " = " .. rstr) or nil
 end
 
+-- Post-unit fractional tail: "two miles and a half" → +0.5, "ten feet and a
+-- quarter" → +0.25, "... and three quarters" → +0.75. This is the variant where
+-- the fraction trails the unit; the pre-unit additive form ("four and a half
+-- feet") is handled on the back side in _prev_num_words. Hyphens are normalised
+-- to spaces so "and three-quarters" matches. Returns (fraction, phrase) or nil;
+-- `phrase` is the space-normalised tail used to walk the match end forward.
+local _FRAC_TAILS = {
+    ["and a half"] = 0.5,
+    ["and one half"] = 0.5,
+    ["and a quarter"] = 0.25,
+    ["and one quarter"] = 0.25,
+    ["and three quarters"] = 0.75,
+    ["and a third"] = 1/3,
+    ["and two thirds"] = 2/3,
+}
+local function _frac_tail(next_text)
+    if not next_text then return nil end
+    local s = next_text:lower():gsub("%-", " "):gsub("^[%s,]+", "")
+    for phrase, frac in pairs(_FRAC_TAILS) do
+        if s:sub(1, #phrase) == phrase then
+            -- Require a word boundary after the phrase so "and a halfpenny" or
+            -- "and a quartermaster" don't read as a fraction.
+            local after = s:sub(#phrase + 1, #phrase + 1)
+            if after == "" or not after:match("%a") then
+                return frac, phrase
+            end
+        end
+    end
+    -- Dynamic "and <numerator> <denominator>" tail not in the table above
+    -- ("and three tenths" = 0.3, "and five eighths" = 0.625).
+    local nw, dw = s:match("^and%s+(%a+)%s+(%a+)")
+    if nw and dw then
+        local v = _word_fraction(nw .. " " .. dw)
+        if v then return v, "and " .. nw .. " " .. dw end
+    end
+    return nil
+end
+
+-- ── Area ("square <unit>") ────────────────────────────────────────────────────
+-- "two or three square miles" reads as miles (length) without this — the cue
+-- word "square" between number and unit flips it to an area. Factors are the
+-- imperial area units in square metres.
+local _AREA_CONV = {
+    mile = 2589988.11, miles = 2589988.11,
+    yard = 0.83612736, yards = 0.83612736,
+    foot = 0.09290304, feet  = 0.09290304,
+    inch = 0.00064516, inches = 0.00064516,
+}
+
+-- Format a square-metre value with an auto-picked unit (km² / m² / cm²) and a
+-- ~2-sig-fig "nice" rounding (areas are inherently approximate).
+local function _fmt_area_one(m2)
+    if m2 >= 1e6 then
+        return _fmt(_nice_round(m2 / 1e6, _HARSH_TOLERANCE)) .. " km²"
+    elseif m2 >= 1 then
+        return _fmt(_nice_round(m2, _HARSH_TOLERANCE)) .. " m²"
+    else
+        return _fmt(_nice_round(m2 * 1e4, _HARSH_TOLERANCE)) .. " cm²"
+    end
+end
+
+-- Area string for a single value or a range. `conn` (e.g. " or ", " to ") is the
+-- original connector so a range reads as prose. Both endpoints share the unit
+-- chosen for the larger one.
+local function _area_str(n1, n2, factor, conn)
+    local a1 = n1 * factor
+    if not n2 then return _fmt_area_one(a1) end
+    local a2 = n2 * factor
+    if a1 > a2 then a1, a2 = a2, a1 end
+    -- Pick scale from the larger endpoint, scale both the same way.
+    local div, suf
+    if a2 >= 1e6 then div, suf = 1e6, " km²"
+    elseif a2 >= 1 then div, suf = 1, " m²"
+    else div, suf = 1 / 1e4, " cm²" end
+    return _fmt(_nice_round(a1 / div, _HARSH_TOLERANCE))
+        .. (conn or _ENDASH)
+        .. _fmt(_nice_round(a2 / div, _HARSH_TOLERANCE)) .. suf
+end
+
 -- Range "N <conn> M [unit]" (unit appears once, e.g. "five to ten miles",
 -- "1 to 30 miles", "twenty or thirty miles"): detect from the lowercased
 -- prev_text. Returns (n1, n2, span-from-N-to-unit) or nil. "and" only ranges
 -- when M >= 1 — "N and a half" is the additive form handled in _prev_num_words.
+-- Multi-endpoint chain: "eight or ten to twelve and fifteen inches" — three or
+-- more numbers strung together by range/additive connectors. The author's intent
+-- is genuinely ambiguous, so we collapse to the OUTER endpoints (8–15) and let
+-- _range_conv_unit render the span from the full matched text. Only fires for 3+
+-- distinct numbers; a plain two-number range falls through to the pairwise logic
+-- below. Returns (min, max, span) or nil. Additive compounds ("one hundred and
+-- twelve") merge to a single value and so report <2 endpoints → nil.
+local function _detect_chain_range(prev, unit)
+    local s = (prev or ""):lower():gsub(_ENDASH, " to "):gsub(_EMDASH, " to ")
+    if unit and unit ~= "" then
+        local ue = unit:gsub("[%-%.%(%)%[%]%+%*%?%^%$%%]", "%%%0")
+        s = s:gsub("%s+" .. ue .. "%s*$", " ")
+    end
+    local toks = {}
+    for w in s:gmatch("[%w%-]+") do toks[#toks + 1] = w end
+    if #toks < 5 then return nil end  -- need ≥3 numbers + ≥2 connectors
+    local CONN = { to = true, ["or"] = true, ["and"] = true }
+    -- Longest suffix run of number-words / connectors only.
+    local lo = #toks + 1
+    for i = #toks, 1, -1 do
+        local w = toks[i]
+        if _is_number_word(w) or CONN[w] then lo = i else break end
+    end
+    -- Trim leading/trailing connectors off the run.
+    while lo <= #toks and CONN[toks[lo]] do lo = lo + 1 end
+    local hi = #toks
+    while hi >= lo and CONN[toks[hi]] do hi = hi - 1 end
+    if hi - lo + 1 < 3 then return nil end
+    -- Split the run into number segments on connector tokens; remember the
+    -- connector that introduced each segment so additive "X hundred and Y" merges.
+    local segs = {}
+    local cur, pend = {}, nil
+    for i = lo, hi do
+        local w = toks[i]
+        if CONN[w] then
+            if #cur > 0 then
+                segs[#segs + 1] = { v = _parse_num(table.concat(cur, " ")), conn = pend }
+                cur = {}
+            end
+            pend = w
+        else
+            cur[#cur + 1] = w
+        end
+    end
+    if #cur > 0 then segs[#segs + 1] = { v = _parse_num(table.concat(cur, " ")), conn = pend } end
+    -- Merge additive "<round hundred/thousand> and <small>" pairs into one value.
+    local vals = {}
+    for _, seg in ipairs(segs) do
+        if not seg.v then return nil end  -- a non-number snuck in → not a pure chain
+        local prevv = vals[#vals]
+        if seg.conn == "and" and prevv and prevv > 0 and seg.v < prevv
+           and ((prevv >= 100 and prevv % 100 == 0) or (prevv >= 1000 and prevv % 1000 == 0)) then
+            vals[#vals] = prevv + seg.v
+        else
+            vals[#vals + 1] = seg.v
+        end
+    end
+    if #vals < 3 then return nil end
+    local mn, mx = vals[1], vals[1]
+    for _, v in ipairs(vals) do
+        if v < mn then mn = v end
+        if v > mx then mx = v end
+    end
+    if mn == mx then return nil end
+    return mn, mx, 1
+end
+
 local function _detect_back_range(prev, unit)
+    local cmn, cmx, csp = _detect_chain_range(prev, unit)
+    if cmn then return cmn, cmx, csp end
     -- Word connectors, typographic range dashes (en/em), and a comma (the
     -- colloquial "seven, eight feet" = 7–8). A connector forms a range only
     -- between two numbers — the `n1 and n2` check below enforces that, so
@@ -1940,7 +2394,11 @@ local function _detect_back_range(prev, unit)
         if conn == ", " then
             before, mtok = prev:match("^(.-), ([%w%-][%w%-%.,°]*)%s*$")
         else
-            before, mtok = prev:match("^(.-)" .. conn .. "(%S.*)$")
+            -- Greedy `(.+)` matches the connector CLOSEST to the unit (rightmost),
+            -- so an earlier same-word connector elsewhere in the window doesn't
+            -- swallow the real range: "…can live, twelve or fifteen miles" must
+            -- read "twelve or fifteen", not the "or" back in "can live, or …".
+            before, mtok = prev:match("^(.+)" .. conn .. "(%S.*)$")
         end
         if before and mtok then
             local n2 = _parse_num(mtok)
@@ -1956,6 +2414,25 @@ local function _detect_back_range(prev, unit)
                     extra = 1
                 end
             end
+            -- The second operand must sit RIGHT BEFORE the unit: after its
+            -- number words, only the unit (or nothing) may remain. Otherwise a
+            -- number far from the unit forms a bogus range — "four or five
+            -- laborers on the foot[-path]" prefix-read "five …" as the endpoint
+            -- and attached it to a unit five words away. (Comma form already
+            -- captures a single trailing token, so it's exempt.)
+            if n1 and n2 and conn ~= ", " then
+                local rest2 = mtok:lower()
+                if unit and unit ~= "" then
+                    rest2 = rest2:gsub(unit:gsub("[%-%.%(%)%[%]%+%*%?%^%$%%]", "%%%0"), " ")
+                end
+                for word in rest2:gmatch("%a+") do
+                    -- "a"/"an" are accepted: they article a multiplier ("…and a
+                    -- hundred fathoms" → 50–100). Everything else must be a number.
+                    if word ~= "a" and word ~= "an" and not _is_number_word(word) then
+                        n2 = nil; break
+                    end
+                end
+            end
             -- Any numbers qualify (incl. 0 / negative, e.g. "−10°F and 0°F").
             -- The additive "N and a half" form is excluded structurally: its
             -- connector is followed by two tokens ("a half"), not the single
@@ -1969,6 +2446,20 @@ local function _detect_back_range(prev, unit)
                     local hi = math.max(math.abs(n1), math.abs(n2))
                     local lo = math.min(math.abs(n1), math.abs(n2))
                     if lo == 0 or hi / lo > 3 then return nil end
+                end
+                -- "N and <fraction>" is the ADDITIVE form, not a range: "one and
+                -- three-quarter leagues" = 1.75, "four and a half feet" = 4.5.
+                -- Bail so _prev_num_words composes the whole value.
+                if conn == " and " and n2 > 0 and n2 < 1 then return nil end
+                -- "<scale> and <small>" is one ADDITIVE number, not a range:
+                -- "one hundred and twelve" = 112, "eight thousand and ninety-two"
+                -- = 8092, "thirteen hundred and eighty-two" = 1382. The "and"
+                -- joins parts of a single number, so bail and let the normal
+                -- single-number path read the whole compound (correct value AND
+                -- span). A true range keeps n1 off a round hundred ("ten and
+                -- twenty") or n2 ≥ 100 ("between one hundred and two hundred").
+                if conn == " and " and n1 % 100 == 0 and n2 > 0 and n2 < 100 then
+                    return nil
                 end
                 return n1, n2, (n1span or 1) + 2 + extra
             end
@@ -2036,6 +2527,31 @@ local function _is_range_start(nx, unit)
     return u ~= nil and _identify_unit(u) == unit
 end
 
+-- Latitude/longitude coordinates ("47° 24′", "69° 50′ 72″") use the arcminute
+-- (′) and arcsecond (″) marks — the SAME glyphs as feet/inches — so a prime pass
+-- would mis-convert "24′" to 7.3 m. Detect the coordinate context and skip.
+local _DEGREE  = "\194\176"   -- ° U+00B0
+-- crengine drops the ° byte that sits immediately before the matched prime (its
+-- own degrees mark), so we can't rely on it being in prev_text. Instead scan the
+-- whole prev+next window for coordinate signals — in a "<n>° <n>′ … <n>° <n>′"
+-- run the OTHER component's ° (and the lat/long vocabulary) survives. All signals
+-- are abbreviation-safe: a real feet/inch prime ("the room was 12′ long",
+-- "6′ tall") carries none of them.
+local function _is_coordinate(prev, nxt)
+    local w = ((prev or "") .. " " .. (nxt or "")):lower()
+    -- A degree symbol anywhere in the window (the paired component's °).
+    if w:find(_DEGREE, 1, true) then return true end
+    -- Coordinate vocabulary — full words and the safe abbreviations only.
+    if w:find("latitude") or w:find("longitude") then return true end
+    if w:find("%f[%a]lat%f[%A]") then return true end        -- "lat" / "lat." (not "flat"/"later")
+    if w:find("%f[%a]deg%f[%A]") or w:find("%f[%a]deg%.") then return true end  -- "deg"/"deg." (degrees)
+    if w:find("meridian") then return true end
+    -- "W. long" / "E. long" — a directional letter guards the otherwise-risky
+    -- "long" (so the adjective in "12′ long" is NOT matched).
+    if w:find("[nsew]%.%s*long") then return true end
+    return false
+end
+
 -- Prime/apostrophe notation (6′8″, 3″, 5'11", 4′ × 2″) isn't anchored on a unit
 -- word, so these run as their own findAllText passes (longest-first so the
 -- feet+inches form claims "6′8″" before the bare feet/inches forms).
@@ -2081,9 +2597,59 @@ end
 local _INCH_UNITS  = { inches = true, inch = true, ["in"] = true }
 local _OZ_UNITS    = { ounces = true, ounce = true, oz = true }
 
+-- "a/an <unit>" read as the number 1 — but ONLY for distance units that rarely
+-- read figuratively, AND only when a spatial cue sits right beside it. This
+-- catches "a league from the city" / "a mile distant" / "a league in width"
+-- while leaving the homonyms alone ("a league of nations", "go the extra mile",
+-- "a foot in the door" — foot isn't even in the set). Article = 1 is otherwise
+-- not honoured (parse_num("a") is nil); "a hundred miles" already works via the
+-- multiplier path.
+local _ART_DIST_UNITS = {
+    league=true, leagues=true, mile=true, miles=true, yard=true, yards=true,
+    fathom=true, fathoms=true, furlong=true, furlongs=true,
+}
+local _SPATIAL_NEXT = {   -- first word AFTER the unit
+    from=true, away=true, off=true, distant=true, long=true, wide=true,
+    deep=true, high=true, tall=true, broad=true, thick=true, apart=true,
+    ahead=true, behind=true, beyond=true, further=true, farther=true,
+    square=true, ["or"]=true,   -- "a mile or two" (range, still a distance)
+}
+local _SPATIAL_DIM = {    -- "<unit> in <dim>"
+    width=true, length=true, height=true, breadth=true, diameter=true,
+    circumference=true, radius=true,
+}
+local _SPATIAL_PREV = {   -- phrase ending right before the article
+    "distance of", "within", "more than", "less than", "about", "nearly",
+    "almost", "scarcely", "barely", "fully", "quite",
+}
+-- Returns true if `unit` is "a/an <distance-unit>" with an adjacent spatial cue.
+local function _article_distance_one(unit, prev, nxt)
+    if not _ART_DIST_UNITS[unit] then return false end
+    prev = (prev or ""):lower(); nxt = (nxt or ""):lower()
+    local art = prev:match("(%a+)%s*$")
+    if art ~= "a" and art ~= "an" then return false end   -- bare article only
+    -- spatial cue FOLLOWING the unit
+    local nf = nxt:match("^%s*(%a+)")
+    if nf and _SPATIAL_NEXT[nf] then return true end
+    local dim = nxt:match("^%s*in%s+(%a+)")
+    if dim and _SPATIAL_DIM[dim] then return true end
+    -- spatial cue PRECEDING the article ("distance of a", "more than a", …)
+    local before = (prev:gsub("%s*an?%s*$", " "))
+    for _, cue in ipairs(_SPATIAL_PREV) do
+        if before:find(cue .. "%s*$") then return true end
+    end
+    return false
+end
+
 local function _fast_scan_matches(doc, cat_enabled)
+    -- 15 context words each side (was 8): the pound currency classifier reads
+    -- the full width to catch £ cues that sit beyond 8 words. Everything else
+    -- (number/range/span logic, the legacy filters) trims back to 8 via
+    -- _last_words/_first_words so its behaviour is unchanged. (Corpus measure:
+    -- 15 is the sweet spot — recovers ~10 out-of-window currency cases with no
+    -- genuine-weight loss; wider starts crossing sentence boundaries.)
     local ok, hits = pcall(function()
-        return doc:findAllText(_FAST_UNIT_PAT, true, 8, 20000, true)
+        return doc:findAllText(_FAST_UNIT_PAT, true, 15, 20000, true)
     end)
     if not ok or not hits then return {} end
 
@@ -2092,6 +2658,15 @@ local function _fast_scan_matches(doc, cat_enabled)
         if okt and mt then return (mt:gsub("^%s+", ""):gsub("%s+$", "")) end
         return nil
     end
+    -- crengine word-navigation wrappers: pcall-guarded, return nil on failure.
+    local function _prevword(xp)
+        local okx, nx = pcall(function() return doc:getPrevVisibleWordStart(xp) end)
+        return okx and nx or nil
+    end
+    local function _nextword(xp)
+        local okx, nx = pcall(function() return doc:getNextVisibleWordEnd(xp) end)
+        return okx and nx or nil
+    end
     -- Extend a start xpointer back over the number, validating by text so it
     -- crosses hyphens (which getPrevVisibleWordStart treats as word breaks, so
     -- "six-foot-four" would otherwise stop the underline at "-foot-"). Returns
@@ -2099,18 +2674,29 @@ local function _fast_scan_matches(doc, cat_enabled)
     -- word-count position if no exact text match is found.
     local function extend_start(unit_start, num, span, prev_text)
         local cand, fallback = unit_start, nil
-        for i = 1, 6 do
-            local okx, nxt = pcall(function() return doc:getPrevVisibleWordStart(cand) end)
-            if not okx or not nxt or nxt == cand then break end
+        for i = 1, 8 do
+            local nxt = _prevword(cand)
+            if not nxt or nxt == cand then break end
             cand = nxt
             if i == span then fallback = cand end
             local t = text_of(cand, unit_start)
-            local lead = t and t:match("^([%w][%w%.,%-]*)")
-            -- Require i >= span before accepting a single-token match, so a
-            -- multi-word number whose LAST word equals the value on its own
-            -- ("one hundred" → "hundred" alone is 100) isn't cut short there:
-            -- the span fallback (the real start, "one") would otherwise be lost.
-            if lead and _parse_num(lead) == num and i >= (span or 1) then return cand end
+            -- Never extend the number across a sentence boundary: in "…not one
+            -- hundred miles from Shanghai. A hundred miles" the earlier "hundred"
+            -- (=100) belongs to the previous sentence, so without this the span
+            -- merged both. A boundary is [.!?] + space + a capital (an "ft. 4"
+            -- abbreviation is followed by a digit, so it doesn't trip this).
+            if t and t:find("[.!?]%s+%u") then break end
+            -- Validate by parsing the WHOLE span text, not just the first token:
+            -- a space-separated spelled compound ("seven thousand five hundred and
+            -- twenty-four") only equals `num` once the entire phrase is covered,
+            -- and getPrevVisibleWordStart splits hyphenated parts ("twenty-four"
+            -- → "twenty" + "four"), so the old first-token + step-count check
+            -- stalled mid-number. _parse_num reads the leading number of `t` and
+            -- stops at the unit, so it grows 524 → 1524 → 7524 as we step back and
+            -- matches only at the true start. The i >= span gate still defers a
+            -- match whose last word alone equals num ("one hundred" → stop at
+            -- "one", not "hundred"; "a hundred" → include the "a").
+            if t and _parse_num(t) == num and i >= (span or 1) then return cand end
         end
         -- Offset fallback: when the unit was matched as a SUBSTRING of a
         -- hyphen-fused token ("five-thousand-five-hundred-mile"), the unit's
@@ -2234,6 +2820,7 @@ local function _fast_scan_matches(doc, cat_enabled)
         local unit = _identify_unit(h.matched_text)
         local conv = unit and _UNIT_CONV[unit]
         if conv and cat_enabled[conv.cat] ~= false and not seen_end[h["end"]]
+           and not (h.start or ""):find("/h[1-6][%[/]")  -- skip heading/title text
            and not _is_range_start((h.next_text or ""):lower(), (unit or ""):lower()) then
             local p = (h.prev_text or ""):lower()
             local ulow = (unit or ""):lower()
@@ -2243,7 +2830,42 @@ local function _fast_scan_matches(doc, cat_enabled)
             -- the range string verbatim (UK-volume recalc would otherwise
             -- collapse it to a single value).
             local range_done = false
-            local rn1 = _detect_back_range(p, ulow)
+
+            -- Area: "two or three square miles" / "fifty square feet" — the cue
+            -- word "square" sits between the number and the unit, so the length
+            -- path would mis-read it as miles/feet. Convert to metric area
+            -- (km²/m²/cm², auto). Sets range_done so the length branches skip.
+            local area_factor = _AREA_CONV[ulow]
+            if area_factor and _last_words(p, 8):match("square%s*$") then
+                local pbefore = _last_words(p, 8):gsub("%s*square%s*$", "")
+                local an1, an2 = _detect_back_range(pbefore, "")
+                local single = (not an1) and _prev_num_words(pbefore) or nil
+                local lonum = an1 or single
+                if lonum then
+                    -- Original connector for prose ("two or three" → " or ").
+                    local conn = " to "
+                    for _, c in ipairs({" or ", " and ", " to " }) do
+                        if pbefore:find(c, 1, true) then conn = c end
+                    end
+                    local astart = extend_start(h.start, lonum, 1)
+                    local mt = text_of(astart, h["end"])
+                    if mt then
+                        out[#out + 1] = {
+                            start = astart, ["end"] = h["end"],
+                            matched_text = mt, prev_text = h.prev_text, next_text = h.next_text,
+                            _search = conv, _cat = "area",
+                            _converted = _display(mt) .. " = "
+                                .. _area_str(lonum, an2, area_factor, an1 and conn or nil),
+                        }
+                        seen_end[h["end"]] = true
+                        range_done = true
+                    end
+                end
+            end
+
+            -- Range detection reads breadth of prev_text, so feed it the legacy
+            -- 8-word slice (the wider window is for the pound classifier only).
+            local rn1 = not range_done and _detect_back_range(_last_words(p, 8), ulow)
             if rn1 then
                 -- Extend back to the FIRST position whose text parses to rn1
                 -- (span = 1). A fixed span miscounts when the connector isn't a
@@ -2419,6 +3041,141 @@ local function _fast_scan_matches(doc, cat_enabled)
                             rec._unit = nil
                         end
                     end
+                    -- "84 degrees Fahrenheit instead of 86" → a 84–86 range (the
+                    -- writer contrasts two temperatures). Scoped to temperature:
+                    -- "instead of" is too unusual a connector to treat as a range
+                    -- for distances/weights. The forward walk is parse-based so it
+                    -- spans a hyphenated spelled second value ("eighty-six").
+                    if not rec._converted and conv.cat == "temperature" and conv.factor then
+                        local n2t = h.next_text and h.next_text:match("^%s*instead of%s+([%w%-]+)")
+                        local n2  = n2t and _parse_num(n2t)
+                        if n2 then
+                            local rend, cand = nil, rec["end"]
+                            for _ = 1, 5 do
+                                local okx, nx = pcall(function() return doc:getNextVisibleWordEnd(cand) end)
+                                if not okx or not nx or nx == cand then break end
+                                cand = nx
+                                local t = text_of(rec["end"], cand)
+                                if t and _parse_num((t:gsub("^%s*instead of%s*", ""))) == n2 then
+                                    rend = cand; break
+                                end
+                            end
+                            if rend then
+                                local lo, hi = math.min(num, n2), math.max(num, n2)
+                                local rlo = _smart_round(lo * conv.factor + (conv.offset or 0), lo, true, conv.target)
+                                local rhi = _smart_round(hi * conv.factor + (conv.offset or 0), hi, true, conv.target)
+                                rec["end"]       = rend
+                                rec.matched_text = text_of(rec.start, rend) or rec.matched_text
+                                rec._converted   = _display(rec.matched_text) .. " = "
+                                    .. _fmt_dist_range(rlo, rhi, conv.target, _ENDASH)
+                                rec._unit = nil
+                            end
+                        end
+                    end
+                    -- Post-unit fractional tail: "two miles and a half" → 2.5.
+                    -- Walk the end forward to swallow the tail words, then pin the
+                    -- value to num+frac. Skipped if a compound/range already claimed
+                    -- the slot, and only for plain factor units (not foot+inch).
+                    if not rec._converted and not rec._num2 and not rec._num_stone2
+                       and conv.factor then
+                        local frac, phrase = _frac_tail(h.next_text)
+                        if frac then
+                            local rend, cand = nil, rec["end"]
+                            for _ = 1, 4 do
+                                local okx, nx = pcall(function() return doc:getNextVisibleWordEnd(cand) end)
+                                if not okx or not nx or nx == cand then break end
+                                cand = nx
+                                local t = text_of(rec["end"], cand)
+                                if t then
+                                    local norm = t:lower():gsub("%-", " "):gsub("^[%s,]+", ""):gsub("%s+$", "")
+                                    if norm == phrase then rend = cand; break end
+                                end
+                            end
+                            if rend then
+                                local val = num + frac
+                                rec["end"] = rend
+                                rec.matched_text = text_of(rec.start, rend) or rec.matched_text
+                                rec._num = val
+                                rec._converted = _value_converted(_display(rec.matched_text), val, conv, unit)
+                                seen_end[rend] = true
+                            end
+                        end
+                    end
+                    -- Forward "or M" range tail with no repeated unit: "one mile
+                    -- or two" → 1–2. (The article form "a mile or two" is handled
+                    -- in the article branch.) Distance/length only, to avoid
+                    -- re-reading weight/temperature "or" as a range here.
+                    if not rec._converted and not rec._num2 and not rec._num_stone2
+                       and conv.factor and conv.cat == "length" then
+                        local m, conn = _distance_or_tail(h.next_text)
+                        if m and m ~= num then
+                            local rend, cand = nil, rec["end"]
+                            for _ = 1, 3 do
+                                local okx, nx = pcall(function() return doc:getNextVisibleWordEnd(cand) end)
+                                if not okx or not nx or nx == cand then break end
+                                cand = nx
+                                local t = text_of(rec["end"], cand)
+                                if t and _parse_num((t:gsub("^[%s,]+", ""):gsub("^%a+%s+", ""))) == m then
+                                    rend = cand; break
+                                end
+                            end
+                            if rend then
+                                local full2 = text_of(rec.start, rend) or rec.matched_text
+                                local lo, hi = math.min(num, m), math.max(num, m)
+                                local r1 = lo * conv.factor + (conv.offset or 0)
+                                local r2 = hi * conv.factor + (conv.offset or 0)
+                                rec["end"], rec.matched_text = rend, full2
+                                rec._num, rec._unit = nil, nil
+                                rec._converted = _display(full2) .. " = "
+                                    .. _fmt_dist_range(_smart_round(r1, nil, true, conv.target),
+                                                       _smart_round(r2, nil, true, conv.target),
+                                                       conv.target, " " .. conn .. " ")
+                                seen_end[rend] = true
+                            end
+                        end
+                    end
+                    -- Forward "by M" dimension tail: "twenty feet by ten" →
+                    -- "6 × 3 m" (both axes share the unit; second number is bare).
+                    if not rec._converted and not rec._num2 and not rec._num_stone2
+                       and conv.factor and conv.cat == "length" then
+                        local m2, phrase = _dim_by_tail(h.next_text)
+                        if m2 then
+                            local rend, cand = nil, rec["end"]
+                            for _ = 1, 3 do
+                                local okx, nx = pcall(function() return doc:getNextVisibleWordEnd(cand) end)
+                                if not okx or not nx or nx == cand then break end
+                                cand = nx
+                                local t = text_of(rec["end"], cand)
+                                if t then
+                                    local norm = t:lower():gsub("^[%s,]+", ""):gsub("%s+$", "")
+                                    if norm == phrase then rend = cand; break end
+                                end
+                            end
+                            if rend then
+                                local full2 = text_of(rec.start, rend) or rec.matched_text
+                                local ra = _smart_round(num * conv.factor, num, false, conv.target)
+                                local rb = _smart_round(m2 * conv.factor, m2, false, conv.target)
+                                rec["end"], rec.matched_text = rend, full2
+                                rec._num, rec._unit = nil, nil
+                                rec._converted = _display(full2) .. " = "
+                                    .. _fmt(ra) .. " \195\151 " .. _fmt_dist(rb, conv.target)
+                                seen_end[rend] = true
+                            end
+                        end
+                    end
+                    -- "not two miles away" — a negation directly before the number
+                    -- marks the distance as vague/approximate, so round the
+                    -- converted value to a whole number in its display unit
+                    -- (3.2 km → 3 km). Plain single length values only, and only
+                    -- when Smart Rounding is on (exact mode stays exact).
+                    if not rec._converted and not rec._num2 and not rec._num_oz
+                       and not rec._num_stone2 and conv.factor and conv.cat == "length"
+                       and _smart_rounding_enabled() and _word_before_number(p) == "not" then
+                        local v = num * conv.factor + (conv.offset or 0)
+                        rec._converted = _display(rec.matched_text) .. " = "
+                            .. _round_whole_dist(v, num, conv.target)
+                        rec._unit = nil
+                    end
                     -- If matched_text's own _parse_num would disagree with the
                     -- value we computed (e.g. additive "four and a half" parses
                     -- as just 4), pin the conversion to the right value.
@@ -2427,8 +3184,98 @@ local function _fast_scan_matches(doc, cat_enabled)
                        and _parse_num(rec.matched_text) ~= num then
                         rec._converted = _value_converted(_display(rec.matched_text), num, conv, unit)
                     end
+                    -- "1,800 lbs." / "18 lb." — pull a trailing abbreviation
+                    -- period into the span (cleaner Mode-3 rewrite + underline).
+                    -- Skip a sentence-ending period (". " + a capital), which is
+                    -- punctuation, not part of the "lbs." abbreviation.
+                    if (unit == "lb" or unit == "lbs")
+                       and (h.next_text or ""):match("^%.")
+                       and not (h.next_text or ""):match("^%.%s+%u") then
+                        local pfx, off = _xpointer_offset(rec["end"])
+                        if pfx ~= rec["end"] then
+                            local cand = pfx .. tostring(off + 1)
+                            if text_of(rec["end"], cand) == "." then
+                                rec.matched_text = (text_of(rec.start, cand) or rec.matched_text)
+                                rec["end"] = cand
+                            end
+                        end
+                    end
                     seen_end[rec["end"]] = true
                     out[#out + 1] = rec
+                elseif conv.factor and (_article_distance_one(unit, h.prev_text, h.next_text)
+                       or (_ART_DIST_UNITS[unit] and _frac_tail(h.next_text))) then
+                    -- "a/an <distance-unit>" → value 1, either with a spatial cue
+                    -- ("a mile away") OR a post-unit fraction ("a mile and a half"
+                    -- = 1.5), which is itself a measurement even with no separate
+                    -- cue. Extend the start back to swallow the article; accept
+                    -- only if the span really begins with "a "/"an ".
+                    local astart = h.start
+                    local nx = _prevword(h.start)
+                    if nx then astart = nx end
+                    local full = text_of(astart, h["end"])
+                    if full and full:lower():match("^an?%s") then
+                        local rec = {
+                            start = astart, ["end"] = h["end"],
+                            prev_text = h.prev_text, next_text = h.next_text,
+                            _search = conv, _cat = conv.cat, _unit = unit, _num = 1,
+                            matched_text = full,
+                            _converted = _value_converted(_display(full), 1, conv, unit),
+                        }
+                        -- "a mile and a half" → 1 + fraction. Walk the end forward
+                        -- over the "and a half" tail and pin the value.
+                        local frac, phrase = _frac_tail(h.next_text)
+                        if frac then
+                            local rend, cand = nil, h["end"]
+                            for _ = 1, 4 do
+                                local nx2 = _nextword(cand)
+                                if not nx2 or nx2 == cand then break end
+                                cand = nx2
+                                local t = text_of(h["end"], cand)
+                                if t then
+                                    local norm = t:lower():gsub("%-", " "):gsub("^[%s,]+", ""):gsub("%s+$", "")
+                                    if norm == phrase then rend = cand; break end
+                                end
+                            end
+                            if rend then
+                                local full2 = text_of(astart, rend) or full
+                                rec["end"], rec.matched_text = rend, full2
+                                rec._num = 1 + frac
+                                rec._converted = _value_converted(_display(full2), 1 + frac, conv, unit)
+                            end
+                        end
+                        -- "a mile or two" → range 1–M. Walk the end forward over
+                        -- the "or two" tail and render as a prose range. (Capture
+                        -- BOTH returns with a plain if — the `a and f() or nil`
+                        -- idiom truncates f()'s 2nd value, leaving conn nil and
+                        -- crashing the "<conn>" concatenation below.)
+                        local m, conn
+                        if not frac then m, conn = _distance_or_tail(h.next_text) end
+                        if m and m > 1 then
+                            local rend, cand = nil, h["end"]
+                            for _ = 1, 3 do
+                                local nx = _nextword(cand)
+                                if not nx or nx == cand then break end
+                                cand = nx
+                                local t = text_of(h["end"], cand)
+                                if t and _parse_num((t:gsub("^[%s,]+", ""):gsub("^%a+%s+", ""))) == m then
+                                    rend = cand; break
+                                end
+                            end
+                            if rend then
+                                local full2 = text_of(astart, rend) or full
+                                local r1 = 1 * conv.factor + (conv.offset or 0)
+                                local r2 = m * conv.factor + (conv.offset or 0)
+                                rec["end"], rec.matched_text = rend, full2
+                                rec._num, rec._unit = nil, nil
+                                rec._converted = _display(full2) .. " = "
+                                    .. _fmt_dist_range(_smart_round(r1, nil, true, conv.target),
+                                                       _smart_round(r2, nil, true, conv.target),
+                                                       conv.target, " " .. conn .. " ")
+                            end
+                        end
+                        out[#out + 1] = rec
+                        seen_end[rec["end"]] = true
+                    end
                 end
             end
         end
@@ -2459,7 +3306,16 @@ local function _fast_scan_matches(doc, cat_enabled)
             if okp and pres then
                 for _, r in ipairs(pres) do
                     if not seen_end[r["end"]] then
-                        if not seen_start[r.start] then
+                        -- Headings (h1–h6: chapter/book titles) are never converted.
+                        if (r.start or ""):find("/h[1-6][%[/]") then
+                            seen_start[r.start] = true
+                            seen_end[r["end"]] = true
+                        -- A lat/long coordinate prime (′ arcminute / ″ arcsecond)
+                        -- is not feet/inches — claim the span so no pass converts it.
+                        elseif e.cat == "length" and _is_coordinate(r.prev_text, r.next_text) then
+                            seen_start[r.start] = true
+                            seen_end[r["end"]] = true
+                        elseif not seen_start[r.start] then
                             seen_start[r.start] = true
                             seen_end[r["end"]] = true
                             r._search = e
@@ -3213,33 +4069,6 @@ function FootFree:_finishScan(doc, all_matches, t_per_pat, t_total, in_subproces
     local _STONE_ROCK_DET = {
         the=true, this=true, that=true, these=true, those=true,
     }
-    -- Verbs that precede money sums in "£" (currency "pounds", not weight).
-    -- "lost"/"lose" are intentionally absent — you can lose weight.
-    local _MONEY_VERBS = {
-        cost=true, costs=true, costing=true, paid=true, pay=true, pays=true,
-        paying=true, spent=true, spend=true, spends=true, spending=true,
-        worth=true, won=true, win=true, wins=true, winning=true, owe=true,
-        owes=true, owed=true, owing=true, earn=true, earns=true, earned=true,
-        earning=true, fetch=true, fetched=true, fetches=true, save=true,
-        saved=true, saves=true, saving=true,
-    }
-    -- Currency context for "£ pounds" — pre-decimal coin units and transaction
-    -- nouns. Unlike the verbs (checked tight, just before the number) these are
-    -- scanned across the whole context window: they essentially never co-occur
-    -- with a weight, so a cue a few words off still resolves it as money
-    -- ("…lost in the bargain five thousand pounds"). Ambiguous words are left
-    -- out on purpose: "sterling" (sterling silver), "crown"/"sovereign" (regalia/
-    -- monarch), "fine" (adjective).
-    local _CURRENCY_WORDS = {
-        shilling=true, shillings=true, pence=true, penny=true, pennies=true,
-        farthing=true, farthings=true, guinea=true, guineas=true, sixpence=true,
-        threepence=true, florin=true, halfpenny=true, quid=true, sovereigns=true,
-        bargain=true, bargained=true, fortune=true, sum=true, salary=true,
-        wage=true, wages=true, rent=true, debt=true, debts=true, dowry=true,
-        inheritance=true, ransom=true, bribe=true, allowance=true, pension=true,
-        legacy=true, bequest=true, annuity=true, banknote=true, banknotes=true,
-        fee=true, fees=true,
-    }
     -- Screens/TVs are conventionally sized in inches and readers expect that, so
     -- an inch measurement near one of these is left unconverted.
     local _SCREEN_WORDS = {
@@ -3263,13 +4092,28 @@ function FootFree:_finishScan(doc, all_matches, t_per_pat, t_total, in_subproces
         balancing=true, plant=true, planted=true, planting=true, stamp=true,
         stamped=true, stamping=true, tap=true, tapped=true, tapping=true,
         shuffle=true, shuffling=true,
+        -- "put/set/place one foot upon …" — moving a foot, not a measurement.
+        put=true, puts=true, set=true, sets=true, place=true, placed=true,
+        places=true, rest=true, rested=true,
     }
     local filtered = {}
     for _, r in ipairs(all_matches) do
         local keep = true
         local mt   = r.matched_text:lower()
-        local prev = (r.prev_text or ""):lower()
-        local nxt  = (r.next_text or ""):lower()
+        -- Full 15-word window (lowercased) — used ONLY by the pound currency
+        -- block below. All other filters use the legacy 8-word slice.
+        local prev_full = (r.prev_text or ""):lower()
+        local nxt_full  = (r.next_text or ""):lower()
+        local prev = _last_words(prev_full, 8)
+        local nxt  = _first_words(nxt_full, 8)
+
+        -- "<length> at a time" — a rate/gradual idiom ("one inch at a time",
+        -- "one foot at a time"), describing increments of progress, not a
+        -- measured distance. Length units only (target m/cm/km).
+        if (r._search.target == "cm" or r._search.target == "m"
+            or r._search.target == "km") and nxt:match("^%s*at a time") then
+            keep = false
+        end
 
         -- "stone" as rock/material, not the weight unit: an ordinary word follows
         -- it. Kept as weight when followed by a number ("twelve stone six"), a
@@ -3288,28 +4132,41 @@ function FootFree:_finishScan(doc, all_matches, t_per_pat, t_total, in_subproces
         if mt:find("nine") and mt:find("yard") and prev:find("whole") then keep = false end
         -- "one pounds" is the verb "to pound" (3rd-person singular); never a measurement.
         if mt == "one pounds" then keep = false end
-        -- "prize of N pounds" / "N-pound prize" — British sterling (£), not weight.
-        -- "prize" can precede (space form) or follow (hyphenated adjective form).
-        if r._search.target == "kg" and mt:find("pound") and
-           (prev:find("prize", 1, true) or nxt:find("prize", 1, true)) then keep = false end
-        -- "pounds" as currency (£): a money verb (cost/paid/spent/worth/won/owe/
-        -- earned) sits just before the amount. Scan the last few words of prev,
-        -- since the verb may be separated from the number ("cost him fifty
-        -- pounds"). "lost"/"lose" are excluded — you can lose weight.
+        -- Spelled "pound(s)": suppress at scan time ONLY on HARD currency cues —
+        -- those with no weight reading: the £ symbol (U+00A3 = bytes \194\163),
+        -- a coin denomination / "sterling" (_pound_hard_currency), "N pounds on
+        -- account" (a payment; kept tight so it doesn't hit "on account of …"),
+        -- or a "prize" (sterling). The SOFT money cues (paid/worth/sum/wager/…)
+        -- are NOT dropped here — they vote in the weighted classifier in
+        -- _apply_settings_to_matches(), where strong weight context can outvote
+        -- them ("the crate, worth a fortune, weighed two hundred pounds"). This
+        -- keeps the soft-currency matches in the sidecar so the decision can be
+        -- re-made on load (and re-tuned) without a rescan.
         if r._search.target == "kg" and mt:find("pound") then
-            local tail = prev:match("((%a+%A+){0,3}%a*)$") or prev
-            for w in tail:gmatch("%a+") do
-                if _MONEY_VERBS[w] then keep = false; break end
-            end
-        end
-        -- Currency nouns/units anywhere in the surrounding context → it's £, not lb.
-        if keep and r._search.target == "kg" and mt:find("pound") then
-            for w in (prev .. " " .. nxt):gmatch("%a+") do
-                if _CURRENCY_WORDS[w] then keep = false; break end
+            local window = prev_full .. " " .. nxt_full
+            if window:find("\194\163", 1, true)
+               or nxt_full:match("^%s*on account")
+               or prev_full:find("prize", 1, true) or nxt_full:find("prize", 1, true)
+               or _pound_hard_currency(window) then
+                keep = false
             end
         end
         -- "N-mile-an-hour" is a speed expressed as a compound adjective, not a distance.
         if r._search.target == "km" and mt:find("mile") and nxt:match("^%s*an%s+hour") then keep = false end
+        -- Gradient/scale ratio: "112 feet to the mile", "one inch to the mile",
+        -- "30 feet per mile" — the number belongs to the NUMERATOR unit and the
+        -- mile is just the denominator, so it's not a standalone distance. (Here
+        -- the "mile" hit's back-range even mis-read the compound "one hundred and
+        -- twelve" as 100–12 via its inner "and", attaching 112 to the mile.) Drop
+        -- the mile; the numerator unit still matches on its own (112 feet → 34 m).
+        if r._search.target == "km" and mt:find("mile") then
+            local g = prev:match("(%a+)%s+to the%s*$") or prev:match("(%a+)%s+per%s*$")
+            if g then
+                g = g:lower()
+                if g == "feet" or g == "foot" or g == "yard" or g == "yards"
+                   or g == "inch" or g == "inches" then keep = false end
+            end
+        end
         -- Suppress numeric tail of a hyphenated compound number when prev_text reaches
         -- back far enough to expose the "-and-" connector (short compounds only).
         -- "five-hundred-and-eleven-foot" is accepted as an imperfect match (rare form).
@@ -3354,6 +4211,12 @@ function FootFree:_finishScan(doc, all_matches, t_per_pat, t_total, in_subproces
             -- "shifting/swaying weight from one foot to the other" — idiom, not a
             -- distance. Anchored on "the other" so "one foot to the left" survives.
             if nxt:match("^%s*to the other") then drop_foot = true end
+            -- "with two feet instead of four" — a leg/limb-count comparison: the
+            -- trailing cardinal is bare (no unit, closed by a comma/period), so
+            -- it's anatomy, not a length. A genuine distance restated would carry
+            -- its unit ("…instead of three hundred feet"), so that survives.
+            local iw = nxt:match("^%s*instead of (%a+)%s*[,%.]")
+            if iw and _is_number_word(iw) then drop_foot = true end
             -- "count … on the fingers/toes of one foot" — joke, not a measurement.
             if prev:find("fingers of", 1, true) or prev:find("toes of", 1, true) then
                 drop_foot = true
@@ -3615,6 +4478,8 @@ function FootFree:_doApplyMetricEdition(doc)
     local seen = {}
     local reps = {}
     local rev_map = {}
+    local kept_count = {}   -- surface text -> number of KEPT (weight) matches
+    local rep_of     = {}   -- surface text -> its rep (to stamp .expected later)
     for _, r in ipairs(ordered) do
         local original = _display(r.matched_text)
         local metric   = _metric_only(r)
@@ -3626,12 +4491,14 @@ function FootFree:_doApplyMetricEdition(doc)
             original = nil
         end
         if original and metric then
+            kept_count[original] = (kept_count[original] or 0) + 1
             if not seen[original] then
                 seen[original] = true
                 local rep = { from = original, to = metric }
                 local guard = _idiom_guard(original)
                 if guard then rep.guard_next = guard end
                 reps[#reps + 1] = rep
+                rep_of[original] = rep
             end
             local info = rev_map[metric]
             if not info then
@@ -3642,6 +4509,21 @@ function FootFree:_doApplyMetricEdition(doc)
         end
     end
     if #reps == 0 then return end
+    -- Currency/weight homonym guard for the in-place rewrite. A spelled pound
+    -- phrase ("ten pounds") can be a genuine weight in one place and sterling
+    -- currency (£) elsewhere in the same book. The scanner suppresses the
+    -- currency occurrences positionally (Mode 1), but the in-place rewrite is
+    -- global surface-string replacement and can't see positions, so it would
+    -- convert the currency uses too ("ten pounds (£10)" → "4.5 kg (£10)").
+    -- Stamp the number of KEPT weight matches; the rewriter skips any phrase
+    -- whose textual occurrences OUTNUMBER them (= some occurrence was currency).
+    -- Converting currency is worse than leaving a colliding genuine weight as
+    -- imperial — and that weight still converts in the positional Mode 1.
+    for original, rep in pairs(rep_of) do
+        if original:lower():find("pound") then
+            rep.expected = kept_count[original]
+        end
+    end
 
     local patches = _patches_path(doc.file)
     local Metric = _metric_module()
@@ -3982,6 +4864,22 @@ end
 -- it completes, then hand off to the shared completion handler.
 function FootFree:_pollFastScan()
     if not self._scan_pid then return end
+    -- Safety net: never poll forever. isSubProcessDone (waitpid) reaps a crashed
+    -- child fine, so the only way we keep polling is a child that is still alive
+    -- but stuck — an infinite loop, or (more likely here) blocked on I/O when the
+    -- book file changes underneath a network/9p mount mid-scan. Past a generous
+    -- deadline, SIGKILL it and finish gracefully so a wedged scan can never leave
+    -- the reader frozen on the spinner.
+    local stuck = _now() - (self._scan_t0 or _now())
+    if stuck > math.max(60, (self._scan_eta or 30) * 8) then
+        logger.warn("FootFree: scan exceeded deadline (" .. math.floor(stuck)
+                    .. "s) — terminating subprocess " .. tostring(self._scan_pid))
+        if ok_ffiutil and ffiutil.terminateSubProcess then
+            pcall(function() ffiutil.terminateSubProcess(self._scan_pid) end)
+        end
+        self:_onScanComplete("scan timed out after " .. math.floor(stuck) .. "s")
+        return
+    end
     local done, err = false, nil
     if ok_ffiutil and ffiutil.isSubProcessDone then
         local ok, result = pcall(function()
