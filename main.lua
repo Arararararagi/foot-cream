@@ -28,7 +28,7 @@ local _ENDASH = "\226\128\147"   -- –  U+2013
 local _TIMES  = "\195\151"       -- ×  U+00D7
 local _SUP2   = "\194\178"       -- ²  U+00B2 (superscript two)
 
-local CACHE_VERSION = 44  -- bumped: FIX scan crash — article-form "a mile or two" range tail truncated _distance_or_tail's connector via the `a and f() or nil` idiom, leaving conn=nil and crashing the subprocess (no sidecar → looked like a freeze)
+local CACHE_VERSION = 45  -- bumped: FIX "fifty and a hundred fathoms" range — extend_start validated the span via _parse_num(whole)==num, but "and"-glued ranges compose multiplicatively ("fifty … hundred"=5000) so it never matched the lower endpoint (50); now also accepts the text up to the first range connector. (VM-verified: was 9000 m, now 90 and 180 m.)
 local _REVERSE_VERSION = 2  -- v2: ordered originals per converted string (position-aware reverse lookup)
 
 -- ── Number prefixes ───────────────────────────────────────────────────────────
@@ -2697,6 +2697,18 @@ local function _fast_scan_matches(doc, cat_enabled)
             -- match whose last word alone equals num ("one hundred" → stop at
             -- "one", not "hundred"; "a hundred" → include the "a").
             if t and _parse_num(t) == num and i >= (span or 1) then return cand end
+            -- Range lower-endpoint rescue: a range like "fifty and a hundred
+            -- fathoms" has its two numbers glued by "and", so _parse_num(t)
+            -- composes the whole span multiplicatively ("fifty … hundred" =
+            -- 5000) and never equals the range's first number (50). Accept the
+            -- candidate when the text UP TO THE FIRST range connector parses to
+            -- num — that's the start of the lower endpoint. ("or"/"to" ranges
+            -- already match at line above because _parse_num stops at those.)
+            if t and i >= (span or 1) then
+                local head = t:match("^(.-)%s+and%s") or t:match("^(.-)%s+or%s")
+                    or t:match("^(.-)%s+to%s")
+                if head and head ~= "" and _parse_num(head) == num then return cand end
+            end
         end
         -- Offset fallback: when the unit was matched as a SUBSTRING of a
         -- hyphen-fused token ("five-thousand-five-hundred-mile"), the unit's
@@ -3371,6 +3383,10 @@ function FootFree:init()
     -- Show unit icon in tooltip: default ON (nil treated as true)
     local show_icon = G_reader_settings:readSetting("footcream_show_icon")
     self._show_icon         = (show_icon ~= false)
+    -- Tooltip size: small / medium / large. Default "large" (the original look,
+    -- so existing users see no change). Validated against the presets table.
+    self._tooltip_size      = G_reader_settings:readSetting("footcream_tooltip_size") or "large"
+    if not FootFree._TOOLTIP_SIZES[self._tooltip_size] then self._tooltip_size = "large" end
     -- Underline styling: solid/wavy, 10/20/30/40% grey, Thin/Thick (1px/2px)
     self._underline_style   = G_reader_settings:readSetting("footcream_underline_style") or "solid"
     if self._underline_style == "dotted" then self._underline_style = "solid" end
@@ -3618,7 +3634,20 @@ local function _write_book_report(doc, filtered)
     logger.info("FootFree: book report → " .. path)
 end
 
-local function _show_conversion_popup(match, box, show_icon)
+-- Tooltip size presets (the "Subtle" scale). Each controls font, icon, padding,
+-- corner radius, icon↔text gap, and border thickness; the pointer arrow's WIDTH
+-- and HEIGHT stay fixed across sizes (only its border tracks the card's). Values
+-- are pre-scale design units (run through Screen:scaleBySize at use). Attached to
+-- the FootFree table rather than a top-level local (the main chunk is at Lua's
+-- 200-locals ceiling). _show_styling_dialog's live preview reads the same table.
+FootFree._TOOLTIP_SIZES = {
+    large  = { font = 22, icon = 26, pad_h = 16, pad_v = 4, border = 1.5,  radius = 12, gap = 14 },
+    medium = { font = 19, icon = 23, pad_h = 14, pad_v = 4, border = 1.5,  radius = 11, gap = 12 },
+    small  = { font = 16, icon = 19, pad_h = 12, pad_v = 3, border = 1.25, radius = 9,  gap = 10 },
+}
+
+local function _show_conversion_popup(match, box, show_icon, size_key)
+    local S = FootFree._TOOLTIP_SIZES[size_key] or FootFree._TOOLTIP_SIZES.large
     local InputContainer  = require("ui/widget/container/inputcontainer")
     local FrameContainer  = require("ui/widget/container/framecontainer")
     local CenterContainer = require("ui/widget/container/centercontainer")
@@ -3638,15 +3667,15 @@ local function _show_conversion_popup(match, box, show_icon)
     local sh = Screen:getHeight()
     local sc = function(n) return Screen:scaleBySize(n) end
 
-    local icon_sz = sc(26)
-    local gap     = sc(14)
-    local pad_h   = sc(16)   -- left/right padding
-    local pad_v   = sc(4)    -- top/bottom padding
+    local icon_sz = sc(S.icon)
+    local gap     = sc(S.gap)
+    local pad_h   = sc(S.pad_h)   -- left/right padding
+    local pad_v   = sc(S.pad_v)   -- top/bottom padding
 
     -- Right: converted value (large bold)
     local text_col = TextWidget:new{
         text = converted,
-        face = Font:getFace("infofont", 22),
+        face = Font:getFace("infofont", S.font),
         bold = true,
     }
 
@@ -3680,8 +3709,8 @@ local function _show_conversion_popup(match, box, show_icon)
         padding_bottom = pad_v,
         padding_left   = pad_h,
         padding_right  = pad_h,
-        radius         = sc(12),
-        bordersize     = Screen:scaleBySize(1.5),
+        radius         = sc(S.radius),
+        bordersize     = Screen:scaleBySize(S.border),
         background     = Blitbuffer.COLOR_WHITE,
         row,
     }
@@ -3709,10 +3738,10 @@ local function _show_conversion_popup(match, box, show_icon)
 
     -- Pointer arrow: points toward the tapped word, flipped depending on
     -- whether the popup landed below or above it.
-    local arrow_w     = sc(16)
+    local arrow_w     = sc(16)   -- arrow size is fixed across tooltip sizes
     local arrow_h     = sc(8)
-    local radius      = sc(12)
-    local border_px   = math.max(1, math.floor(Screen:scaleBySize(1.5) + 0.5))
+    local radius      = sc(S.radius)
+    local border_px   = math.max(1, math.floor(Screen:scaleBySize(S.border) + 0.5))
     local apex_min    = popup_x + radius + arrow_w / 2
     local apex_max    = popup_x + card_size.w - radius - arrow_w / 2
     local apex_x
@@ -3780,8 +3809,10 @@ local function _show_styling_dialog(plugin)
     local VerticalGroup   = require("ui/widget/verticalgroup")
     local VerticalSpan    = require("ui/widget/verticalspan")
     local OverlapGroup    = require("ui/widget/overlapgroup")
+    local MovableContainer = require("ui/widget/container/movablecontainer")
     local TextWidget      = require("ui/widget/textwidget")
     local Button          = require("ui/widget/button")
+    local GestureRange    = require("ui/gesturerange")
     local Screen          = require("device").screen
     local Font            = require("ui/font")
 
@@ -3789,7 +3820,13 @@ local function _show_styling_dialog(plugin)
     local sw, sh = Screen:getWidth(), Screen:getHeight()
 
     local overlay
+    local movable
     local function refresh()
+        -- Preserve the dragged position across the close+reopen that a setting
+        -- change triggers, so toggling an option doesn't snap the modal back to
+        -- centre. Stashed on the plugin because refresh() recurses into a fresh
+        -- _show_styling_dialog call.
+        if movable then plugin._styling_offset = movable:getMovedOffset() end
         UIManager:close(overlay)
         _show_styling_dialog(plugin)
     end
@@ -3824,19 +3861,20 @@ local function _show_styling_dialog(plugin)
         sample,
     }
 
-    -- Tooltip card mirrors _show_conversion_popup's styling. The real popup
-    -- shows _metric_only's "converted value only" form (e.g. "1.68 m"), not
-    -- the "original = converted" form, so match that here.
+    -- Tooltip card mirrors _show_conversion_popup's styling for the SELECTED
+    -- size, so the preview is true WYSIWYG. The real popup shows _metric_only's
+    -- "converted value only" form (e.g. "1.68 m"), so match that here.
+    local PS = FootFree._TOOLTIP_SIZES[plugin._tooltip_size] or FootFree._TOOLTIP_SIZES.large
     local conversion_text = string.format("%s m", _fmt_height(5 * 0.3048 + 6 * 0.0254))
     local tooltip_text = TextWidget:new{
         text = conversion_text,
-        face = Font:getFace("infofont", 18),
+        face = Font:getFace("infofont", PS.font),
         bold = true,
     }
     local tooltip_row = tooltip_text
     if plugin._show_icon then
         local ImageWidget = require("ui/widget/imagewidget")
-        local icon_sz   = sc(20)
+        local icon_sz   = sc(PS.icon)
         local icon_path = _PLUGIN_DIR .. "/unit-icons/" .. (_CAT_ICONS["length"] or "length") .. ".svg"
         local icon_col = CenterContainer:new{
             dimen = Geom:new{ w = icon_sz, h = icon_sz },
@@ -3851,27 +3889,28 @@ local function _show_styling_dialog(plugin)
         tooltip_row = HorizontalGroup:new{
             align = "center",
             icon_col,
-            WidgetContainer:new{ dimen = Geom:new{ w = sc(10), h = 1 } },
+            WidgetContainer:new{ dimen = Geom:new{ w = sc(PS.gap), h = 1 } },
             tooltip_text,
         }
     end
     local tooltip_card = FrameContainer:new{
-        padding_top    = sc(4),
-        padding_bottom = sc(4),
-        padding_left   = sc(12),
-        padding_right  = sc(12),
-        radius         = sc(8),
-        bordersize     = Screen:scaleBySize(1.5),
+        padding_top    = sc(PS.pad_v),
+        padding_bottom = sc(PS.pad_v),
+        padding_left   = sc(PS.pad_h),
+        padding_right  = sc(PS.pad_h),
+        radius         = sc(PS.radius),
+        bordersize     = Screen:scaleBySize(PS.border),
         background     = Blitbuffer.COLOR_WHITE,
         tooltip_row,
     }
 
     -- Pointer arrow, base merging into the tooltip card's bottom edge —
     -- same overlap trick as _show_conversion_popup (arrow's top border row
-    -- lands exactly on the card's bottom border row).
+    -- lands exactly on the card's bottom border row). Arrow size is fixed;
+    -- only its border tracks the card's so the join stays seamless.
     local arrow_w   = sc(16)
     local arrow_h   = sc(8)
-    local border_px = math.max(1, math.floor(Screen:scaleBySize(1.5) + 0.5))
+    local border_px = math.max(1, math.floor(Screen:scaleBySize(PS.border) + 0.5))
     local arrow = _PointerArrow:new{
         width        = arrow_w,
         height       = arrow_h,
@@ -3882,22 +3921,84 @@ local function _show_styling_dialog(plugin)
         fill_color   = Blitbuffer.COLOR_WHITE,
     }
 
-    -- A row of buttons; the option matching `current` is marked with a filled dot.
+    -- Radio marker, drawn (not a font glyph) so the fills and dark-mode
+    -- behaviour are exact. Selected: a big filled-black disc with a smaller
+    -- solid-white disc inside. Unselected: a thin black ring (empty). Drawn
+    -- black-on-white always; KOReader's global night-mode inversion flips it to
+    -- white-on-black for free. Defined here (function scope) rather than as a
+    -- top-level local — the main chunk is at Lua's 200-locals ceiling.
+    -- Edges are anti-aliased by per-pixel coverage (paintCircle is hard-edged
+    -- and looked jagged at this size): coverage ≈ how far the pixel is inside
+    -- the relevant radius, blended over the white background as a grey value.
+    local _RadioDot = Widget:extend{ size = 0, selected = false }
+    function _RadioDot:getSize() return Geom:new{ w = self.size, h = self.size } end
+    function _RadioDot:paintTo(bb, x, y)
+        local sz   = self.size
+        local ro   = sz / 2                              -- outer radius
+        local cx   = x + ro - 0.5                         -- centre on the pixel grid
+        local cy   = y + ro - 0.5
+        local ri   = self.selected and (ro * 0.5) or nil  -- inner white radius
+        local rh   = ro - math.max(1.3, ro * 0.26)        -- ring inner edge (unselected)
+        local function cover(d, edge) -- 1 inside, 0 outside, linear across the edge
+            local c = edge + 0.5 - d
+            if c < 0 then return 0 elseif c > 1 then return 1 else return c end
+        end
+        for py = 0, sz - 1 do
+            for px = 0, sz - 1 do
+                local dx, dy = (x + px) - cx, (y + py) - cy
+                local d = math.sqrt(dx * dx + dy * dy)
+                local v   -- final grey 0..255; nil = leave background untouched
+                if self.selected then
+                    local co = cover(d, ro)               -- black-disc coverage
+                    if co > 0 then
+                        local cin = cover(d, ri)          -- white-inner coverage
+                        v = 255 * (1 - co)                -- white bg → black disc
+                        v = v * (1 - cin) + 255 * cin     -- white inner over the disc
+                    end
+                else
+                    local c = cover(d, ro) - cover(d, rh) -- ring = outer minus hole
+                    if c > 0 then v = 255 * (1 - c) end
+                end
+                if v then
+                    bb:paintRect(x + px, y + py, 1, 1, Blitbuffer.Color8(math.floor(v + 0.5)))
+                end
+            end
+        end
+    end
+
+    -- One option = the radio dot + its label, both wrapped in a single tappable
+    -- container so a tap anywhere on the item (dot OR label) selects it. The dot
+    -- gets padding so its hit area isn't a tiny circle.
     local function option_row(options, current, on_select)
         local row = { align = "center" }
         for i, opt in ipairs(options) do
             if i > 1 then
-                table.insert(row, WidgetContainer:new{ dimen = Geom:new{ w = sc(8), h = 1 } })
+                table.insert(row, WidgetContainer:new{ dimen = Geom:new{ w = sc(10), h = 1 } })
             end
-            local marker = (opt.value == current) and "\226\151\143 " or "\226\151\139 "
-            table.insert(row, Button:new{
-                text       = marker .. opt.text,
+            local value = opt.value
+            -- FrameContainer (not WidgetContainer) records its absolute screen
+            -- rect in .dimen on every paint, so the tap GestureRange tracks the
+            -- item wherever the modal is dragged to.
+            local frame = FrameContainer:new{
                 bordersize = 0,
-                callback = function()
-                    on_select(opt.value)
-                    refresh()
-                end,
-            })
+                padding    = sc(4),
+                HorizontalGroup:new{
+                    align = "center",
+                    _RadioDot:new{ size = sc(15), selected = (value == current) },
+                    WidgetContainer:new{ dimen = Geom:new{ w = sc(5), h = 1 } },
+                    TextWidget:new{ text = opt.text, face = Font:getFace("cfont", 18) },
+                },
+            }
+            local item = InputContainer:new{ frame }
+            item.ges_events = {
+                Tap = { GestureRange:new{ ges = "tap", range = function() return frame.dimen end } },
+            }
+            item.onTap = function()
+                on_select(value)
+                refresh()
+                return true
+            end
+            table.insert(row, item)
         end
         return HorizontalGroup:new(row)
     end
@@ -3928,6 +4029,15 @@ local function _show_styling_dialog(plugin)
         G_reader_settings:saveSetting("footcream_underline_width", v)
     end)
 
+    local size_row = option_row({
+        { text = "Small",  value = "small"  },
+        { text = "Medium", value = "medium" },
+        { text = "Large",  value = "large"  },
+    }, plugin._tooltip_size, function(v)
+        plugin._tooltip_size = v
+        G_reader_settings:saveSetting("footcream_tooltip_size", v)
+    end)
+
     -- Manually stack tooltip card, arrow, and example, centred horizontally.
     -- The preview frame stretches to match the widest option row below (so
     -- it fills the modal's width), but never shrinks below what the worked
@@ -3939,7 +4049,7 @@ local function _show_styling_dialog(plugin)
     local preview_padding_h = sc(20) * 2
     local preview_border_h  = Screen:scaleBySize(1) * 2
     local max_row_w = 0
-    for _, w in ipairs({ style_row, color_row, width_row }) do
+    for _, w in ipairs({ style_row, color_row, width_row, size_row }) do
         max_row_w = math.max(max_row_w, w:getSize().w)
     end
     local content_w = math.max(natural_content_w, max_row_w - preview_padding_h - preview_border_h)
@@ -3959,15 +4069,24 @@ local function _show_styling_dialog(plugin)
         end,
     }
 
-    -- Close spans the full width of the preview frame below it.
+    -- Close spans the full width of the preview frame below it. Pass the "ui"
+    -- refresh type to close() so the uncovered area (reader page or file-manager
+    -- list) actually repaints on e-ink — context-independent, so it works both
+    -- in a book and in the library (where there's no ReaderView to setDirty).
     local function close_overlay()
-        UIManager:close(overlay)
-        if plugin.view then UIManager:setDirty(plugin.view.dialog, "ui") end
+        -- Forget the dragged position so the next fresh open re-centres
+        -- (only refresh() should carry position over).
+        plugin._styling_offset = nil
+        UIManager:close(overlay, "ui")
     end
 
+    -- Make the Close button 20% taller than its natural height (text stays
+    -- vertically centred; "Close" can't truncate at full_w, so no font reflow).
+    local close_natural_h = Button:new{ text = "Close", width = full_w }:getSize().h
     local close_button = Button:new{
-        text  = "Close",
-        width = full_w,
+        text   = "Close",
+        width  = full_w,
+        height = math.floor(close_natural_h * 1.2 + 0.5),
         callback = close_overlay,
     }
 
@@ -3982,7 +4101,9 @@ local function _show_styling_dialog(plugin)
     local preview_label = TextWidget:new{
         text   = "PREVIEW",
         face   = Font:getFace("infofont", 11),
-        fgcolor = Blitbuffer.COLOR_DARK_GRAY,
+        -- 20% more contrast vs white than COLOR_DARK_GRAY (0x88): the
+        -- white-difference 255-0x88=119 grows ×1.2 to ~143, so 255-143 ≈ 0x70.
+        fgcolor = Blitbuffer.Color8(0x70),
     }
     preview_label.overlap_offset = { -sc(5), -sc(5) }
 
@@ -4027,11 +4148,23 @@ local function _show_styling_dialog(plugin)
             label("Underline thickness"),
             width_row,
             span(),
+            label("Tooltip size"),
+            size_row,
+            span(),
             icon_checkbox,
             span(),
             close_button,
         },
     }
+
+    -- Wrap the card so it can be dragged around the screen (Hold + pan, or
+    -- swipe). The preview area is the natural grab handle — it's the one large
+    -- non-interactive region; the option buttons still take taps normally.
+    movable = MovableContainer:new{ card }
+    -- Re-apply any position carried over from a refresh (see refresh() above).
+    if plugin._styling_offset then
+        movable:setMovedOffset(plugin._styling_offset)
+    end
 
     overlay = InputContainer:new{
         key_events = {
@@ -4039,7 +4172,7 @@ local function _show_styling_dialog(plugin)
         },
         CenterContainer:new{
             dimen = Geom:new{ w = sw, h = sh },
-            card,
+            movable,
         },
     }
 
@@ -4048,8 +4181,12 @@ local function _show_styling_dialog(plugin)
         return true
     end
 
-    if plugin.view then UIManager:setDirty(plugin.view.dialog, "ui") end
-    UIManager:show(overlay)
+    -- Pass the "ui" refresh type to show() so the modal's region paints on
+    -- e-ink directly, rather than relying on the reader view (nil in the file
+    -- manager). Without this, reopening the dialog after an option tap (the rows
+    -- close + reopen the dialog) didn't refresh in the library, so the selection
+    -- dot and live preview looked frozen.
+    UIManager:show(overlay, "ui")
 end
 
 function FootFree:_finishScan(doc, all_matches, t_per_pat, t_total, in_subprocess, debug_report)
@@ -4932,36 +5069,6 @@ function FootFree:_reapply_settings()
     if self.view then UIManager:setDirty(self.view.dialog, "ui") end
 end
 
--- Debug (Advanced › Debug): jump forward in document order to the next imperial
--- unit and announce its position — "Unit A of B in book". Wraps to the first
--- unit once past the last.
-function FootFree:_gotoNextUnit()
-    local doc = self.ui.document
-    if not doc then return end
-    if not self._all_matches or #self._all_matches == 0 then
-        UIManager:show(Notification:new{ text = "No units found in this book." })
-        return
-    end
-    -- Units in reading order (same key the convert/report paths use).
-    local ordered = {}
-    for _, m in ipairs(self._all_matches) do ordered[#ordered + 1] = m end
-    table.sort(ordered, function(a, b)
-        return _xp_key_less(_xp_numkey(a.start), _xp_numkey(b.start))
-    end)
-    local total = #ordered
-    -- First unit strictly after the current page top; wrap to the first.
-    local cur, idx = doc:getXPointer(), 1
-    for i, m in ipairs(ordered) do
-        if cur and doc:compareXPointers(cur, m.start) == 1 then idx = i; break end
-    end
-    local target = ordered[idx]
-    if self.ui.link then self.ui.link:addCurrentLocationToStack() end
-    self.ui:handleEvent(Event:new("GotoXPointer", target.start, target.start))
-    UIManager:show(Notification:new{
-        text = string.format("Unit %d of %d in book", idx, total),
-    })
-end
-
 -- Debug (Advanced › Debug › "Units in book"): a scrollable modal listing every
 -- unit found — its converted value and the surrounding sentence — for quickly
 -- auditing discovery + conversion. Tap an entry to jump to it in the book;
@@ -5290,7 +5397,7 @@ function FootFree:_handleTap(ges)
            ty >= b.y - 6 and ty <= b.y + b.h + 6 then
             if entry._reverse then
                 -- Converted value tapped: show its original imperial text.
-                _show_conversion_popup(entry.match, b, self._show_icon)
+                _show_conversion_popup(entry.match, b, self._show_icon, self._tooltip_size)
             elseif self._tap_mode == 3 then
                 -- Mode 3: metric edition is applied automatically on mode selection.
                 -- If tapped before it could run (e.g. no scan data at the time),
@@ -5301,7 +5408,7 @@ function FootFree:_handleTap(ges)
                 end
             else
                 -- Option 1 (default): popup
-                _show_conversion_popup(entry.match, b, self._show_icon)
+                _show_conversion_popup(entry.match, b, self._show_icon, self._tooltip_size)
             end
             return true
         end
@@ -5758,17 +5865,6 @@ function FootFree:addToMainMenu(menu_items)
                                 end,
                                 callback = function()
                                     self:_showUnitList()
-                                end,
-                            },
-                            {
-                                text = "Go to next unit",
-                                enabled_func = function()
-                                    return self.ui.document ~= nil
-                                        and self._all_matches ~= nil
-                                        and #self._all_matches > 0
-                                end,
-                                callback = function()
-                                    self:_gotoNextUnit()
                                 end,
                             },
                             {
