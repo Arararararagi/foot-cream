@@ -8,7 +8,7 @@ It's built to be smart about context. It knows the difference between pounds (th
 
 It runs totally on-device (no API:s or Wifi needed). A novel takes about 15–30 seconds to scan (on an newer Kobo). The scan runs in the background, so you can read while it does it's magic.
 
-DISCLAIMER: Although Claude Code helped a lot in the writing of Lua, I have QA:ed this plugin extensively with a large variety of content – so please don't judge it as bare slop before you tested it. Please give it a try - would love to hear the feedback!
+NOTE: Although Claude Code helped a lot in the writing of Lua, I have QA:ed this plugin extensively with a large variety of content – so please don't judge it as bare slop before you tested it. Please give it a try - would love to hear the feedback!
 
 ***
 
