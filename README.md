@@ -2,7 +2,7 @@
 
 ![Footcream](https://github.com/Fank1/foot-cream/releases/download/readme-assets/hero-img.png)
 
-Are you tired of mentally trying to convert *"six foot four"* or *"ninety degrees Fahrenheit" *while reading English books? The Footcream plugin for KOReader scans your book once, finds every imperial measurement and gives you the metric value. You can choose to **underline** each one so you can **tap for the conversion**, or choose to **rewrite the text in place** so the metric value is just *there* as you read.
+Are you tired of mentally trying to convert "six foot four" or "ninety degrees Fahrenheit" while reading English books? The Footcream plugin for KOReader scans your book once, finds every imperial measurement and gives you the metric value. You can choose to **underline** each one so you can **tap for the conversion**, or choose to **rewrite the text in place** so the metric value is just *there* as you read.
 
 It's built to be smart about context. It knows the difference between pounds (the money) and pounds (the weight), between a six-foot man and a six-foot-by-eight-foot room, and it leaves idioms like *"stand on your own two feet"* alone.
 
