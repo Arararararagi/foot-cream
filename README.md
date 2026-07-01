@@ -18,8 +18,7 @@ DISCLAIMER: Although Claude Code helped a lot in the writing of Lua, I have QA:e
   - **Underline & tap for metric**: non-destructive. Measurements get a distinct underline; tap one for a popup with the metric value.
   - **Convert directly in the text**: rewrites the book's text in place (e.g. *"six feet"* → *"1.8 m"*). Fully reversible.
 - **Distinct highlight style**: plugin underlines never get confused with your own highlights.
-- **Tap → popup** showing the metric conversion and a small unit icon.
-- **Customisable styling** with a live preview: solid or wavy underline, intensity, thickness, tooltip size (S / M / L), optional unit icon. The styling dialog is draggable.
+- **Customisable styling**: solid or wavy underline, intensity, thickness, tooltip size (S / M / L), optional unit icon. The styling dialog is draggable.
 - **Per-category toggles**: turn whole groups (length, weight, volume, …) on or off.
 - **UK / US aware**: uses imperial or US gallons & pints based on the book's language.
 - **Smart Rounding** toggle clean, human-readable values instead of cluttery precision.
@@ -80,7 +79,7 @@ Footcream isn't a dumb find-and-replace. A lot of the code goes into matching th
 - **Compound measurements**: heights like *"six foot four"*, *"5 ft 7 in"*, *"six-foot-five-inch"*, *"five-foot, seven inches"*, and *"six feet, one and a half inches"* are read as a single value. Same for weights: *"nine stone four"*, *"seven pounds four ounces"*.
 - **Ranges**: *"four to five feet"*, *"twelve or fifteen miles"* convert to a metric range.
 - **Fractions**: fractions *18½*), spelled-out fractions (*"two thirds of a mile"*, *"one and three-quarter leagues"*), and additive tails (*"two miles and a half"*).
-- **Vague quantities** — *"a few hundred pounds"* becomes a range (*≈ 90–230 kg*) rather than a fake-precise number. Open for suggestions on how to improve this further.
+- **Vague quantities**: *"a few hundred pounds"* becomes a range (*≈ 90–230 kg*) rather than a fake-precise number. Open for suggestions on how to improve this further.
 - **Dimensions**: *"twenty feet by ten"* → *6 × 3 m*.
 - **Smart rounding**: about two significant number, finer detail below a metre, whole numbers for vague distances.
 - **Knows what to ignore**
