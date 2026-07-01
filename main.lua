@@ -2393,6 +2393,12 @@ local function _detect_back_range(prev, unit)
         local before, mtok
         if conn == ", " then
             before, mtok = prev:match("^(.-), ([%w%-][%w%-%.,°]*)%s*$")
+            -- A foot/feet word right before the comma marks a feet+inches height
+            -- ("five-foot, seven inches"), NOT a "5 to 7" range — leave it for the
+            -- compound-tail merge so it reads 5'7" rather than a 5–7 inch range.
+            if before and (before:match("foot$") or before:match("feet$")) then
+                before = nil
+            end
         else
             -- Greedy `(.+)` matches the connector CLOSEST to the unit (rightmost),
             -- so an earlier same-word connector elsewhere in the window doesn't
@@ -2590,8 +2596,11 @@ local _TEMP_PATS = {
 -- even with a comma or "and" connector ("two pounds, four ounces",
 -- "5 feet and 3 inches"), not just a plain space.
 local function _compound_tail(p, u1, u2)
-    return p:match(u1 .. "[,%s]+%S+%s*$")        or p:match(u2 .. "[,%s]+%S+%s*$")
-        or p:match(u1 .. "[,%s]+and%s+%S+%s*$")  or p:match(u2 .. "[,%s]+and%s+%S+%s*$")
+    -- Separator after the foot/pound word may be a space, comma OR hyphen — the
+    -- last covers fully-hyphenated compounds like "six-foot-five-inch", whose
+    -- prev_text ends "...six-foot-five-" (no space/comma before the inches).
+    return p:match(u1 .. "[,%s%-]+%S+%s*$")        or p:match(u2 .. "[,%s%-]+%S+%s*$")
+        or p:match(u1 .. "[,%s%-]+and%s+%S+%s*$")  or p:match(u2 .. "[,%s%-]+and%s+%S+%s*$")
 end
 
 local _INCH_UNITS  = { inches = true, inch = true, ["in"] = true }
@@ -2648,10 +2657,31 @@ local function _fast_scan_matches(doc, cat_enabled)
     -- _last_words/_first_words so its behaviour is unchanged. (Corpus measure:
     -- 15 is the sweet spot — recovers ~10 out-of-window currency cases with no
     -- genuine-weight loss; wider starts crossing sentence boundaries.)
+    local _t0 = _now()
     local ok, hits = pcall(function()
         return doc:findAllText(_FAST_UNIT_PAT, true, 15, 20000, true)
     end)
     if not ok or not hits then return {} end
+    local _tA1 = _now() - _t0
+
+    -- Real scan progress (read by the parent's _pollFastScan over
+    -- _SCAN_PROGRESS_FILE). findAllText above is one opaque pass, but the per-hit
+    -- loop below is the dominant cost and its length (#hits) is known now, so we
+    -- report i/#hits as genuine progress. _tA1 (the findAllText duration) is sent
+    -- alongside so the parent can size the pre-loop band proportionally. Writes
+    -- are atomic (tmp + rename) so a torn read can never mis-parse; every failure
+    -- is ignored (the parent just falls back to its time-based estimate).
+    local _prog_total = #hits
+    local _prog_every = math.max(1, math.floor(_prog_total / 100))
+    local function _report(frac)
+        local fh = io.open(_SCAN_PROGRESS_FILE .. ".tmp", "w")
+        if fh then
+            fh:write(string.format("%.4f %.5f", _tA1, frac))
+            fh:close()
+            os.rename(_SCAN_PROGRESS_FILE .. ".tmp", _SCAN_PROGRESS_FILE)
+        end
+    end
+    _report(0)
 
     local function text_of(a, b)
         local okt, mt = pcall(function() return doc:getTextFromXPointers(a, b) end)
@@ -2828,11 +2858,19 @@ local function _fast_scan_matches(doc, cat_enabled)
     end
 
     local out, seen_end = {}, {}
-    for _, h in ipairs(hits) do
+    for i, h in ipairs(hits) do
+        if i % _prog_every == 0 then _report(i / _prog_total) end
         local unit = _identify_unit(h.matched_text)
         local conv = unit and _UNIT_CONV[unit]
         if conv and cat_enabled[conv.cat] ~= false and not seen_end[h["end"]]
            and not (h.start or ""):find("/h[1-6][%[/]")  -- skip heading/title text
+           -- A fraction DENOMINATOR right before the unit is not the measurement
+           -- value — e.g. the OCR-mangled "not over 1 /10; inch" (= one-tenth inch)
+           -- ends its context "...1 /10; " and would otherwise read "10 inch" =
+           -- 25 cm. The "<num> / <num>" shape (optionally trailing ";") can't be
+           -- reliably recovered, so suppress rather than emit a wrong value (cf.
+           -- CH18 mangled fractions).
+           and not (h.prev_text or ""):match("%d%s*/%s*%d+%s*;?%s*$")
            and not _is_range_start((h.next_text or ""):lower(), (unit or ""):lower()) then
             local p = (h.prev_text or ""):lower()
             local ulow = (unit or ""):lower()
@@ -3031,6 +3069,30 @@ local function _fast_scan_matches(doc, cat_enabled)
                                     .. _fmt_height(lo) .. " " .. kconn .. " "
                                     .. _fmt_height(hi) .. " m"
                                 rec._num, rec._num2, rec._unit = nil, nil, nil
+                            end
+                        end
+                        -- Fractional inch tail: "six feet, one and a half inches"
+                        -- → 1.5" (the bare merge above only took the integer "one").
+                        -- Only honoured when an "inch(es)" word actually follows the
+                        -- fraction, so "six feet, one and a half MILES" isn't read as
+                        -- 1.5 inches. Grows the span to cover "<frac> inches" too.
+                        if not kval and kind == "bare" and rec._num2 then
+                            local nt = (h.next_text or ""):gsub("^[%s,%.%-]+", "")
+                            local frac = _frac_tail(nt:gsub("^[%w][%w%.,]*", ""))
+                            if frac then
+                                local cand, hit_inch = rec["end"], false
+                                for _ = 1, 6 do
+                                    local okx, nx = pcall(function() return doc:getNextVisibleWordEnd(cand) end)
+                                    if not okx or not nx or nx == cand then break end
+                                    cand = nx
+                                    if (text_of(rec["end"], cand) or ""):lower():match("inch") then
+                                        hit_inch = true; break
+                                    end
+                                end
+                                if hit_inch then
+                                    rec._num2 = second + frac
+                                    rec["end"] = cand
+                                end
                             end
                         end
                     elseif second and second < 12 and kind == "in_abbr" and unit == "ft" then
@@ -3294,6 +3356,8 @@ local function _fast_scan_matches(doc, cat_enabled)
     end
 
 
+    _report(1)  -- per-hit loop done; the prime/°F tail below is the last sliver
+
     -- Prime notation — skip these extra passes ONLY when we can positively
     -- confirm the book has no prime/apostrophe-inch notation. The gate text is
     -- read via getPageXPointer, which can fail in the forked subprocess (paging
@@ -3348,6 +3412,13 @@ local function _fast_scan_matches(doc, cat_enabled)
         and ((not ok_t) or (not bt) or bt:find(_DEGF, 1, true) ~= nil)
     if has_degf then run_passes(_TEMP_PATS) end
 
+    -- Drop overlapping spans. The main loop only deduped by END xpointer
+    -- (seen_end), so a compound height that didn't merge — e.g. a "foot" hit
+    -- ("six-foot") plus the orphaned "inch" hit ("six-foot-five-inch") that
+    -- shares its start, or a "feet, one" compound plus an overlapping "one and a
+    -- half inches" — left two partially-overlapping matches. This collapses each
+    -- such pair to a single match (longest span at a shared start wins, which is
+    -- the foot-anchored compound), the same interval filter the reverse path uses.
     return out
 end
 
@@ -3413,18 +3484,6 @@ end
 function FootFree:onReaderReady()
     local doc = self.ui.document
     if not doc or not doc.file then return end
-
-    -- ── Probe removed after API investigation ─────────────────────────────────
-    do
-        local fh = io.open("/mnt/macos/debug/api_probe.txt", "w")
-        if fh then
-            fh:write("probe removed\n")
-
-
-            fh:close()
-        end
-    end
-    -- ── End API probe ──────────────────────────────────────────────────────────
 
     -- Wrap paintTo and tap up front so the view is ready whenever highlights arrive.
     if not self._paintTo_wrapped then
@@ -4495,6 +4554,15 @@ function FootFree:_finishScan(doc, all_matches, t_per_pat, t_total, in_subproces
         if keep then table.insert(filtered, r) end
     end
 
+    -- Collapse overlapping spans — but only now, AFTER the legacy false-positive
+    -- filters above have run. Doing it on the raw scan output would let a
+    -- soon-to-be-rejected over-catch (e.g. "fifteen-foot-wide stone") win the
+    -- overlap and evict the legit match ("fifteen-foot") that the stone guard
+    -- would have kept. Among survivors, the longest span at a shared start wins,
+    -- which collapses an un-merged foot+inch compound (a "six-foot" hit plus the
+    -- overlapping "six-foot-five-inch" hit) to a single match.
+    filtered = _filter_overlapping_matches(filtered)
+
     logger.info(string.format("FootFree: %d match(es) found  total=%.3fs", #filtered, t_total or 0))
     _save_sidecar(doc.file, filtered)
 
@@ -4896,6 +4964,10 @@ function FootFree:_startFastScan(doc)
     self._scan_eta  = math.max(2, (self._scan_size or 0) * rate)
     self._scan_t0   = _now()
     os.remove(_PARTIAL_SIDECAR)
+    -- Clear any progress file a previous crashed/killed scan may have left, so
+    -- the poller can't read a stale fraction before the child writes a fresh one.
+    os.remove(_SCAN_PROGRESS_FILE)
+    os.remove(_SCAN_PROGRESS_FILE .. ".tmp")
     if self.view then UIManager:setDirty(self.view.dialog, "ui") end
 
     local cat_enabled  = self._cat_enabled
@@ -4992,13 +5064,31 @@ function FootFree:_onScanComplete(err)
     end
     self._scan_progress = nil
     os.remove(_SCAN_PROGRESS_FILE)
+    os.remove(_SCAN_PROGRESS_FILE .. ".tmp")
     os.remove(_PARTIAL_SIDECAR)
     self:_runAfterScan()
 end
 
--- Poll the fast-scan subprocess. It's a single opaque pass (no per-step
--- progress), so animate the donut indeterminately — easing toward 0.9 — until
--- it completes, then hand off to the shared completion handler.
+-- Read the scan child's real-progress file (written by _fast_scan_matches):
+-- "<tA1> <frac>" where tA1 is the findAllText duration and frac is the per-hit
+-- loop fraction (0..1). Returns tA1, frac — or nil if absent/unparseable, in
+-- which case the poller falls back to its time-based estimate.
+function FootFree:_readScanProgress()
+    local fh = io.open(_SCAN_PROGRESS_FILE, "r")
+    if not fh then return nil end
+    local line = fh:read("*l")
+    fh:close()
+    if not line then return nil end
+    local ta, f = line:match("^([%d%.]+)%s+([%d%.]+)$")
+    ta, f = tonumber(ta), tonumber(f)
+    if not f then return nil end
+    return ta, f
+end
+
+-- Poll the fast-scan subprocess. The child reports genuine progress for its
+-- dominant phase (the per-hit loop) through _SCAN_PROGRESS_FILE; we map that
+-- onto the bar and only time-estimate the opaque findAllText head and the short
+-- prime/°F tail. Completion hands off to the shared completion handler.
 function FootFree:_pollFastScan()
     if not self._scan_pid then return end
     -- Safety net: never poll forever. isSubProcessDone (waitpid) reaps a crashed
@@ -5028,12 +5118,37 @@ function FootFree:_pollFastScan()
     if done then
         self:_onScanComplete(err)
     else
-        -- Linear, time-based progress against the estimated ETA — "true-ish"
-        -- rather than a fast ease that stalls at 90%. Clamp to 0.97 so we never
-        -- claim done early; completion snaps it to 100% / closes the loader.
+        -- Blend real per-hit-loop progress (when the child has reported it) with
+        -- a time estimate for the two opaque ends:
+        --   • findAllText head  → time-based, capped below the hand-off point
+        --   • per-hit loop (B)  → REAL i/#hits, mapped a1..0.93
+        --   • prime/°F tail     → time-creep 0.93..0.97 until the child is done
+        -- a1 (the loop's start point) is sized from the child's measured
+        -- findAllText duration, clamped 0.10..0.50. Monotonic: the bar never
+        -- steps backwards even if an estimate over- or under-shoots.
         local elapsed = _now() - (self._scan_t0 or _now())
         local eta = self._scan_eta or 30
-        self._scan_progress = math.min(0.97, eta > 0 and (elapsed / eta) or 0.9)
+        local ta, f = self:_readScanProgress()
+        local computed
+        if f then
+            -- a1 = the bar position where the finished findAllText head gives way
+            -- to real per-hit progress, sized from its MEASURED share of the ETA
+            -- (tA1/eta). Empirically findAllText often dominates, so this is left
+            -- large (up to 0.90): an A1-dominant book keeps the bar where the time
+            -- estimate already had it (no backwards jump), while a hit-dense book
+            -- gets a long, genuinely-real loop band.
+            local a1 = math.min(0.90, math.max(0.05, (eta > 0 and ta) and (ta / eta) or 0.30))
+            if f >= 1 then
+                computed = 0.93 + 0.04 * math.min(1, eta > 0 and (elapsed / eta) or 1)
+            else
+                computed = a1 + f * (0.93 - a1)
+            end
+        else
+            -- findAllText still running (no report yet): plain time estimate — the
+            -- best available for an opaque C call — capped just shy of the tail.
+            computed = math.min(0.92, eta > 0 and (elapsed / eta) or 0.3)
+        end
+        self._scan_progress = math.max(self._scan_progress or 0, math.min(0.97, computed))
         self._scan_poll_n = (self._scan_poll_n or 0) + 1
         -- Animate the corner loader ~3×/s, refreshing ONLY its small top-left
         -- region with a gentle partial ("ui") refresh. Never "fast" (leaves
@@ -5303,48 +5418,55 @@ end
 -- be inspected from the file rather than guessed at.
 local _BOX_DEBUG_FILE = "/mnt/macos/debug/footcream_boxes.txt"
 
-function FootFree:_drawHighlights(bb)
-    if not self._cat_enabled then return end
-    local doc = self.ui.document
-    if not doc then return end
-
-    -- Paint the SVG scan-progress loader directly into the framebuffer.
-    -- Sits at the same top-left position as KOReader's reflow progress bar.
-    -- If reflow is active (bar occupies x=0..Screen/3), we shift right past it.
-    if self._scan_progress ~= nil then
-        local Screen = require("device").screen
-        local x_base = Screen:scaleBySize(4)
-        if self.ui.rolling and self.ui.rolling.rendering_state
-           and self.ui.rolling.rendering_state ~= 0 then
-            x_base = math.floor(Screen:getWidth() / 3) + Screen:scaleBySize(4)
+-- Cheap, fully data-derived signature of everything that affects WHERE the
+-- underline boxes land. The resolved-box cache (below) is valid only while this
+-- is unchanged: page turn / scroll (getCurrentPage/Pos), reflow or font/style
+-- change (getDocumentRenderingHash), rotation (screen dims), and the plugin-side
+-- inputs that change which matches resolve (enabled, tap mode, the match-set
+-- identity, the category filter). Because every input is read from live state,
+-- no change can be silently missed. Returns nil on any API error, which forces
+-- a rebuild every paint — i.e. degrades to the old always-resolve behaviour.
+function FootFree:_boxCacheSig(doc, Screen)
+    local ok, sig = pcall(function()
+        local cats = {}
+        for k, v in pairs(self._cat_enabled) do
+            cats[#cats + 1] = k .. (v == false and "0" or "1")
         end
-        local y_base = Screen:scaleBySize(4)
-        pcall(_draw_loader, bb, x_base, y_base, self._scan_progress)
-    end
+        table.sort(cats)
+        return table.concat({
+            doc:getCurrentPage(),
+            doc:getCurrentPos(),
+            doc:getDocumentRenderingHash(),
+            Screen:getWidth(), Screen:getHeight(),
+            self._enabled and "1" or "0",
+            tostring(self._tap_mode),
+            tostring(self._all_matches),
+            tostring(self._reverse_matches),
+            table.concat(cats, ","),
+        }, "|")
+    end)
+    return ok and sig or nil
+end
 
-    self._current_boxes = {}
-    if not self._all_matches and not self._reverse_matches then return end
-
-    local Screen = require("device").screen
-    local color = _underline_color(self._underline_color)
-    local width = Screen:scaleBySize(self._underline_width)
-
+-- Resolve the on-screen underline segments for every enabled match into a flat
+-- list of { box, match, _reverse }. This is the expensive part — one crengine
+-- getScreenBoxesFromPositions per match — so its result is cached by
+-- _drawHighlights and only rebuilt when _boxCacheSig changes.
+function FootFree:_resolveHighlightBoxes(doc)
+    local boxes_out = {}
     local dbg = self._debug_report and {} or nil
 
-    -- Draw underlines for one match's on-screen segments, recording tap boxes.
-    local function draw_match(r, is_reverse)
+    local function resolve_match(r, is_reverse)
         if self._cat_enabled[r._cat] == false then return end
         local start_xp = _draw_start_xp(r)
-        local ok, boxes = pcall(function()
-            return doc:getScreenBoxesFromPositions(start_xp, r["end"], true)
-        end)
+        -- pcall with the method + args directly (no per-match closure) to avoid
+        -- allocating a closure for every match on every rebuild.
+        local ok, boxes = pcall(doc.getScreenBoxesFromPositions, doc, start_xp, r["end"], true)
         -- If advancing past the boundary char yielded nothing (e.g. the char
         -- and the digit were in different text nodes), fall back to the raw
         -- start so we never lose an underline that used to render.
         if ok and boxes and #boxes == 0 and start_xp ~= r.start then
-            ok, boxes = pcall(function()
-                return doc:getScreenBoxesFromPositions(r.start, r["end"], true)
-            end)
+            ok, boxes = pcall(doc.getScreenBoxesFromPositions, doc, r.start, r["end"], true)
         end
         if not ok or not boxes then return end
         if dbg and #boxes > 0 then
@@ -5356,9 +5478,7 @@ function FootFree:_drawHighlights(bb)
         for _, box in ipairs(boxes) do
             local drawn = box.h > 0 and box.w > 0
             if drawn then
-                _draw_underline(bb, box, self._underline_style, color, width,
-                    self._underline_width, self._underline_color)
-                table.insert(self._current_boxes, { box = box, match = r, _reverse = is_reverse })
+                boxes_out[#boxes_out + 1] = { box = box, match = r, _reverse = is_reverse }
             end
             if dbg then
                 dbg[#dbg + 1] = string.format("    box x=%s y=%s w=%s h=%s%s",
@@ -5370,17 +5490,69 @@ function FootFree:_drawHighlights(bb)
 
     -- Mode 1 highlights point at imperial-text positions; in mode 3 the book
     -- text is already converted, so those positions are meaningless — never
-    -- draw them there (the reverse-match loop below handles mode 3 instead).
+    -- resolve them there (the reverse-match loop handles mode 3 instead).
     if self._enabled and self._tap_mode ~= 3 and self._all_matches then
-        for _, r in ipairs(self._all_matches) do draw_match(r, false) end
+        for _, r in ipairs(self._all_matches) do resolve_match(r, false) end
     end
     if self._reverse_matches then
-        for _, r in ipairs(self._reverse_matches) do draw_match(r, true) end
+        for _, r in ipairs(self._reverse_matches) do resolve_match(r, true) end
     end
 
     if dbg and #dbg > 0 then
         local fh = io.open(_BOX_DEBUG_FILE, "w")
         if fh then fh:write(table.concat(dbg, "\n") .. "\n"); fh:close() end
+    end
+    return boxes_out
+end
+
+function FootFree:_drawHighlights(bb)
+    if not self._cat_enabled then return end
+    local doc = self.ui.document
+    if not doc then return end
+
+    local Screen = require("device").screen
+
+    -- Paint the SVG scan-progress loader directly into the framebuffer.
+    -- Sits at the same top-left position as KOReader's reflow progress bar.
+    -- If reflow is active (bar occupies x=0..Screen/3), we shift right past it.
+    if self._scan_progress ~= nil then
+        local x_base = Screen:scaleBySize(4)
+        if self.ui.rolling and self.ui.rolling.rendering_state
+           and self.ui.rolling.rendering_state ~= 0 then
+            x_base = math.floor(Screen:getWidth() / 3) + Screen:scaleBySize(4)
+        end
+        local y_base = Screen:scaleBySize(4)
+        pcall(_draw_loader, bb, x_base, y_base, self._scan_progress)
+    end
+
+    if not self._all_matches and not self._reverse_matches then
+        self._current_boxes = {}
+        self._box_cache = nil
+        self._box_cache_sig = nil
+        return
+    end
+
+    -- Reuse the resolved boxes across repaints of an unchanged view. Popups,
+    -- footer ticks and menu dismissals repaint the whole page but don't move
+    -- any text, so re-resolving every match's screen position each time is pure
+    -- waste; only a real view/state change (sig miss) re-resolves. In dev debug
+    -- mode the cache is bypassed so the per-page box report is always written.
+    local sig = (not self._debug_report) and self:_boxCacheSig(doc, Screen) or nil
+    if sig and sig == self._box_cache_sig and self._box_cache then
+        self._current_boxes = self._box_cache
+    else
+        self._current_boxes = self:_resolveHighlightBoxes(doc)
+        self._box_cache = self._current_boxes
+        self._box_cache_sig = sig   -- nil in debug mode → rebuilds every paint
+    end
+
+    -- Draw pass — reads the live style settings, so changing underline
+    -- style / colour / width takes effect on the next paint with no cache work.
+    local color = _underline_color(self._underline_color)
+    local width = Screen:scaleBySize(self._underline_width)
+    for _, e in ipairs(self._current_boxes) do
+        _draw_underline(bb, e.box, self._underline_style, color, width,
+            self._underline_width, self._underline_color)
     end
 end
 
