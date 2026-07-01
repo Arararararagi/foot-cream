@@ -193,6 +193,37 @@ local function read_record(path)
     return nil
 end
 
+local function json_decode(s)
+    local ok, rj = pcall(require, "rapidjson")
+    if ok and rj and rj.decode then
+        local ok2, t = pcall(rj.decode, s)
+        if ok2 then return t end
+    end
+    local ok3, J = pcall(require, "json")  -- fallback if rapidjson is unavailable
+    if ok3 and J and J.decode then
+        local ok4, t = pcall(J.decode, s)
+        if ok4 then return t end
+    end
+    return nil
+end
+
+-- Legacy record: builds before the current backup-based format stored a JSON
+-- array of per-file string edits — [{file=.., patches={{from,to},..}}, ..] — and
+-- did in-place text replacement with NO whole-file backup. read_record (loadfile)
+-- can't parse JSON, so such a book errors "no patch record found" on every open.
+-- Detect that shape here so revert can reverse-apply the edits (to -> from).
+local function read_legacy_record(path)
+    local f = io.open(path, "r")
+    if not f then return nil end
+    local data = f:read("*a"); f:close()
+    if not data or data == "" then return nil end
+    local t = json_decode(data)
+    if type(t) ~= "table" or type(t[1]) ~= "table" or type(t[1].patches) ~= "table" then
+        return nil
+    end
+    return t
+end
+
 -- ── apply ─────────────────────────────────────────────────────────────────────
 function M.apply(epub_path, record_path, reps)
     if not reps or #reps == 0 then return "OK:0" end
@@ -318,10 +349,87 @@ function M.apply(epub_path, record_path, reps)
     return "OK:" .. #changed
 end
 
+-- ── legacy revert (no backup — reverse-apply the recorded string edits) ─────────
+-- For books converted by an old build that stored per-file {from,to} edits and no
+-- whole-file backup. Rebuild the original by replacing each metric `to` back with
+-- its imperial `from`. The `to` strings are highly distinctive ("10.2 cm (Four
+-- inches)"), so reverse matching is unambiguous; reuses apply_one for the same
+-- whitespace-flex + entity-encoded fallbacks the forward pass used.
+local function revert_legacy(epub_path, record_path, legacy)
+    local reps = {}
+    for _, entry in ipairs(legacy) do
+        for _, p in ipairs(entry.patches or {}) do
+            if p.from and p.to then reps[#reps + 1] = { from = p.to, to = p.from } end
+        end
+    end
+    if #reps == 0 then return "ERROR:no patch record found" end
+    -- Longest metric string first, so one that is a substring of another (a bare
+    -- "1.8 m" inside "1.8 m (six-foot)") reverts in the right order.
+    table.sort(reps, function(a, b) return #a.from > #b.from end)
+
+    local reader = Archiver.Reader:new()
+    if not reader:open(epub_path) then return "ERROR:cannot open epub" end
+    local order, content = {}, {}
+    for entry in reader:iterate() do
+        if entry.mode == "file" then
+            local d = reader:extractToMemory(entry.path)
+            if not d then reader:close(); return "ERROR:read failed: " .. tostring(entry.path) end
+            order[#order + 1] = entry.path
+            content[entry.path] = d
+        end
+    end
+    reader:close()
+
+    local modified, changed = {}, {}
+    for _, name in ipairs(order) do
+        if is_html(name, content[name]) then
+            local text, total = content[name], 0
+            for _, rep in ipairs(reps) do
+                local new, n = apply_one(text, rep.from, rep.to, nil)
+                if n > 0 then text = new; total = total + n end
+            end
+            if total > 0 then modified[name] = text; changed[#changed + 1] = name end
+        end
+    end
+    if #changed == 0 then
+        -- Nothing matched — the book is already in its original form. Drop the
+        -- stale record so it stops erroring (and re-reverting) on every open.
+        os.remove(record_path); os.remove(record_path .. ".inprogress")
+        return "OK"
+    end
+
+    local probe = epub_path .. ".footcream_wtest"
+    local pf = io.open(probe, "wb")
+    if not pf then return "ERROR:cannot restore — the book's folder is read-only" end
+    pf:close(); os.remove(probe)
+
+    local tmp = epub_path .. ".footcream_tmp"
+    local writer = Archiver.Writer:new()
+    if not writer:open(tmp, "epub") then return "ERROR:cannot open writer" end
+    writer:setZipCompression("store")
+    if content["mimetype"] then writer:addFileFromMemory("mimetype", content["mimetype"]) end
+    writer:setZipCompression("deflate")
+    for _, name in ipairs(order) do
+        if name ~= "mimetype" then
+            writer:addFileFromMemory(name, modified[name] or content[name])
+        end
+    end
+    writer:close()
+    if not os.rename(tmp, epub_path) then os.remove(tmp); return "ERROR:cannot replace epub" end
+
+    os.remove(record_path); os.remove(record_path .. ".inprogress")
+    return "OK"
+end
+
 -- ── revert ────────────────────────────────────────────────────────────────────
 function M.revert(epub_path, record_path)
     local rec = read_record(record_path)
-    if not rec then return "ERROR:no patch record found" end
+    if not rec then
+        -- Not the current Lua record — maybe a legacy JSON edit-list (no backup).
+        local legacy = read_legacy_record(record_path)
+        if legacy then return revert_legacy(epub_path, record_path, legacy) end
+        return "ERROR:no patch record found"
+    end
     local backup = rec.backup
     if not file_exists(backup) then return "ERROR:no patch record found" end
 

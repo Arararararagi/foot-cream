@@ -28,7 +28,7 @@ local _ENDASH = "\226\128\147"   -- –  U+2013
 local _TIMES  = "\195\151"       -- ×  U+00D7
 local _SUP2   = "\194\178"       -- ²  U+00B2 (superscript two)
 
-local CACHE_VERSION = 45  -- bumped: FIX "fifty and a hundred fathoms" range — extend_start validated the span via _parse_num(whole)==num, but "and"-glued ranges compose multiplicatively ("fifty … hundred"=5000) so it never matched the lower endpoint (50); now also accepts the text up to the first range connector. (VM-verified: was 9000 m, now 90 and 180 m.)
+local CACHE_VERSION = 46  -- bumped: v1.4.3 shipped matching changes (mangled-fraction "1 /10; inch" suppression, forward fractional-inch merge, overlap-duplicate filter) but left CACHE_VERSION at 45, so books scanned on v1.4.2 kept their stale sidecars and never got the fixes. Bumping invalidates those sidecars → auto-rescan on next open. (45 was: FIX "fifty and a hundred fathoms" range — "and"-glued ranges compose multiplicatively so the lower endpoint never matched; now accepts text up to the first range connector.)
 local _REVERSE_VERSION = 2  -- v2: ordered originals per converted string (position-aware reverse lookup)
 
 -- ── Number prefixes ───────────────────────────────────────────────────────────
@@ -4566,27 +4566,30 @@ function FootFree:_finishScan(doc, all_matches, t_per_pat, t_total, in_subproces
     logger.info(string.format("FootFree: %d match(es) found  total=%.3fs", #filtered, t_total or 0))
     _save_sidecar(doc.file, filtered)
 
-    os.execute("mkdir -p /mnt/macos/debug 2>/dev/null")
-    local fh = io.open("/mnt/macos/debug/scan_report.txt", "w")
-    if fh then
-        fh:write(string.format("footcream scan report\nBook: %s\n%d match(es)  total=%.3fs\n%s\n",
-            doc.file, #filtered, t_total or 0, string.rep("-", 60)))
-        if t_per_pat then
-            fh:write("pattern timing:\n")
-            for _, t in ipairs(t_per_pat) do
-                fh:write(string.format("  [%d] %-22s  %.3fs  %d hits\n",
-                    t.idx, t.label, t.elapsed, t.hits))
-            end
-            fh:write(string.rep("-", 60) .. "\n")
-        end
-        for i, r in ipairs(filtered) do
-            fh:write(string.format("[%3d] %s\n      Context: ...%s[%s]%s...\n\n",
-                i, _convert(r), r.prev_text or "", _display(r.matched_text), r.next_text or ""))
-        end
-        fh:close()
-    end
-
+    -- Dev-only diagnostics, gated behind dev mode. Both the scan report and the
+    -- per-book report write to the Mac↔VM shared debug folder (/mnt/macos/debug),
+    -- which doesn't exist on a user's device — gating keeps every user scan from
+    -- spawning a shell and leaving a stray /mnt/macos/debug dir behind.
     if debug_report then
+        os.execute("mkdir -p /mnt/macos/debug 2>/dev/null")
+        local fh = io.open("/mnt/macos/debug/scan_report.txt", "w")
+        if fh then
+            fh:write(string.format("footcream scan report\nBook: %s\n%d match(es)  total=%.3fs\n%s\n",
+                doc.file, #filtered, t_total or 0, string.rep("-", 60)))
+            if t_per_pat then
+                fh:write("pattern timing:\n")
+                for _, t in ipairs(t_per_pat) do
+                    fh:write(string.format("  [%d] %-22s  %.3fs  %d hits\n",
+                        t.idx, t.label, t.elapsed, t.hits))
+                end
+                fh:write(string.rep("-", 60) .. "\n")
+            end
+            for i, r in ipairs(filtered) do
+                fh:write(string.format("[%3d] %s\n      Context: ...%s[%s]%s...\n\n",
+                    i, _convert(r), r.prev_text or "", _display(r.matched_text), r.next_text or ""))
+            end
+            fh:close()
+        end
         _write_book_report(doc, filtered)
     end
 
@@ -4951,6 +4954,15 @@ end
 -- applies the same idiom filters and saves the same sidecar as the classic scan.
 function FootFree:_startFastScan(doc)
     logger.info("FootFree: fast scan — " .. doc.file)
+    -- Re-entrancy guard: a scan subprocess is already running (e.g. the auto-scan
+    -- from onReaderReady is still going and the user taps "Scan book", or a
+    -- double-tap). Starting another would overwrite self._scan_pid — orphaning the
+    -- first child (never reaped, keeps burning CPU on a single-core reader) and
+    -- racing it on the progress file + sidecar. Leave the running scan alone.
+    if self._scan_pid then
+        UIManager:show(Notification:new{ text = "A scan is already in progress…" })
+        return
+    end
     self._all_matches   = nil
     self._current_boxes = {}
     self._scan_progress = 0.0  -- show the corner loader while it runs
@@ -5067,6 +5079,32 @@ function FootFree:_onScanComplete(err)
     os.remove(_SCAN_PROGRESS_FILE .. ".tmp")
     os.remove(_PARTIAL_SIDECAR)
     self:_runAfterScan()
+end
+
+-- Terminate any in-flight scan subprocess and clear its state WITHOUT running the
+-- normal completion path. Used when the book closes mid-scan so a background scan
+-- can't keep burning CPU after the reader navigates away, nor fire a "scan
+-- complete" notification over the file browser / the next book.
+function FootFree:_cancelScan()
+    if not self._scan_pid then return end
+    if ok_ffiutil and ffiutil.terminateSubProcess then
+        pcall(function() ffiutil.terminateSubProcess(self._scan_pid) end)
+    end
+    self._scan_pid      = nil
+    self._scan_doc      = nil
+    self._scan_progress = nil
+    if self._scan_indicator then
+        pcall(function() UIManager:close(self._scan_indicator) end)
+        self._scan_indicator = nil
+    end
+    os.remove(_SCAN_PROGRESS_FILE)
+    os.remove(_SCAN_PROGRESS_FILE .. ".tmp")
+end
+
+-- Book closing: stop any background scan (see _cancelScan). The poll loop checks
+-- self._scan_pid at its top, so it halts on its own once this clears it.
+function FootFree:onCloseDocument()
+    self:_cancelScan()
 end
 
 -- Read the scan child's real-progress file (written by _fast_scan_matches):
