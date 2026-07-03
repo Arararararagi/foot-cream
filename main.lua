@@ -19,6 +19,14 @@ local ok_ffiutil, ffiutil = pcall(require, "ffi/util")
 local FootFree = WidgetContainer:extend{
     name     = "foot-cream",
     _enabled = true,
+    -- Books whose Footcream data the user removed THIS SESSION (keyed by file
+    -- path). Auto-scan skips them so the rescan/convert prompt doesn't pop right
+    -- back up after "Remove Footcream data from this book" (the removal reloads
+    -- the document, which re-runs onReaderReady). Lives on the CLASS table —
+    -- reloadDocument recreates the plugin instance, so an instance field would
+    -- be lost. Not persisted: reopening the book in a later session auto-scans
+    -- again as normal. A manual "Scan book" clears the entry.
+    _removed_this_session = {},
 }
 
 -- ── Unicode constants (decimal-escaped UTF-8) ─────────────────────────────────
@@ -28,7 +36,7 @@ local _ENDASH = "\226\128\147"   -- –  U+2013
 local _TIMES  = "\195\151"       -- ×  U+00D7
 local _SUP2   = "\194\178"       -- ²  U+00B2 (superscript two)
 
-local CACHE_VERSION = 46  -- bumped: v1.4.3 shipped matching changes (mangled-fraction "1 /10; inch" suppression, forward fractional-inch merge, overlap-duplicate filter) but left CACHE_VERSION at 45, so books scanned on v1.4.2 kept their stale sidecars and never got the fixes. Bumping invalidates those sidecars → auto-rescan on next open. (45 was: FIX "fifty and a hundred fathoms" range — "and"-glued ranges compose multiplicatively so the lower endpoint never matched; now accepts text up to the first range connector.)
+local CACHE_VERSION = 47  -- bumped: NEW UNIT cubit/cubits (1 cubit = 45.72 cm, biblical/historical prose) — sidecars scanned without it must rescan. (46 was: v1.4.3 shipped matching changes — mangled-fraction suppression, fractional-inch merge, overlap filter — without a bump, so v1.4.2 sidecars never picked them up.)
 local _REVERSE_VERSION = 2  -- v2: ordered originals per converted string (position-aware reverse lookup)
 
 -- ── Number prefixes ───────────────────────────────────────────────────────────
@@ -1783,6 +1791,10 @@ local _UNIT_CONV = {
     -- the safe default for general fiction.
     ["leagues"]           = { factor=4.82803,  offset=0,       target="km",   cat="length"      },
     ["league"]            = { factor=4.82803,  offset=0,       target="km",   cat="length"      },
+    -- Ancient/biblical length: 1 cubit = 18 in = 45.72 cm. Appears in scripture,
+    -- historical and fantasy prose ("three hundred cubits").
+    ["cubits"]            = { factor=0.4572,   offset=0,       target="m",    cat="length"      },
+    ["cubit"]             = { factor=0.4572,   offset=0,       target="m",    cat="length"      },
     ["pounds"]            = { factor=0.453592, offset=0,       target="kg",   cat="weight"      },
     ["pound"]             = { factor=0.453592, offset=0,       target="kg",   cat="weight"      },
     ["lbs"]               = { factor=0.453592, offset=0,       target="kg",   cat="weight"      },
@@ -1825,6 +1837,7 @@ local _UNIT_SUFFIXES = {
     "fl oz", "fathoms", "fathom", "furlongs", "furlong",
     "leagues", "league",
     "gallons", "gallon", "quarts", "quart",
+    "cubits", "cubit",
     "knots", "knot", "pounds", "pound",
     "ounces", "ounce", "pints", "pint",
     "acres", "acre", "stone", "yards", "yard",
@@ -3485,6 +3498,19 @@ function FootFree:onReaderReady()
     local doc = self.ui.document
     if not doc or not doc.file then return end
 
+    -- Footcream only works on reflowable crengine documents (EPUB & co.).
+    -- Paged formats (PDF/DjVu via mupdf) lack the whole API this plugin is
+    -- built on — findAllText, xpointers, getCurrentPage — so the paintTo
+    -- wrapper's doc:getCurrentPage() call crashed the entire reader on the
+    -- first repaint after opening a PDF. Bail before hooking anything; the
+    -- flag also disables the scan menu entries for this document.
+    if type(doc.getCurrentPage) ~= "function" or type(doc.findAllText) ~= "function" then
+        self._doc_unsupported = true
+        logger.info("FootFree: unsupported document type (not crengine) — plugin inactive for " .. doc.file)
+        return
+    end
+    self._doc_unsupported = nil
+
     -- Wrap paintTo and tap up front so the view is ready whenever highlights arrive.
     if not self._paintTo_wrapped then
         local orig   = self.view.paintTo
@@ -3611,7 +3637,11 @@ function FootFree:onReaderReady()
         self._all_matches   = nil
         self._current_boxes = {}
         self._scanned       = false
-        if self._auto_scan and _is_english(doc) then
+        -- Skip auto-scan for a book whose data the user JUST removed: the
+        -- removal's revert reloads the document, and without this the rescan/
+        -- convert prompt would pop right back up. Session-only (class table).
+        if self._auto_scan and _is_english(doc)
+           and not self._removed_this_session[doc.file] then
             -- In "Convert directly in the text" mode, offer the conversion
             -- automatically once this fresh scan finishes — the user enabled
             -- auto-scan + convert mode and expects the "Convert?" prompt on
@@ -5017,6 +5047,8 @@ end
 -- straight to it. (The old multi-pass classic scan was removed.)
 function FootFree:_startScan(doc)
     if not doc or not doc.file then return end
+    -- Non-crengine document (PDF/DjVu): no findAllText/xpointers — never scan.
+    if self._doc_unsupported then return end
     return self:_startFastScan(doc)
 end
 
@@ -5912,11 +5944,16 @@ function FootFree:addToMainMenu(menu_items)
                     end
                     return "Scan book"
                 end,
-                enabled_func = function() return self.ui.document ~= nil end,
+                enabled_func = function()
+                    return self.ui.document ~= nil and not self._doc_unsupported
+                end,
                 callback = function()
                     local doc = self.ui.document
                     if not doc then return end
                     local function do_scan()
+                        -- An explicit scan overrides the session suppression
+                        -- set by "Remove Footcream data from this book".
+                        self._removed_this_session[doc.file] = nil
                         os.remove(_sidecar_path(doc.file))
                         self:_startScan(doc)
                     end
@@ -6048,6 +6085,10 @@ function FootFree:addToMainMenu(menu_items)
                         callback = function()
                             local doc = self.ui.document
                             if not doc then return end
+                            -- Suppress auto-scan for this book for the rest of
+                            -- the session (the revert below reloads the document
+                            -- and would otherwise re-prompt immediately).
+                            self._removed_this_session[doc.file] = true
                             os.remove(_sidecar_path(doc.file))
                             os.remove(_reverse_path(doc.file))
                             os.remove(_metric_ver_path(doc.file))

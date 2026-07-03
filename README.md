@@ -41,6 +41,7 @@ NOTE: Although Claude Code helped a lot in the writing of Lua, I have QA:ed this
 | 📏 Length       | mile / miles / mi                    | km             |
 | 📏 Length       | nautical mile / nmi                  | km             |
 | 📏 Length       | league / leagues                     | km             |
+| 📏 Length       | cubit / cubits                       | m              |
 | ⚖️ Weight       | ounce / ounces / oz                  | g              |
 | ⚖️ Weight       | pound / pounds / lb / lbs            | kg             |
 | ⚖️ Weight       | stone                                | kg             |
