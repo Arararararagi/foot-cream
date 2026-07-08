@@ -14,15 +14,17 @@ NOTE: Although Claude Code helped a lot in the writing of Lua, I have QA:ed this
 
 ## Features
 
-- **2 reading modes**
-  - **Underline & tap for metric**: non-destructive. Measurements get a distinct underline; tap one for a popup with the metric value.
-  - **Convert directly in the text**: rewrites the book's text in place (e.g. *"six feet"* → *"1.8 m"*). Fully reversible.
+- **3 reading modes**
+  - **Underline units, tap for metric**: non-destructive. Measurements get a distinct underline; tap one for a popup with the metric value.
+  - **Metric alongside original (in text)**: inserts the conversion as a parenthetical gloss (e.g. *"six feet (1.8 m)"*), keeping the original text. Fully reversible.
+  - **Metric only (in text)**: rewrites the book's text in place (e.g. *"six feet"* → *"1.8 m"*). Fully reversible.
 - **Distinct highlight style**: plugin underlines never get confused with your own highlights.
 - **Customisable styling**: solid or wavy underline, intensity, thickness, tooltip size (S / M / L), optional unit icon. The styling dialog is draggable.
 - **Per-category toggles**: turn whole groups (length, weight, volume, …) on or off.
 - **UK / US aware**: uses imperial or US gallons & pints based on the book's language.
 - **Smart Rounding** toggle clean, human-readable values instead of cluttery precision.
-- **"Show original units"** option for *Convert directly in the text* mode — underlines the converted values and lets you tap to see the original imperial text.
+- **"Show original units"** option for *Metric only (in text)* mode — underlines the converted values and lets you tap to see the original imperial text.
+- **Opt-in error reporting**: long-press a unit (or select text Footcream missed) to flag a bad conversion straight to the developer — anonymous, works offline, and directly improves future versions.
 - **Fast on reopen**: results are cached in a per-book sidecar; new books are scanned automatically.
 - **Updateable**: check for and install updates from inside the plugin.
 - **Reversible & per-book**: *"Remove Footcream data from this book"* undoes everything cleanly.
@@ -92,15 +94,19 @@ Footcream isn't a dumb find-and-replace. A lot of the code goes into matching th
 
 ***
 
-## The two modes
+## The three modes
 
-### Underline & tap for metric
+### Underline units, tap for metric
 
 Measurements are underlined in your chosen style. Tap one to see a popup with the metric value and a unit icon. Your book's text is never changed.
 
-### Convert directly in the text
+### Metric alongside original (in text)
 
-Footcream rewrites the measurements in the book's text itself. *"six feet"* becomes *"1.8 m"* as you read, no tapping required. Turn on **"Show original units"** (Advanced) to underline the converted values and tap any of them to see the original imperial text. This helps if you are worried something is not converted correctly. The book is fully reversible via *"Remove Footcream data from this book" *(Advanced).
+Footcream inserts each conversion right after the original measurement, in parentheses: *"six feet"* becomes *"six feet (1.8 m)"*. Nothing is hidden or replaced, and no tapping is required. The book is fully reversible via *"Remove Footcream data from this book"* (Advanced).
+
+### Metric only (in text)
+
+Footcream rewrites the measurements in the book's text itself. *"six feet"* becomes *"1.8 m"* as you read, no tapping required. Turn on **"Show original units"** (Advanced) to underline the converted values and tap any of them to see the original imperial text. This helps if you are worried something is not converted correctly. The book is fully reversible via *"Remove Footcream data from this book"* (Advanced).
 
 ***
 
@@ -132,7 +138,7 @@ You can check for updates via **Check for updates** in the plugin menu.
 
 ## How it works
 
-Footcream scans the book's whole text once and stores the results in a small per-book sidecar file, so subsequent opens are instant. *Convert directly in the text* rewrites the book file's text. It's always reversible, but it *does* modify the stored book.
+Footcream scans the book's whole text once and stores the results in a small per-book sidecar file, so subsequent opens are instant. The two *(in text)* modes rewrite the book file's text. They're always reversible, but they *do* modify the stored book.
 
 ***
 
@@ -150,29 +156,17 @@ Footcream scans the book's whole text once and stores the results in a small per
 
 ### Flagging bad conversions
 
-The best way to help is to flag conversions that come out wrong while you read. Footcream keeps a small on-device log of these so you can pull it off and attach it to a GitHub issue.
+The best way to help is to flag conversions that come out wrong while you read. The easiest path: turn on **Advanced** → **"Long-press units to send errors to the developer"**. With it on, flags are sent anonymously to the developer and feed directly into improving the scanner — no manual steps. Flags made while offline are queued and sent automatically once you're connected again.
 
-**How to flag:**
+**How to flag (with the toggle on):**
 
-1. Open the Footcream menu → **Advanced** → **Debug** → **Units in book (list)**. This shows every measurement Footcream found in the current book.
-2. **Long-press** the entry that's wrong. A dialog pops up. Pick the option that fits:
-   - **⚑ Wrong conversion**: it converted, but the metric value is off.
-   - **⚑ Missed / wrong span**: it grabbed too little/too much text, or missed part of the measurement.
-   - **⚑ False positive**: it flagged something that isn't a measurement at all.
-3. You'll see a "Flagged: …" confirmation. Each flag records the book title, what was detected, the value, the resulting conversion, the surrounding sentence, and its location in the book.
+- **Long-press a unit while reading** — an underlined measurement, or converted text in the two *(in text)* modes. Pick the issue that fits:
+  - **⚑ Wrong conversion**: it converted, but the metric value is off.
+  - **⚑ Wrong text captured**: it grabbed too little or too much of the measurement.
+  - **⚑ Not a unit**: it marked something that isn't a measurement at all.
+- **Footcream missed a measurement entirely?** Select the text (long-press + drag) and tap **⚑ Flag to Footcream** in the selection menu, then **⚑ Missed unit**.
+- You can also long-press any entry in **Advanced** → **Debug** → **Units in book (list)**.
 
-**Where the file lives:**
+Each flag records the book title, what was detected, the value, the conversion, the surrounding sentence, and its location — nothing else.
 
-All flags are appended to a plain-text file at:
-
-```text
-koreader/footcream/flagged_errors.txt
-```
-
-(inside your KOReader data directory — e.g. on a Kobo, `.adds/koreader/footcream/flagged_errors.txt`). You can also review the log on-device via **Debug** → **View flagged errors**.
-
-**Submitting it:**
-
-1. Connect your reader to a computer over USB and copy `flagged_errors.txt` off the device.
-2. Open a new issue in this repo and attach the file (or paste its contents). Feel free to add any extra context about what you expected.
-3. Once you've submitted it, you can tidy up with **Debug** → **Clear flagged errors** to start a fresh log.
+**Prefer not to send anything?** Leave the toggle off. Flags made from the Units list are still saved to a plain-text log on the device at `koreader/footcream/flagged_errors.txt` (e.g. on a Kobo, `.adds/koreader/footcream/flagged_errors.txt`) — you can review it via **Debug** → **View flagged errors**, attach it to a GitHub issue in this repo, then tidy up with **Debug** → **Clear flagged errors**.

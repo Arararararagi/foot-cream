@@ -225,8 +225,51 @@ local function read_legacy_record(path)
 end
 
 -- ── apply ─────────────────────────────────────────────────────────────────────
-function M.apply(epub_path, record_path, reps)
+-- Does any (X)HTML chapter contain a soft hyphen (U+00AD, raw or as an
+-- entity)? The scanner needs to know BEFORE scanning: crengine's regex
+-- findAllText returns shifted/missing hits on soft-hyphenated text, so such
+-- books scan through the plain-search fallback instead. File-level detection
+-- because no crengine text API exposes the character (context extraction
+-- strips it, and the plain search path skips it for matching).
+-- Does the conversion record still describe the file on disk? A completed
+-- apply stores the converted epub's byte size; if the on-disk size differs,
+-- the file was replaced externally (re-download, sync, regenerated test book)
+-- and the record is ORPHANED — the book must not be treated as converted, and
+-- the backup must not be restored into it. Returns false only on a proven
+-- mismatch; a missing/size-less record (legacy or interrupted apply) returns
+-- true so those keep their existing open-time handling.
+function M.record_matches_file(epub_path, record_path)
+    local rec = read_record(record_path)
+    if not rec or not rec.size then return true end
+    local attr = lfs.attributes(epub_path)
+    return attr ~= nil and attr.size == rec.size
+end
+
+function M.has_soft_hyphens(epub_path)
+    local reader = Archiver.Reader:new()
+    if not reader:open(epub_path) then return false end
+    for entry in reader:iterate() do
+        if entry.mode == "file" then
+            local data = reader:extractToMemory(entry.path)
+            if data and is_html(entry.path, data) then
+                if data:find("\194\173", 1, true)
+                   or data:find("&shy;", 1, true)
+                   or data:find("&#173;", 1, true)
+                   or data:find("&#xad;", 1, true)
+                   or data:find("&#xAD;", 1, true) then
+                    reader:close()
+                    return true
+                end
+            end
+        end
+    end
+    reader:close()
+    return false
+end
+
+function M.apply(epub_path, record_path, reps, opts)
     if not reps or #reps == 0 then return "OK:0" end
+    local append_mode = opts and opts.append
 
     -- Apply longest `from` first. A shorter phrase that is a substring of a
     -- longer one ("one inch" inside "five foot one inch") would otherwise, if
@@ -275,10 +318,37 @@ function M.apply(epub_path, record_path, reps)
     for _, name in ipairs(order) do
         if is_html(name, content[name]) then
             local text, total = content[name], 0
-            for _, rep in ipairs(reps) do
-                if not rep.skip then
-                    local new, n = apply_one(text, rep.from, rep.to, rep.guard_next)
-                    if n > 0 then text = new; total = total + n end
+            if append_mode then
+                -- Append mode's `to` CONTAINS the original text, so a shorter
+                -- rep applied later would re-match inside an earlier rep's
+                -- already-glossed span ("six feet" inside "six feet four
+                -- inches (1.93 m)" → a bogus second gloss). Longest-first
+                -- ordering can't save it the way it does for replacement,
+                -- where the matched text disappears. Two phases instead:
+                -- phase 1 swaps each match for an opaque placeholder
+                -- (longest-first, guards honored) that no later rep can see;
+                -- phase 2 expands placeholders to the glossed text.
+                for i, rep in ipairs(reps) do
+                    if not rep.skip then
+                        local new, n = apply_one(text, rep.from,
+                            "\1" .. i .. "\1", rep.guard_next)
+                        if n > 0 then text = new; total = total + n end
+                    end
+                end
+                if total > 0 then
+                    for i, rep in ipairs(reps) do
+                        if not rep.skip then
+                            text = (text:gsub("\1" .. i .. "\1",
+                                (rep.to:gsub("%%", "%%%%"))))
+                        end
+                    end
+                end
+            else
+                for _, rep in ipairs(reps) do
+                    if not rep.skip then
+                        local new, n = apply_one(text, rep.from, rep.to, rep.guard_next)
+                        if n > 0 then text = new; total = total + n end
+                    end
                 end
             end
             if total > 0 then
