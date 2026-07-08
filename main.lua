@@ -1774,11 +1774,23 @@ local function _load_sidecar_raw(doc_path)
     -- different clock than the device's, and a mere few seconds of skew makes
     -- every freshly saved sidecar look "older" than the epub — an endless
     -- discard-and-rescan loop.
+    -- While the book is CONVERTED, the sidecar on disk is the ORIGINAL-text
+    -- scan: stale against the rewritten epub (mtime mismatch), but exactly
+    -- what a future revert needs — the revert restores byte-identical text
+    -- and re-stamps the recorded mtime, making this sidecar valid again with
+    -- no rescan. So in metric mode a stale sidecar is unusable but must be
+    -- KEPT on disk; only unconverted books delete stale caches (that removal
+    -- is what forces the legitimate rescan after external file changes).
+    local keep_stale = _is_metric_mode(doc_path)
     local epub_attr = lfs and lfs.attributes(doc_path, "modification")
     if data.epub_mtime then
         if epub_attr and epub_attr ~= data.epub_mtime then
-            logger.info("FootFree: epub modified since scan — discarding stale cache")
-            os.remove(sidecar)
+            if keep_stale then
+                logger.info("FootFree: sidecar is the preserved pre-conversion scan — keeping")
+            else
+                logger.info("FootFree: epub modified since scan — discarding stale cache")
+                os.remove(sidecar)
+            end
             return nil
         end
     else
@@ -1786,8 +1798,12 @@ local function _load_sidecar_raw(doc_path)
         -- cross-clock comparison (better than accepting stale xpointers).
         local sidecar_attr = lfs and lfs.attributes(sidecar, "modification")
         if epub_attr and sidecar_attr and epub_attr > sidecar_attr then
-            logger.info("FootFree: epub newer than sidecar — discarding stale cache")
-            os.remove(sidecar)
+            if keep_stale then
+                logger.info("FootFree: sidecar is the preserved pre-conversion scan — keeping")
+            else
+                logger.info("FootFree: epub newer than sidecar — discarding stale cache")
+                os.remove(sidecar)
+            end
             return nil
         end
     end
@@ -4048,6 +4064,7 @@ function FootFree:onReaderReady()
             os.remove(_metric_ver_path(doc.file))
             self._reverse_matches = nil
             if _pending_rescan == doc.file then _pending_rescan = nil end
+            if FootFree._pending_reapply == doc.file then FootFree._pending_reapply = nil end
         end
     end
     -- An "apply in progress" marker means a previous conversion was interrupted
@@ -4073,7 +4090,7 @@ function FootFree:onReaderReady()
         amode = amode or 3   -- pre-stamp conversions were always mode 3
         if self._tap_mode ~= amode then
             logger.info("FootFree: converted book opened in a different mode — reverting for consistency")
-            if self._tap_mode >= 2 then _pending_rescan = doc.file end
+            if self._tap_mode >= 2 then FootFree._pending_reapply = doc.file end
             UIManager:scheduleIn(0.2, function() self:_revertMetricEdition(doc) end)
             return
         end
@@ -4091,6 +4108,39 @@ function FootFree:onReaderReady()
             if d2 then self:_applyMetricEdition(d2, true) end
         end
         self:_startScan(doc)
+        return
+    end
+
+    -- Mode switch (2⇄3, or the different-mode consistency revert): the revert
+    -- restored the original text byte-for-byte AND revalidated the preserved
+    -- original-text sidecar, so re-apply straight from it — no rescan. Falls
+    -- back to the fresh-scan path when the sidecar didn't survive (deleted,
+    -- or written by a different scanner version).
+    if FootFree._pending_reapply == doc.file then
+        FootFree._pending_reapply = nil
+        local raw2 = _load_sidecar_raw(doc.file)
+        if raw2 then
+            local use_uk = self._uk_volumes and _is_uk_book(doc)
+            local applied = _apply_settings_to_matches(raw2, self._distinguish_pounds, use_uk)
+            self._all_matches   = #applied > 0 and applied or nil
+            self._current_boxes = {}
+            self._scanned       = true
+        end
+        if self._all_matches then
+            logger.info("FootFree: mode switch — re-applying from preserved scan ("
+                        .. #self._all_matches .. " matches)")
+            UIManager:scheduleIn(0.3, function()
+                local d2 = self.ui.document
+                if d2 then self:_applyMetricEdition(d2, true) end
+            end)
+        else
+            os.remove(_sidecar_path(doc.file))
+            self._after_scan = function()
+                local d2 = self.ui.document
+                if d2 then self:_applyMetricEdition(d2, true) end
+            end
+            self:_startScan(doc)
+        end
         return
     end
 
@@ -4151,10 +4201,26 @@ function FootFree:onReaderReady()
         self._all_matches   = nil
         self._current_boxes = {}
         self._scanned       = false
+        if _is_metric_mode(doc.file) and self._tap_mode >= 2 then
+            -- Converted book: the on-disk sidecar is the preserved original-
+            -- text scan (kept stale for a no-rescan revert/mode-switch), and
+            -- scanning the converted text finds nothing the convert modes
+            -- actually use — this "echo scan" was a full second scan after
+            -- every convert. Skip it. The menu count reads the stamped total;
+            -- announce the conversion from the stamp too, since no scan
+            -- notice will fire.
+            if FootFree._just_converted == doc.file then
+                FootFree._just_converted = nil
+                UIManager:scheduleIn(0.4, function()
+                    UIManager:show(Notification:new{
+                        text = self:_scanNoticeText(0, doc),
+                    })
+                end)
+            end
         -- Skip auto-scan for a book whose data the user JUST removed: the
         -- removal's revert reloads the document, and without this the rescan/
         -- convert prompt would pop right back up. Session-only (class table).
-        if self._auto_scan and _is_english(doc)
+        elseif self._auto_scan and _is_english(doc)
            and not self._removed_this_session[doc.file] then
             -- In "Convert directly in the text" mode, offer the conversion
             -- automatically once this fresh scan finishes — the user enabled
@@ -5416,10 +5482,11 @@ function FootFree:_doApplyMetricEdition(doc)
                 })
                 return
             end
-            -- The sidecar is NOT preserved: the rewrite just moved the text, so
-            -- its xpointer positions are stale. The reload's staleness check
-            -- (recorded epub_mtime) discards it and the auto-rescan of the
-            -- converted text produces a fresh leftovers sidecar (metric_scan).
+            -- The sidecar stays on disk untouched: its xpointers are stale
+            -- against the rewritten text (the load path won't use it while
+            -- converted), but a revert restores byte-identical text and
+            -- re-stamps the recorded mtime — making it instantly valid again,
+            -- which is what lets mode switches skip the rescan entirely.
             -- Persist the converted->original map: in replace mode (3) it
             -- powers "show original units" AND hold-to-flag; in append mode
             -- (2) the original is already visible in the gloss, so the map's
@@ -5431,6 +5498,10 @@ function FootFree:_doApplyMetricEdition(doc)
             -- keeps reporting the book's full unit count while converted, and
             -- the applied mode so open/mode-switch flows can tell the styles apart.
             _write_metric_version(doc.file, hint_total, apply_mode)
+            -- Marks the post-reload onReaderReady (fresh plugin instance —
+            -- hence the class field) to announce the conversion from the
+            -- stamp: with the echo scan gone, no scan notice will fire.
+            FootFree._just_converted = doc.file
             -- Reload document (seamless — keeps xpointer position)
             self.ui:reloadDocument(nil, true)
         else
@@ -5467,7 +5538,9 @@ function FootFree:_revertMetricEdition(doc, on_done)
             -- reconvert) queued this revert, abort the whole chain: a stale
             -- _pending_rescan would otherwise fire on a later open and
             -- auto-CONVERT (skip_confirm) a book whose revert never happened.
+            -- Same for the mode-switch _pending_reapply chain.
             if _pending_rescan == doc.file then _pending_rescan = nil end
+            if FootFree._pending_reapply == doc.file then FootFree._pending_reapply = nil end
             return
         end
         result = result or ""
@@ -5476,8 +5549,9 @@ function FootFree:_revertMetricEdition(doc, on_done)
         -- reconverted a regenerated smoketest5 — the revert refused ("file
         -- changed since conversion", record rightly dropped), but the pending
         -- flag survived and the next onReaderReady rescanned and re-applied.
-        if result ~= "OK" and _pending_rescan == doc.file then
-            _pending_rescan = nil
+        if result ~= "OK" then
+            if _pending_rescan == doc.file then _pending_rescan = nil end
+            if FootFree._pending_reapply == doc.file then FootFree._pending_reapply = nil end
         end
         if result == "OK" then
             logger.info("FootFree: metric edition reverted")
@@ -5565,7 +5639,10 @@ function FootFree:_switchConvertMode(new_mode, mode_name)
     if _is_metric_mode(doc.file) then
         local _, _, amode = _read_metric_version(doc.file)
         if (amode or 3) == new_mode then return end
-        _pending_rescan = doc.file
+        -- Re-apply from the preserved original-text sidecar after the revert
+        -- (no rescan); _pending_rescan is reserved for the flows that WANT a
+        -- fresh scan (version refresh, manual "Rescan & reconvert").
+        FootFree._pending_reapply = doc.file
         UIManager:scheduleIn(0.3, function() self:_revertMetricEdition(doc) end)
         return
     end
