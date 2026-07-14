@@ -2,7 +2,7 @@
 
 ![Footcream](https://github.com/Fank1/foot-cream/releases/download/readme-assets/hero-img.png)
 
-Are you tired of mentally trying to convert "six foot four" or "ninety degrees Fahrenheit" while reading English books? The Footcream plugin for KOReader scans your book once, finds every imperial measurement and gives you the metric value. You can choose to **underline** each one so you can **tap for the conversion**, or choose to **rewrite the text in place** so the metric value is just *there* as you read.
+Are you tired of mentally trying to convert "six foot four" or "ninety degrees Fahrenheit" while reading English books? The Footcream plugin for KOReader scans your book once, finds every measurement and converts it to the unit system **you** think in. Imperial books become metric, and metric books become imperial: *"1.8 m"* → *"5 ft 11 in"*, *"30 °C"* → *"86 °F"*. You can choose to **underline** each one so you can **tap for the conversion**, or choose to **rewrite the text in place** so the converted value is just *there* as you read.
 
 It's built to be smart about context. It knows the difference between pounds (the money) and pounds (the weight), between a six-foot man and a six-foot-by-eight-foot room, and it leaves idioms like *"stand on your own two feet"* alone.
 
@@ -14,17 +14,20 @@ NOTE: Although Claude Code helped a lot in the writing of Lua, I have QA:ed this
 
 ## Features
 
+- **Both directions**: set **Convert units to** Metric, Imperial (US) or Imperial (UK). Metric books get natural imperial compounds, like *"75 kg"* → *"165 lb"* (UK: *"11 st 11 lb"*) and *"500 ml"* → *"17 fl oz"*, and imperial books get metric, in every mode.
 - **3 reading modes**
-  - **Underline units, tap for metric**: non-destructive. Measurements get a distinct underline; tap one for a popup with the metric value.
-  - **Metric alongside original (in text)**: inserts the conversion as a parenthetical gloss (e.g. *"six feet (1.8 m)"*), keeping the original text. Fully reversible.
-  - **Metric only (in text)**: rewrites the book's text in place (e.g. *"six feet"* → *"1.8 m"*). Fully reversible.
+  - **Underline & tap**: non-destructive. Measurements get a distinct underline; tap one for a popup with the conversion.
+  - **Alongside original (in text)**: inserts the conversion as a parenthetical gloss (e.g. *"six feet (1.8 m)"*), keeping the original text. Fully reversible.
+  - **Converted only (in text)**: rewrites the book's text in place (e.g. *"six feet"* → *"1.8 m"*). Fully reversible.
+- **Per-book off switch**: *"Enable Footcream in this book"* turns it off for one book (restores its text, stops prompts) while every other book keeps working.
+- **Self-explaining menu**: long-press any menu item for a plain-language explanation of what it does.
 - **Distinct highlight style**: plugin underlines never get confused with your own highlights.
 - **Customisable styling**: solid or wavy underline, intensity, thickness, tooltip size (S / M / L), optional unit icon. The styling dialog is draggable.
 - **Per-category toggles**: turn whole groups (length, weight, volume, …) on or off.
 - **UK / US aware**: uses imperial or US gallons & pints based on the book's language.
 - **Smart Rounding** toggle clean, human-readable values instead of cluttery precision.
-- **"Show original units"** option for *Metric only (in text)* mode — underlines the converted values and lets you tap to see the original imperial text.
-- **Opt-in error reporting**: long-press a unit (or select text Footcream missed) to flag a bad conversion straight to the developer — anonymous, works offline, and directly improves future versions.
+- **"Show original units"** option for the *Converted only (in text)* mode: underlines the converted values and lets you tap to see the original text.
+- **Opt-in error reporting**: long-press a unit (or select text Footcream missed) to flag a bad conversion straight to the developer. Anonymous, works offline, and directly improves future versions.
 - **Fast on reopen**: results are cached in a per-book sidecar; new books are scanned automatically.
 - **Updateable**: check for and install updates from inside the plugin.
 - **Reversible & per-book**: *"Remove Footcream data from this book"* undoes everything cleanly.
@@ -57,9 +60,11 @@ NOTE: Although Claude Code helped a lot in the writing of Lua, I have QA:ed this
 | 🟩 Area         | acre / acres                         | ha             |
 | 🟩 Area         | square miles / feet / yards / …      | km² / m² / cm² |
 
-*Volumes follow the book's locale — UK imperial vs. US measures.*
+*Volumes follow the book's locale: UK imperial vs. US measures.*
 
-> **A note on tons:** Footcream intentionally does **not** convert *tons*. The word is ambiguous — a long ton (1016 kg), a short ton (907 kg), a metric tonne (1000 kg) etc. Rather than converting incorrectly, it leaves them untouched. If there is a huge need for this, it might be added in the future.
+**In the imperial direction** (Convert units to: Imperial US/UK) the same categories work in reverse: km/m/cm/mm, kg/kilos/grams, °C, liters/ml, km/h, hectares and square km/m/cm all convert, as natural compounds (*"1.8 m"* → *"5 ft 11 in"*, *"2.5 kg"* → *"5 lb 8 oz"*), with stones and imperial pints/gallons in the UK flavor and eighth-inch fractions for small lengths (*"9 mm"* → *"⅜ in"*).
+
+> **A note on tons:** Footcream intentionally does **not** convert *tons*. The word is ambiguous: a long ton (1016 kg), a short ton (907 kg), a metric tonne (1000 kg) etc. Rather than converting incorrectly, it leaves them untouched. If there is a huge need for this, it might be added in the future.
 
 ***
 
@@ -96,17 +101,19 @@ Footcream isn't a dumb find-and-replace. A lot of the code goes into matching th
 
 ## The three modes
 
-### Underline units, tap for metric
+Tap **Mode** in the menu to open the picker: it shows one sample sentence rendered in each of the three modes (with a live underline in your own styling), so you can see exactly what you're choosing. The mode names follow your **Convert units to** setting: under an imperial preference they read *"tap for imperial"*, *"Imperial alongside original"*, and so on.
 
-Measurements are underlined in your chosen style. Tap one to see a popup with the metric value and a unit icon. Your book's text is never changed.
+### Underline units, tap for the conversion
 
-### Metric alongside original (in text)
+Measurements are underlined in your chosen style. Tap one to see a popup with the converted value and a unit icon. Your book's text is never changed.
 
-Footcream inserts each conversion right after the original measurement, in parentheses: *"six feet"* becomes *"six feet (1.8 m)"*. Nothing is hidden or replaced, and no tapping is required. The book is fully reversible via *"Remove Footcream data from this book"* (Advanced).
+### Alongside original (in text)
 
-### Metric only (in text)
+Footcream inserts each conversion right after the original measurement, in parentheses: *"six feet"* becomes *"six feet (1.8 m)"*, or *"1.8 m"* becomes *"1.8 m (5 ft 11 in)"* under an imperial preference. Nothing is hidden or replaced, and no tapping is required. The book is fully reversible via *"Remove Footcream data from this book"* (Advanced).
 
-Footcream rewrites the measurements in the book's text itself. *"six feet"* becomes *"1.8 m"* as you read, no tapping required. Turn on **"Show original units"** (Advanced) to underline the converted values and tap any of them to see the original imperial text. This helps if you are worried something is not converted correctly. The book is fully reversible via *"Remove Footcream data from this book"* (Advanced).
+### Converted only (in text)
+
+Footcream rewrites the measurements in the book's text itself. *"six feet"* becomes *"1.8 m"* as you read, no tapping required. Turn on **"Show original units"** (Advanced) to underline the converted values and tap any of them to see the original text. This helps if you are worried something is not converted correctly. The book is fully reversible via *"Remove Footcream data from this book"* (Advanced).
 
 ***
 
@@ -131,8 +138,8 @@ You can check for updates via **Check for updates** in the plugin menu.
 ## Usage
 
 1. Open a book in KOReader and go to **Settings** (Cogs) → **Footcream**. Either scan book-for-book or toggle the **Auto-scan** feature. It checks if the book is in English. It will leave other languages alone.
-2. Pick a conversion mode and adjust styling and unit categories to taste from the menu.
-3. Starting read Freedom Unit-free.
+2. Pick your system under **Convert units to** (Metric / Imperial US / Imperial UK) and a conversion mode; adjust styling and unit categories (Advanced) to taste.
+3. Start reading! 
 
 ***
 
@@ -156,17 +163,17 @@ Footcream scans the book's whole text once and stores the results in a small per
 
 ### Flagging bad conversions
 
-The best way to help is to flag conversions that come out wrong while you read. The easiest path: turn on **Advanced** → **"Long-press units to send errors to the developer"**. With it on, flags are sent anonymously to the developer and feed directly into improving the scanner — no manual steps. Flags made while offline are queued and sent automatically once you're connected again.
+The best way to help is to flag conversions that come out wrong while you read. The easiest path: turn on **Advanced** → **"Long-press units to send errors to the developer"**. With it on, flags are sent anonymously to the developer and feed directly into improving the scanner, no manual steps. Flags made while offline are queued and sent automatically once you're connected again.
 
 **How to flag (with the toggle on):**
 
-- **Long-press a unit while reading** — an underlined measurement, or converted text in the two *(in text)* modes. Pick the issue that fits:
-  - **⚑ Wrong conversion**: it converted, but the metric value is off.
+- **Long-press a unit while reading**: an underlined measurement, or converted text in the two *(in text)* modes. Pick the issue that fits:
+  - **⚑ Wrong conversion**: it converted, but the value is off.
   - **⚑ Wrong text captured**: it grabbed too little or too much of the measurement.
   - **⚑ Not a unit**: it marked something that isn't a measurement at all.
 - **Footcream missed a measurement entirely?** Select the text (long-press + drag) and tap **⚑ Flag to Footcream** in the selection menu, then **⚑ Missed unit**.
 - You can also long-press any entry in **Advanced** → **Debug** → **Units in book (list)**.
 
-Each flag records the book title, what was detected, the value, the conversion, the surrounding sentence, and its location — nothing else.
+Each flag records the book title, what was detected, the value, the conversion, the surrounding sentence, and its location. Nothing else.
 
-**Prefer not to send anything?** Leave the toggle off. Flags made from the Units list are still saved to a plain-text log on the device at `koreader/footcream/flagged_errors.txt` (e.g. on a Kobo, `.adds/koreader/footcream/flagged_errors.txt`) — you can review it via **Debug** → **View flagged errors**, attach it to a GitHub issue in this repo, then tidy up with **Debug** → **Clear flagged errors**.
+**Prefer not to send anything?** Leave the toggle off. Flags made from the Units list are still saved to a plain-text log on the device at `koreader/footcream/flagged_errors.txt` (e.g. on a Kobo, `.adds/koreader/footcream/flagged_errors.txt`). You can review it via **Debug** → **View flagged errors**, attach it to a GitHub issue in this repo, then tidy up with **Debug** → **Clear flagged errors**.

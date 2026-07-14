@@ -2,7 +2,7 @@
 return {
     name        = "foot-cream",
     fullname    = "Footcream",
-    description = "Underlines imperial measurements and shows metric conversions on tap.",
+    description = "Converts a book's measurements to your preferred units, metric or imperial: underline and tap for the conversion, or rewrite it directly in the text.",
     author      = "Erik Fanki",
-    version     = "1.5.1",
+    version     = "1.6.0",
 }

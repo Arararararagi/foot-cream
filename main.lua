@@ -35,7 +35,7 @@ local _ENDASH = "\226\128\147"   -- –  U+2013
 local _TIMES  = "\195\151"       -- ×  U+00D7
 local _SUP2   = "\194\178"       -- ²  U+00B2 (superscript two)
 
-local CACHE_VERSION = 58  -- bumped: hyphen-glued attributive fractions parse — "<ordinal>-of-a-<unit>-thick/long" reads as 1/denominator ("a third-of-a-mile-thick" = 540 m; "quarter-of-a" worked already via _WORD_NUMS, ordinals like "third" were nil because bare ordinals are ambiguous — the glued "-of-a" tail disambiguates). (57 was: bare-article "a million miles" (incl. "an hour"/"away" forms) suppressed as hyperbole — user-approved 2026-07-06, all 7 corpus hits figurative; digits and real multiples ("two million miles", "half a million miles") still convert. (56 was: URL path fragments never convert (digit/letter slash in matched_text — "178650/League" was 860 000 km); "N-foot-by-M-foot" dimension adjectives convert both sides ("twenty-foot-by-hundred-foot" = 6 × 30 m, was a bare 6 m). (55 was: shy-book plain passes enforce true \\b via adjacent-char probes on BOTH sides (plain-path contexts are word-based, so "15 mi|nutes"/"one kn|ows" looked clean and inflated matches 3-6x). (54 was: soft-hyphen books (U+00AD in the text) scan via per-alias PLAIN findAllText passes — the regex path returns span-shifted/missing hits in such books (The Rise and Fall of the Dinosaurs: "1,700 miles" never hit, "seven-ton" garbled). (53 was: new-test-books sweep fixes — em-dash/ellipsis glued to the number no longer defeats _prev_num_words ("too far—eleven feet six inches", "off course by…sixty miles", "park—four acres"); fused digit+unit forms hit via a digit lookbehind in _FAST_UNIT_PAT ("260lbs", "6ft"); banking vocabulary (bank/account/bills/untraceable) added to the soft-currency cues. (52 was: "for a mile" article cue (user-approved) + attributive-tail guard ("ran a mile RELAY" is a compound noun — the batch-2 motion-verb cues were wrongly converting it). (51 was: tight U+2044 fractions from sup/sub-span markup ("21⁄2-inch" = 2½, "13⁄16-inch" = 13/16 — improper-looking numerator reads as a mixed number, proper as a plain fraction). 50 was: corpus-sweep batch 2 follow-ups — prime matches re-check the coordinate/astronomy vocab on the tail of their own paragraph (the 5-word hit window missed "ABERRATION … is established 20″"); spaced U+2044 mixed fractions parse ("2 1 ⁄ 2 -inch plank" = 2.5); _prev_num_words' article-fraction tail requires both words ("half LONG" no longer reads 0.5, which spawned a bogus 0.5–1000 range eating "…a mile and a half long and 1000 ft. deep"). (49 was: batch 2 — FP guards for closing-quote/middle-dot/arcsecond; enumeration lists; ASCII mixed fractions; million; article-mile directional/motion cues; at-a-time ≤ 2; "<digit> of a mile" fraction guard. 48 was: foot-idiom positional cues gated ≤ 2.)
+local CACHE_VERSION = 59  -- bumped: metric→imperial direction ("Preferred units": metric/us/uk; sidecars carry a direction field, matches can now target imperial compound formats). (58 was: hyphen-glued attributive fractions parse — "<ordinal>-of-a-<unit>-thick/long" reads as 1/denominator ("a third-of-a-mile-thick" = 540 m; "quarter-of-a" worked already via _WORD_NUMS, ordinals like "third" were nil because bare ordinals are ambiguous — the glued "-of-a" tail disambiguates). (57 was: bare-article "a million miles" (incl. "an hour"/"away" forms) suppressed as hyperbole — user-approved 2026-07-06, all 7 corpus hits figurative; digits and real multiples ("two million miles", "half a million miles") still convert. (56 was: URL path fragments never convert (digit/letter slash in matched_text — "178650/League" was 860 000 km); "N-foot-by-M-foot" dimension adjectives convert both sides ("twenty-foot-by-hundred-foot" = 6 × 30 m, was a bare 6 m). (55 was: shy-book plain passes enforce true \\b via adjacent-char probes on BOTH sides (plain-path contexts are word-based, so "15 mi|nutes"/"one kn|ows" looked clean and inflated matches 3-6x). (54 was: soft-hyphen books (U+00AD in the text) scan via per-alias PLAIN findAllText passes — the regex path returns span-shifted/missing hits in such books (The Rise and Fall of the Dinosaurs: "1,700 miles" never hit, "seven-ton" garbled). (53 was: new-test-books sweep fixes — em-dash/ellipsis glued to the number no longer defeats _prev_num_words ("too far—eleven feet six inches", "off course by…sixty miles", "park—four acres"); fused digit+unit forms hit via a digit lookbehind in _FAST_UNIT_PAT ("260lbs", "6ft"); banking vocabulary (bank/account/bills/untraceable) added to the soft-currency cues. (52 was: "for a mile" article cue (user-approved) + attributive-tail guard ("ran a mile RELAY" is a compound noun — the batch-2 motion-verb cues were wrongly converting it). (51 was: tight U+2044 fractions from sup/sub-span markup ("21⁄2-inch" = 2½, "13⁄16-inch" = 13/16 — improper-looking numerator reads as a mixed number, proper as a plain fraction). 50 was: corpus-sweep batch 2 follow-ups — prime matches re-check the coordinate/astronomy vocab on the tail of their own paragraph (the 5-word hit window missed "ABERRATION … is established 20″"); spaced U+2044 mixed fractions parse ("2 1 ⁄ 2 -inch plank" = 2.5); _prev_num_words' article-fraction tail requires both words ("half LONG" no longer reads 0.5, which spawned a bogus 0.5–1000 range eating "…a mile and a half long and 1000 ft. deep"). (49 was: batch 2 — FP guards for closing-quote/middle-dot/arcsecond; enumeration lists; ASCII mixed fractions; million; article-mile directional/motion cues; at-a-time ≤ 2; "<digit> of a mile" fraction guard. 48 was: foot-idiom positional cues gated ≤ 2.)
 local _REVERSE_VERSION = 2  -- v2: ordered originals per converted string (position-aware reverse lookup)
 
 -- ── Number prefixes ───────────────────────────────────────────────────────────
@@ -490,6 +490,11 @@ local function _downscale(v, unit)
 end
 
 local function _fmt_dist(v, unit)
+    -- Imperial target tag (metric→imperial direction): compound formatting
+    -- lives in FootFree._IMPERIAL (defined below; resolved at call time).
+    if unit and FootFree._IMPERIAL.tags[unit] then
+        return FootFree._IMPERIAL.fmt(v, unit)
+    end
     local sv, su = _downscale(v, unit)
     return _fmt(sv) .. " " .. su
 end
@@ -500,6 +505,9 @@ end
 -- reads as prose ("1.2 and 1.5 m") instead of range notation ("1.2–1.5 m") —
 -- this matters most in Convert-in-text mode, where it lands in the sentence.
 local function _fmt_dist_range(r1, r2, unit, conn)
+    if unit and FootFree._IMPERIAL.tags[unit] then
+        return FootFree._IMPERIAL.fmt_range(r1, r2, unit, conn)
+    end
     local sr2, su = _downscale(r2, unit)
     local scale = (su == unit or r2 == 0) and 1 or (sr2 / r2)
     return _fmt(r1 * scale) .. (conn or _ENDASH) .. _fmt(sr2) .. " " .. su
@@ -580,6 +588,9 @@ end
 -- force=true for ranges, which are inherently approximate regardless of how the
 -- endpoints happen to be written.
 local function _smart_round(v, n, force, target)
+    -- Imperial target tags own their rounding inside FootFree._IMPERIAL.fmt
+    -- (compound output rounds inherently) — pass the value through untouched.
+    if target and FootFree._IMPERIAL.tags[target] then return v end
     if not _smart_rounding_enabled() then return v end
     -- Temperature: always whole degrees (72°F → 22 °C, not 22.2 °C).
     if target == "°C" then return _round_to_int(v) end
@@ -617,10 +628,291 @@ end
 -- 0.8 km → 800 m), THEN drop any remaining decimal in the display unit, so "not"
 -- never reads LESS round than the plain conversion would.
 local function _round_whole_dist(v, n, target)
+    if FootFree._IMPERIAL.tags[target] then
+        return FootFree._IMPERIAL.fmt(_round_to_int(v), target)
+    end
     local rv = _smart_round(v, n, true, target)
     local sv, su = _downscale(rv, target)
     return _fmt(_round_to_int(sv)) .. " " .. su
 end
+
+-- ── Metric → imperial direction ("Convert units to") ─────────────────────────
+-- Data + formatters for the REVERSE direction: scanning metric units and
+-- showing imperial conversions, for readers whose preferred system is
+-- imperial ("us"/"uk"; "metric" is the classic direction and the default).
+-- One class-attached block of pure data/functions (not chunk locals: the main
+-- chunk sits near LuaJIT's 200-locals ceiling, and the headless test
+-- extractor lifts dotted blocks — same convention as FootFree._REPORTING).
+FootFree._IMPERIAL = {
+    -- Imperial TARGET TAGS mark a conversion entry as metric-direction.
+    -- _smart_round passes tagged values through untouched and _fmt_dist /
+    -- _fmt_dist_range dispatch to fmt/fmt_range below, so the generic
+    -- pipeline (single values, ranges, sidecar, popups) needs no other
+    -- changes. Each tag's BASE unit (what `factor` converts into):
+    -- ftin=feet, in=inches, mi=miles, lboz=pounds, oz=ounces, °F=degrees F,
+    -- vol=LITERS (flavor picks fl oz / pints / quarts / gallons at format
+    -- time), mph=mph, acres=acres.
+    tags = { ftin=true, ["in"]=true, mi=true, lboz=true, oz=true,
+             ["°F"]=true, vol=true, mph=true, acres=true,
+             sqft=true, sqmi=true, sqin=true },
+
+    -- The user's preferred system: "metric" (default) | "us" | "uk".
+    preferred = function()
+        local v = G_reader_settings:readSetting("footcream_preferred_system")
+        if v == "us" or v == "uk" then return v end
+        return "metric"
+    end,
+
+    -- Metric-source unit → conversion entry (mirror of _UNIT_CONV). Bare
+    -- one-letter "m"/"g" are identified from matched text but deliberately
+    -- get special anchoring in the scan pattern (digit-adjacent only);
+    -- tonnes are deliberately absent (register-tonnage ambiguity — standing
+    -- decision); °C degree-symbol forms run as literal passes like °F.
+    conv = {
+        ["kilometers"]           = { factor=0.621371,  offset=0,  target="mi",    cat="length" },
+        ["kilometres"]           = { factor=0.621371,  offset=0,  target="mi",    cat="length" },
+        ["kilometer"]            = { factor=0.621371,  offset=0,  target="mi",    cat="length" },
+        ["kilometre"]            = { factor=0.621371,  offset=0,  target="mi",    cat="length" },
+        ["km"]                   = { factor=0.621371,  offset=0,  target="mi",    cat="length" },
+        ["klicks"]               = { factor=0.621371,  offset=0,  target="mi",    cat="length" },
+        ["klick"]                = { factor=0.621371,  offset=0,  target="mi",    cat="length" },
+        ["meters"]               = { factor=3.28084,   offset=0,  target="ftin",  cat="length" },
+        ["metres"]               = { factor=3.28084,   offset=0,  target="ftin",  cat="length" },
+        ["meter"]                = { factor=3.28084,   offset=0,  target="ftin",  cat="length" },
+        ["metre"]                = { factor=3.28084,   offset=0,  target="ftin",  cat="length" },
+        ["m"]                    = { factor=3.28084,   offset=0,  target="ftin",  cat="length" },
+        ["centimeters"]          = { factor=0.393701,  offset=0,  target="in",    cat="length" },
+        ["centimetres"]          = { factor=0.393701,  offset=0,  target="in",    cat="length" },
+        ["centimeter"]           = { factor=0.393701,  offset=0,  target="in",    cat="length" },
+        ["centimetre"]           = { factor=0.393701,  offset=0,  target="in",    cat="length" },
+        ["cm"]                   = { factor=0.393701,  offset=0,  target="in",    cat="length" },
+        ["millimeters"]          = { factor=0.0393701, offset=0,  target="in",    cat="length" },
+        ["millimetres"]          = { factor=0.0393701, offset=0,  target="in",    cat="length" },
+        ["millimeter"]           = { factor=0.0393701, offset=0,  target="in",    cat="length" },
+        ["millimetre"]           = { factor=0.0393701, offset=0,  target="in",    cat="length" },
+        ["mm"]                   = { factor=0.0393701, offset=0,  target="in",    cat="length" },
+        ["kilograms"]            = { factor=2.20462,   offset=0,  target="lboz",  cat="weight" },
+        ["kilogram"]             = { factor=2.20462,   offset=0,  target="lboz",  cat="weight" },
+        ["kilos"]                = { factor=2.20462,   offset=0,  target="lboz",  cat="weight" },
+        ["kilo"]                 = { factor=2.20462,   offset=0,  target="lboz",  cat="weight" },
+        ["kg"]                   = { factor=2.20462,   offset=0,  target="lboz",  cat="weight" },
+        ["grams"]                = { factor=0.0352740, offset=0,  target="oz",    cat="weight" },
+        ["gram"]                 = { factor=0.0352740, offset=0,  target="oz",    cat="weight" },
+        ["g"]                    = { factor=0.0352740, offset=0,  target="oz",    cat="weight" },
+        ["degrees Celsius"]      = { factor=9/5,       offset=32, target="°F",    cat="temperature" },
+        ["degrees centigrade"]   = { factor=9/5,       offset=32, target="°F",    cat="temperature" },
+        ["centigrade"]           = { factor=9/5,       offset=32, target="°F",    cat="temperature" },
+        ["Celsius"]              = { factor=9/5,       offset=32, target="°F",    cat="temperature" },
+        ["liters"]               = { factor=1,         offset=0,  target="vol",   cat="volume" },
+        ["litres"]               = { factor=1,         offset=0,  target="vol",   cat="volume" },
+        ["liter"]                = { factor=1,         offset=0,  target="vol",   cat="volume" },
+        ["litre"]                = { factor=1,         offset=0,  target="vol",   cat="volume" },
+        ["milliliters"]          = { factor=0.001,     offset=0,  target="vol",   cat="volume" },
+        ["millilitres"]          = { factor=0.001,     offset=0,  target="vol",   cat="volume" },
+        ["milliliter"]           = { factor=0.001,     offset=0,  target="vol",   cat="volume" },
+        ["millilitre"]           = { factor=0.001,     offset=0,  target="vol",   cat="volume" },
+        ["ml"]                   = { factor=0.001,     offset=0,  target="vol",   cat="volume" },
+        ["hectares"]             = { factor=2.47105,   offset=0,  target="acres", cat="area" },
+        ["hectare"]              = { factor=2.47105,   offset=0,  target="acres", cat="area" },
+        -- Square metric ("an eleven-square-metre cell" converted as LINEAR
+        -- 36 ft before these — Nesbø sweep). Hyphen twins cover the
+        -- adjectival form; conv keys must mirror the suffix strings exactly.
+        ["square kilometers"]    = { factor=0.386102,  offset=0,  target="sqmi",  cat="area" },
+        ["square kilometres"]    = { factor=0.386102,  offset=0,  target="sqmi",  cat="area" },
+        ["square kilometer"]     = { factor=0.386102,  offset=0,  target="sqmi",  cat="area" },
+        ["square kilometre"]     = { factor=0.386102,  offset=0,  target="sqmi",  cat="area" },
+        ["square-kilometer"]     = { factor=0.386102,  offset=0,  target="sqmi",  cat="area" },
+        ["square-kilometre"]     = { factor=0.386102,  offset=0,  target="sqmi",  cat="area" },
+        ["square meters"]        = { factor=10.7639,   offset=0,  target="sqft",  cat="area" },
+        ["square metres"]        = { factor=10.7639,   offset=0,  target="sqft",  cat="area" },
+        ["square meter"]         = { factor=10.7639,   offset=0,  target="sqft",  cat="area" },
+        ["square metre"]         = { factor=10.7639,   offset=0,  target="sqft",  cat="area" },
+        ["square-meter"]         = { factor=10.7639,   offset=0,  target="sqft",  cat="area" },
+        ["square-metre"]         = { factor=10.7639,   offset=0,  target="sqft",  cat="area" },
+        ["square centimeters"]   = { factor=0.155,     offset=0,  target="sqin",  cat="area" },
+        ["square centimetres"]   = { factor=0.155,     offset=0,  target="sqin",  cat="area" },
+        ["square centimeter"]    = { factor=0.155,     offset=0,  target="sqin",  cat="area" },
+        ["square centimetre"]    = { factor=0.155,     offset=0,  target="sqin",  cat="area" },
+        ["square-centimeter"]    = { factor=0.155,     offset=0,  target="sqin",  cat="area" },
+        ["square-centimetre"]    = { factor=0.155,     offset=0,  target="sqin",  cat="area" },
+        ["kilometers per hour"]  = { factor=0.621371,  offset=0,  target="mph",   cat="speed" },
+        ["kilometres per hour"]  = { factor=0.621371,  offset=0,  target="mph",   cat="speed" },
+        ["kilometers an hour"]   = { factor=0.621371,  offset=0,  target="mph",   cat="speed" },
+        ["kilometres an hour"]   = { factor=0.621371,  offset=0,  target="mph",   cat="speed" },
+        ["km/h"]                 = { factor=0.621371,  offset=0,  target="mph",   cat="speed" },
+        ["kph"]                  = { factor=0.621371,  offset=0,  target="mph",   cat="speed" },
+        ["meters per second"]    = { factor=2.23694,   offset=0,  target="mph",   cat="speed" },
+        ["metres per second"]    = { factor=2.23694,   offset=0,  target="mph",   cat="speed" },
+    },
+
+    -- Longest-first, like _UNIT_SUFFIXES (suffix identification + shy-book
+    -- plain passes; "m"/"g" are identified here but anchored digit-adjacent
+    -- in the pattern, and skipped by the shy plain passes entirely — a plain
+    -- search for a single letter matches every occurrence of the letter).
+    suffixes = {
+        -- Square units FIRST: "…square kilometres" must not tail-match the
+        -- linear "kilometres". Hyphen twins catch "eleven-square-metre".
+        "square kilometers", "square kilometres", "square kilometer",
+        "square kilometre", "square-kilometer", "square-kilometre",
+        "square centimeters", "square centimetres", "square centimeter",
+        "square centimetre", "square-centimeter", "square-centimetre",
+        "square meters", "square metres", "square meter", "square metre",
+        "square-meter", "square-metre",
+        "kilometers per hour", "kilometres per hour",
+        "kilometers an hour", "kilometres an hour",
+        "meters per second", "metres per second",
+        "degrees Celsius", "degrees centigrade", "centigrade", "Celsius",
+        "millimeters", "millimetres", "millimeter", "millimetre",
+        "centimeters", "centimetres", "centimeter", "centimetre",
+        "kilometers", "kilometres", "kilometer", "kilometre",
+        "milliliters", "millilitres", "milliliter", "millilitre",
+        "kilograms", "kilogram", "hectares", "hectare",
+        "klicks", "klick", "liters", "litres", "liter", "litre",
+        "kilos", "kilo", "grams", "gram",
+        -- AFTER kilometers/centimeters/millimeters: "meters" is a tail of all
+        -- three, and _identify_unit takes the first tail match.
+        "meters", "metres", "meter", "metre",
+        "km/h", "kph", "ml", "km", "cm", "mm", "kg", "m", "g",
+    },
+
+    -- Eighth-inch fraction display for small lengths ("⅜ in", "1¼ in").
+    -- Eighths, not quarters: quarter resolution mangled gun calibers ("9mm"
+    -- = 0.354 in showed ¼ instead of ⅜ — Nesbø sweep), and eighths are the
+    -- everyday US carpentry fractions anyway.
+    frac_in = function(iv)
+        local e = math.floor(iv * 8 + 0.5)
+        if e == 0 then e = 1 end
+        local whole, eighth = math.floor(e / 8), e % 8
+        local glyph = ({ [1] = "⅛", [2] = "¼", [3] = "⅜", [4] = "½",
+                         [5] = "⅝", [6] = "¾", [7] = "⅞" })[eighth] or ""
+        if whole == 0 then return glyph .. " in" end
+        return whole .. glyph .. " in"
+    end,
+
+    -- Natural-compound imperial formatting. `v` is in the tag's base unit;
+    -- `flavor` defaults to the live preference (tests pass it explicitly).
+    -- Owns its own rounding (compounds round inherently), which is why
+    -- _smart_round passes tagged values through. With the Smart Rounding
+    -- toggle OFF, falls back to decimal single units ("5.9 ft").
+    fmt = function(v, target, flavor)
+        local IMP = FootFree._IMPERIAL
+        flavor = flavor or IMP.preferred()
+        local uk = flavor == "uk"
+        if not _smart_rounding_enabled() then
+            local plain = { ftin = "ft", ["in"] = "in", mi = "mi", lboz = "lb",
+                            oz = "oz", ["°F"] = "°F", mph = "mph", acres = "acres",
+                            sqft = "sq ft", sqmi = "sq mi", sqin = "sq in" }
+            if target == "vol" then
+                return _fmt(v * (uk and 0.219969 or 0.264172)) .. " gal"
+            end
+            return _fmt(v) .. " " .. plain[target]
+        end
+        local neg = v < 0
+        local a = neg and -v or v
+        local out
+        if target == "in" then
+            if a >= 12 then return IMP.fmt(v / 12, "ftin", flavor) end
+            out = a < 2 and IMP.frac_in(a) or _fmt(a) .. " in"
+        elseif target == "ftin" then
+            if a >= 2000 then return IMP.fmt(v / 5280, "mi", flavor) end
+            if a < 2 then
+                -- Inches, formatted DIRECTLY: routing through the "in" branch
+                -- ping-pongs (its >=12-inch promotion sends 1–2 ft straight
+                -- back here — stack overflow on any 0.3–0.6 m length; found
+                -- by the Nesbø metric sweep).
+                local iv = a * 12
+                out = iv < 2 and IMP.frac_in(iv) or _fmt(iv) .. " in"
+            elseif a < 20 then
+                local ft = math.floor(a)
+                local inch = _round_to_int((a - ft) * 12)
+                if inch >= 12 then ft, inch = ft + 1, 0 end
+                out = inch == 0 and (ft .. " ft") or (ft .. " ft " .. inch .. " in")
+            else
+                out = _fmt(_round_to_int(_nice_round(a, _SMART_ROUND_TOLERANCE))) .. " ft"
+            end
+        elseif target == "mi" then
+            if a < 0.25 then return IMP.fmt(v * 5280, "ftin", flavor) end
+            local r = _nice_round(a, _SMART_ROUND_TOLERANCE)
+            out = (r >= 10 and _fmt(_round_to_int(r)) or _fmt(r)) .. " mi"
+        elseif target == "lboz" then
+            if a < 1 then return IMP.fmt(v * 16, "oz", flavor) end
+            if uk and a >= 66 and a <= 441 then
+                local st = math.floor(a / 14)
+                local lb = _round_to_int(a - st * 14)
+                if lb >= 14 then st, lb = st + 1, 0 end
+                out = lb == 0 and (st .. " st") or (st .. " st " .. lb .. " lb")
+            elseif a < 20 then
+                local lb = math.floor(a)
+                local ozv = _round_to_int((a - lb) * 16)
+                if ozv >= 16 then lb, ozv = lb + 1, 0 end
+                out = ozv == 0 and (lb .. " lb") or (lb .. " lb " .. ozv .. " oz")
+            else
+                out = _fmt(_round_to_int(a)) .. " lb"
+            end
+        elseif target == "oz" then
+            if a >= 16 then return IMP.fmt(v / 16, "lboz", flavor) end
+            -- Sub-tenth values need two decimals — _fmt's single decimal
+            -- printed "one gram = 0 oz" (Nesbø sweep). Never show 0 for a
+            -- real amount.
+            if a < 0.095 then
+                local s = string.format("%.2f", a)
+                if s == "0.00" then s = "0.01" end
+                out = s .. " oz"
+            else
+                out = _fmt(a) .. " oz"
+            end
+        elseif target == "°F" then
+            out = _fmt(_round_to_int(a)) .. " °F"
+        elseif target == "vol" then
+            -- fl oz below one pint (UK) / one quart (US) — "17 fl oz" reads
+            -- better than "0.5 qt". Whole fl oz from 2 up; decimals only for
+            -- tiny amounts ("0.5 fl oz" for 15 ml).
+            if uk then
+                if a < 0.569 then
+                    local floz = a * 35.1951
+                    out = _fmt(floz < 2 and floz or _round_to_int(floz)) .. " fl oz"
+                elseif a < 3.5 then
+                    local p = _fmt(a * 1.75975)
+                    out = p .. (p == "1" and " pint" or " pints")
+                else out = _fmt(a * 0.219969) .. " gal" end
+            else
+                if a < 0.947 then
+                    local floz = a * 33.814
+                    out = _fmt(floz < 2 and floz or _round_to_int(floz)) .. " fl oz"
+                elseif a < 4 then out = _fmt(a * 1.05669) .. " qt"
+                else out = _fmt(a * 0.264172) .. " gal" end
+            end
+        elseif target == "mph" then
+            out = _fmt(_round_to_int(a)) .. " mph"
+        elseif target == "acres" then
+            out = (a >= 10 and _fmt(_round_to_int(_nice_round(a, _HARSH_TOLERANCE)))
+                            or _fmt(a)) .. " acres"
+        elseif target == "sqft" then
+            out = (a >= 10 and _fmt(_round_to_int(_nice_round(a, _HARSH_TOLERANCE)))
+                            or _fmt(a)) .. " sq ft"
+        elseif target == "sqmi" then
+            local r = _nice_round(a, _SMART_ROUND_TOLERANCE)
+            out = (r >= 10 and _fmt(_round_to_int(r)) or _fmt(r)) .. " sq mi"
+        elseif target == "sqin" then
+            out = _fmt(a) .. " sq in"
+        else
+            out = _fmt(a) .. " " .. tostring(target)
+        end
+        return (neg and _UMINUS or "") .. out
+    end,
+
+    -- Range twin: format both endpoints; when both come out as simple
+    -- "<number> <same unit>" strings, drop the first unit ("3.1–6.2 mi").
+    -- Compound endpoints stay whole ("5 ft 11 in to 6 ft 2 in").
+    fmt_range = function(r1, r2, target, conn)
+        local IMP = FootFree._IMPERIAL
+        local a, b = IMP.fmt(r1, target), IMP.fmt(r2, target)
+        local u1 = a:match("^[%d.,]+ ([%a °]+)$")
+        local u2 = b:match("^[%d.,]+ ([%a °]+)$")
+        if u1 and u1 == u2 then a = a:match("^([%d.,]+)") end
+        return a .. (conn or _ENDASH) .. b
+    end,
+}
 
 -- ── Compound converters ───────────────────────────────────────────────────────
 
@@ -1112,16 +1404,31 @@ FootFree._REPORTING = {
 -- Cancel/OK button row. Tap outside dismisses, like ConfirmBox. A class
 -- attribute rather than a chunk local — the main chunk sits near LuaJIT's
 -- 200-locals ceiling.
-function FootFree._confirm(text, ok_text, ok_callback, cancel_text)
+-- cancel_callback (optional) runs when the user declines — via the Cancel
+-- button OR by dismissing the dialog with a tap outside. Used by the convert
+-- question to undo a picker-originated mode change.
+function FootFree._confirm(text, ok_text, ok_callback, cancel_text, cancel_callback)
+    -- Headless test driver: accept every confirmation without showing the
+    -- dialog. Set only by the VM verification runs (like KO_MULTIUSER, the
+    -- variable never exists on a device).
+    if os.getenv("FOOTCREAM_AUTOCONFIRM") == "1" then
+        logger.info("FootFree: auto-confirmed — " .. (ok_text or "?"))
+        ok_callback()
+        return
+    end
     local ButtonDialog = require("ui/widget/buttondialog")
     local dialog
     dialog = ButtonDialog:new{
         title       = text,
         title_align = "left",
+        tap_close_callback = cancel_callback,
         buttons = {{
             {
                 text = cancel_text or "Cancel",
-                callback = function() UIManager:close(dialog) end,
+                callback = function()
+                    UIManager:close(dialog)
+                    if cancel_callback then cancel_callback() end
+                end,
             },
             {
                 text = ok_text,
@@ -1346,15 +1653,20 @@ end
 -- book's _all_matches holds only the rewrite's leftovers, but the menu status
 -- line must keep reporting the full unit count in every mode (user-specified),
 -- so the pre-conversion count is stamped here alongside the version.
--- `mode` (optional) is the tap mode the conversion was applied in (2 = metric
--- appended alongside the original, 3 = replaced) so open/mode-switch flows
--- know whether the on-disk text matches the active mode.
-local function _write_metric_version(doc_path, total, mode)
+-- `mode` (optional) is the tap mode the conversion was applied in (2 = the
+-- conversion appended alongside the original, 3 = replaced) so open/mode-
+-- switch flows know whether the on-disk text matches the active mode.
+-- `direction` is the preferred-units setting the conversion was made under
+-- ("metric"/"us"/"uk") — a converted book must revert when the preference
+-- changes, since the baked-in text is for the other system (us vs uk also
+-- differ: stones, imperial pints).
+local function _write_metric_version(doc_path, total, mode, direction)
     local f = io.open(_metric_ver_path(doc_path), "w")
     if f then
         f:write(tostring(CACHE_VERSION)
             .. (total and (" " .. tostring(total)) or "")
-            .. (total and mode and (" " .. tostring(mode)) or ""))
+            .. (total and mode and (" " .. tostring(mode)) or "")
+            .. (total and mode and direction and (" " .. direction) or ""))
         f:close()
     end
 end
@@ -1363,16 +1675,19 @@ end
 -- older conversion predating this record — treated as stale so it updates
 -- once). Second return: the conversion-time hint count; third: the tap mode
 -- it was applied in (nil for conversions predating the stamp — those were
--- mode 3, the only convert mode at the time).
+-- mode 3, the only convert mode at the time); fourth: the conversion's
+-- direction (nil for stamps predating it — those were always "metric", the
+-- only in-text direction at the time).
 local function _read_metric_version(doc_path)
     local f = io.open(_metric_ver_path(doc_path))
     if not f then return nil end
     local s = f:read("*a") or ""
     f:close()
-    local v, applied, amode = s:match("(%d+)%s+(%d+)%s+(%d+)")
+    local v, applied, amode, adir = s:match("(%d+)%s+(%d+)%s+(%d+)%s+(%a+)")
+    if not v then v, applied, amode = s:match("(%d+)%s+(%d+)%s+(%d+)") end
     if not v then v, applied = s:match("(%d+)%s+(%d+)") end
     if not v then v = s:match("%d+") end
-    return tonumber(v), tonumber(applied), tonumber(amode)
+    return tonumber(v), tonumber(applied), tonumber(amode), adir
 end
 
 -- Escape ERE metacharacters so a converted string (e.g. "1.8 m") can be used
@@ -1703,6 +2018,51 @@ function _UnderlinePreview:paintTo(bb, x, y)
         self.style, self.color, self.line_width, self.raw_width, self.color_pct)
 end
 
+-- Radio marker, drawn (not a font glyph) so the fills and dark-mode behaviour
+-- are exact. Selected: a big filled-black disc with a smaller solid-white disc
+-- inside. Unselected: a thin black ring (empty). Drawn black-on-white always;
+-- KOReader's global night-mode inversion flips it to white-on-black for free.
+-- A class attribute (not a chunk local — the 200-locals ceiling), shared by
+-- the Styling dialog and the Mode picker. Edges are anti-aliased by per-pixel
+-- coverage (paintCircle is hard-edged and looked jagged at this size):
+-- coverage ≈ how far the pixel is inside the relevant radius, blended over
+-- the white background as a grey value.
+FootFree._RadioDot = Widget:extend{ size = 0, selected = false }
+function FootFree._RadioDot:getSize() return Geom:new{ w = self.size, h = self.size } end
+function FootFree._RadioDot:paintTo(bb, x, y)
+    local sz   = self.size
+    local ro   = sz / 2                              -- outer radius
+    local cx   = x + ro - 0.5                         -- centre on the pixel grid
+    local cy   = y + ro - 0.5
+    local ri   = self.selected and (ro * 0.5) or nil  -- inner white radius
+    local rh   = ro - math.max(1.3, ro * 0.26)        -- ring inner edge (unselected)
+    local function cover(d, edge) -- 1 inside, 0 outside, linear across the edge
+        local c = edge + 0.5 - d
+        if c < 0 then return 0 elseif c > 1 then return 1 else return c end
+    end
+    for py = 0, sz - 1 do
+        for px = 0, sz - 1 do
+            local dx, dy = (x + px) - cx, (y + py) - cy
+            local d = math.sqrt(dx * dx + dy * dy)
+            local v   -- final grey 0..255; nil = leave background untouched
+            if self.selected then
+                local co = cover(d, ro)               -- black-disc coverage
+                if co > 0 then
+                    local cin = cover(d, ri)          -- white-inner coverage
+                    v = 255 * (1 - co)                -- white bg → black disc
+                    v = v * (1 - cin) + 255 * cin     -- white inner over the disc
+                end
+            else
+                local c = cover(d, ro) - cover(d, rh) -- ring = outer minus hole
+                if c > 0 then v = 255 * (1 - c) end
+            end
+            if v then
+                bb:paintRect(x + px, y + py, 1, 1, Blitbuffer.Color8(math.floor(v + 0.5)))
+            end
+        end
+    end
+end
+
 local function _sidecar_path(doc_path)
     local key = doc_path:gsub("[/\\]", "_"):gsub("[^%w%-%._]", "_")
     if #key > 180 then key = key:sub(-180) end
@@ -1732,6 +2092,13 @@ local function _save_sidecar(doc_path, matches)
     -- imperial book, at converted-text positions). Mark it so the revert
     -- knows to delete rather than revalidate.
     if _is_metric_mode(doc_path) then fh:write("  metric_scan = true,\n") end
+    -- Scan direction: an imperial-preference scan found METRIC units; its
+    -- matches are meaningless under another preference (absent = "metric",
+    -- the classic direction — backward compatible).
+    local dir_now = FootFree._IMPERIAL.preferred()
+    if dir_now ~= "metric" then
+        fh:write("  direction = \"" .. dir_now .. "\",\n")
+    end
     fh:write("  matches = {\n")
     for _, r in ipairs(matches) do
         -- Core fields always written
@@ -1765,6 +2132,15 @@ local function _load_sidecar_raw(doc_path)
     local sidecar = _sidecar_path(doc_path)
     local ok, data = pcall(dofile, sidecar)
     if not ok or type(data) ~= "table" or data.version ~= CACHE_VERSION then return nil end
+    -- Direction mismatch (preference flipped since the scan): the matches are
+    -- for the other system entirely — rescan. Keep the file on a CONVERTED
+    -- book (it's the preserved pre-conversion scan; the revert path needs it,
+    -- and the post-revert load lands here again and deletes it then).
+    if (data.direction or "metric") ~= FootFree._IMPERIAL.preferred() then
+        logger.info("FootFree: sidecar is for the other unit direction — rescan needed")
+        if not _is_metric_mode(doc_path) then os.remove(sidecar) end
+        return nil
+    end
     -- Discard the sidecar if the epub has been modified since it was saved —
     -- its xpointers would point into text that no longer exists. The sidecar
     -- records the epub mtime it was scanned against; staleness is INEQUALITY
@@ -2059,9 +2435,13 @@ local _UNIT_SUFFIXES = {
     "mph", "kn", "ft", "mi", "oz", "pt", "qt", "°F",
 }
 
-local function _identify_unit(text)
+local function _identify_unit(text, list)
     local s = text:lower()
-    for _, u in ipairs(_UNIT_SUFFIXES) do
+    -- Active direction picks the suffix set: imperial preference scans
+    -- METRIC units (tests pass `list` explicitly).
+    list = list or (FootFree._IMPERIAL.preferred() ~= "metric"
+                    and FootFree._IMPERIAL.suffixes or _UNIT_SUFFIXES)
+    for _, u in ipairs(list) do
         if s:sub(-#u) == u:lower() then return u end
     end
 end
@@ -2085,7 +2465,9 @@ end
 -- Range converter: identifies unit from matched_text tail, splits on and/or/to.
 local function _range_conv_unit(text)
     local unit = _identify_unit(text)
-    local info = unit and _UNIT_CONV[unit]
+    local conv_tbl = FootFree._IMPERIAL.preferred() ~= "metric"
+        and FootFree._IMPERIAL.conv or _UNIT_CONV
+    local info = unit and conv_tbl[unit]
     if not info or not info.factor then return nil end
     local s = _display(text):lower()
     -- En/em dashes and a comma+space are range separators too ("five–six miles",
@@ -2154,7 +2536,8 @@ local function _conv_hundred_and(text)
     local remainder = _parse_num(rem_part)
     if not remainder then return nil end
     local total = hundreds * 100 + remainder
-    local info = _UNIT_CONV[unit_word]
+    local info = (FootFree._IMPERIAL.preferred() ~= "metric"
+                  and FootFree._IMPERIAL.conv or _UNIT_CONV)[unit_word]
     if not info or not info.factor then return nil end
     local result = total * info.factor + (info.offset or 0)
     return _fmt_dist(_smart_round(result, total, false, info.target), info.target)
@@ -2185,6 +2568,41 @@ do
     -- unit, so the number path reads "…of 260" from prev_text unchanged.
     _FAST_UNIT_PAT = "(?:\\b|(?<=[0-9]))(" .. table.concat(alts, "|") .. ")\\b"
 end
+
+-- Metric-direction twin of _FAST_UNIT_PAT — exactly its shape, minus the
+-- one-letter aliases. "m"/"g" can't ride in this alternation at all:
+--   * a plain \b anchor lets "I'm" hit "m" via the apostrophe boundary,
+--     blowing the 2000-hit budget on every novel;
+--   * a branch-leading lookbehind ((?<=[0-9])[ ]?m) makes crengine return a
+--     CORRUPT START for its first match (smoketest6 caught a "match" running
+--     from a chapter heading to the first "1.8m");
+--   * a branch-leading digit class ([0-9][0-9.,]*[ ]?m) comes back with the
+--     start off by a character ("1.8m" reported as "8m", "500g" as "00g"),
+--     which the glued-number fallback then "fixes" into a truncated value
+--     (1.8 m read as 1 m, 500 g as 5 g).
+-- They run as dedicated literal passes instead (unit_pats below) — the
+-- standalone digit-leading shape is the proven _TEMP_PATS one.
+do
+    local alts = {}
+    for _, u in ipairs(FootFree._IMPERIAL.suffixes) do
+        if u ~= "m" and u ~= "g" then alts[#alts + 1] = u end
+    end
+    FootFree._IMPERIAL.pat = "(?:\\b|(?<=[0-9]))(" .. table.concat(alts, "|") .. ")\\b"
+end
+
+-- Single-letter metric aliases as literal passes (see above). The number is
+-- part of the match, so the value comes from _parse_num(matched_text) like
+-- the °F/°C passes. "m" takes an optional space ("1.8 m", "180m"); "g" only
+-- glued tight ("500g" — a spaced "5 g" is usually g-force, deliberately not
+-- matched). money=true arms the run_passes currency veto ("$50 m" = fifty
+-- million dollars; the symbol can share the word with the digits, so the
+-- veto raw-reads the characters just before the hit).
+FootFree._IMPERIAL.unit_pats = {
+    { pat = "\\b[0-9][0-9.,]*[ ]?m\\b", cat = "length",
+      factor = 3.28084, offset = 0, target = "ftin", money = true },
+    { pat = "\\b[0-9][0-9.,]*g\\b", cat = "weight",
+      factor = 0.0352740, offset = 0, target = "oz", money = true },
+}
 
 -- Is this token part of a number phrase? (digit, number-word, or connector word
 -- like "a"/"and" that glue multi-word numbers such as "a hundred and fifty").
@@ -2878,6 +3296,18 @@ local _TEMP_PATS = {
       factor = 5/9, offset = -32*5/9, target = "°C", cat = "temperature" },
 }
 
+-- Metric-direction twin: °C literal passes (imperial preference only). Same
+-- degree-symbol anchoring problem as °F; same longest-first structure.
+FootFree._IMPERIAL.degc = "\194\176C"   -- °C
+FootFree._IMPERIAL.temp_pats = {
+    { pat = _TNUM .. "[ ]*" .. "\194\176C" .. "[ ]+(to|and|or)[ ]+" .. _TNUM .. "[ ]*" .. "\194\176C",
+      converter = _range_conv(9/5, 32, "°F"), target = "°F", cat = "temperature" },
+    { pat = _TNUM .. "[ ]+(to|and|or)[ ]+" .. _TNUM .. "[ ]*" .. "\194\176C",
+      converter = _range_conv(9/5, 32, "°F"), target = "°F", cat = "temperature" },
+    { pat = _TNUM .. "[ ]*" .. "\194\176C",
+      factor = 9/5, offset = 32, target = "°F", cat = "temperature" },
+}
+
 -- Does prev_text end with "<unit> [,/and] <number>"? Confirms a compound tail
 -- even with a comma or "and" connector ("two pounds, four ounces",
 -- "5 feet and 3 inches"), not just a plain space.
@@ -2978,6 +3408,12 @@ local function _fast_scan_matches(doc, cat_enabled)
     -- 15 is the sweet spot — recovers ~10 out-of-window currency cases with no
     -- genuine-weight loss; wider starts crossing sentence boundaries.)
     local _t0 = _now()
+    -- Active direction: imperial preference scans METRIC units (metric →
+    -- imperial); the default scans imperial as always. Read once per scan —
+    -- the subprocess inherits the parent's settings snapshot.
+    local dir_imperial = FootFree._IMPERIAL.preferred() ~= "metric"
+    local ACTIVE_CONV = dir_imperial and FootFree._IMPERIAL.conv or _UNIT_CONV
+    local ACTIVE_SUFS = dir_imperial and FootFree._IMPERIAL.suffixes or _UNIT_SUFFIXES
     -- Soft-hyphen books break the REGEX findAllText path: hits near U+00AD
     -- words come back span-shifted or go missing entirely (probe-confirmed on
     -- The Rise and Fall of the Dinosaurs: "Indianapolis is 1,700 miles"
@@ -3006,8 +3442,11 @@ local function _fast_scan_matches(doc, cat_enabled)
         hits = {}
         local claimed = {}   -- start xpointer -> true (longest alias wins)
         local aliases = {}
-        for _, u in ipairs(_UNIT_SUFFIXES) do
-            if u ~= "°F" then aliases[#aliases + 1] = u end
+        for _, u in ipairs(ACTIVE_SUFS) do
+            -- One-letter metric aliases are excluded from the shy plain
+            -- passes: a PLAIN search for "m"/"g" matches every occurrence of
+            -- the letter (known limitation for soft-hyphen books).
+            if u ~= "°F" and u ~= "m" and u ~= "g" then aliases[#aliases + 1] = u end
         end
         table.sort(aliases, function(a, b) return #a > #b end)
         -- True \b on BOTH sides, by reading the adjacent character in the
@@ -3054,7 +3493,9 @@ local function _fast_scan_matches(doc, cat_enabled)
         ok = true
     else
         ok, hits = pcall(function()
-            return doc:findAllText(_FAST_UNIT_PAT, true, 15, 20000, true)
+            return doc:findAllText(dir_imperial and FootFree._IMPERIAL.pat
+                                                 or _FAST_UNIT_PAT,
+                                   true, 15, 20000, true)
         end)
     end
     if not ok or not hits then return {} end
@@ -3256,8 +3697,19 @@ local function _fast_scan_matches(doc, cat_enabled)
     local out, seen_end = {}, {}
     for i, h in ipairs(hits) do
         if i % _prog_every == 0 then _report(i / _prog_total) end
-        local unit = _identify_unit(h.matched_text)
-        local conv = unit and _UNIT_CONV[unit]
+        local unit = _identify_unit(h.matched_text, ACTIVE_SUFS)
+        local conv = unit and ACTIVE_CONV[unit]
+        -- Metric-direction money guard: "$50 m" / "£3m" / "€2 m" is a money
+        -- abbreviation (millions), not meters/grams — the currency symbol
+        -- glued to the number gives it away. The number is usually INSIDE
+        -- matched_text (the m/g pattern branches include it), leaving
+        -- prev_text ending on the bare symbol — hence the optional digits.
+        if conv and dir_imperial and (unit == "m" or unit == "g")
+           and ((h.prev_text or ""):match("%$%s*[%d.,]*%s*$")
+                or (h.prev_text or ""):match("£%s*[%d.,]*%s*$")
+                or (h.prev_text or ""):match("€%s*[%d.,]*%s*$")) then
+            conv = nil
+        end
         if conv and cat_enabled[conv.cat] ~= false and not seen_end[h["end"]]
            and not (h.start or ""):find("/h[1-6][%[/]")  -- skip heading/title text
            -- A fraction DENOMINATOR right before the unit is not the measurement
@@ -3397,15 +3849,17 @@ local function _fast_scan_matches(doc, cat_enabled)
             if merged then seen_end[h["end"]] = true end
 
             if not range_done and not merged then
-                local num, span = _prev_num_words(h.prev_text)
-                -- Fused digit+unit ("260lbs"): the digits share the hit's own
-                -- WORD, so crengine's word-based prev_text ends before them
-                -- ("…must weigh upwards of "). Read the raw characters just
-                -- before the hit and take a glued trailing number. The span is
-                -- extended by exact offset (validated by re-reading the text),
-                -- not by word-walking.
-                local glued_start
-                if not num then
+                -- Fused digit+unit ("260lbs", "9mm"): the digits share the
+                -- hit's own WORD, so crengine's word-based prev_text ends
+                -- before them ("…must weigh upwards of "). Read the raw
+                -- characters just before the hit and take a glued trailing
+                -- number. Probed FIRST — a glued digit IS the measurement,
+                -- and a spelled number further back is a count: "It takes
+                -- two 9mm…" used to read as 2 mm (Nesbø sweep). The span is
+                -- extended by exact offset (validated by re-reading the
+                -- text), not by word-walking.
+                local num, span, glued_start
+                do
                     local pfx, off = _xpointer_offset(h.start)
                     if pfx ~= h.start and off and off > 0 then
                         local pre_xp = pfx .. tostring(math.max(0, off - 12))
@@ -3425,6 +3879,9 @@ local function _fast_scan_matches(doc, cat_enabled)
                         end
                     end
                 end
+                if not num then
+                    num, span = _prev_num_words(h.prev_text)
+                end
                 -- Bare-article "a million miles" is hyperbole, not measurement
                 -- ("walked a million miles to get a coffee", "a million miles
                 -- an hour/away") — user-approved suppression, 2026-07-06 sweep:
@@ -3442,7 +3899,10 @@ local function _fast_scan_matches(doc, cat_enabled)
                     num = nil
                 end
                 local vlo, vhi, vword, vmult = _detect_vague(h.prev_text)
-                if num and vlo and vmult == num and conv.factor then
+                -- Vague bands are metric-direction-deferred ("a few hundred
+                -- meters" → band) — stage 2 of the imperial direction.
+                if num and vlo and vmult == num and conv.factor
+                   and not dir_imperial then
                     -- Vague quantified amount ("a few hundred pounds") → convert
                     -- as a metric BAND ("≈ 90–230 kg") rather than a false-precise
                     -- point. Always rounded (vagueness demands it, regardless of
@@ -3551,7 +4011,8 @@ local function _fast_scan_matches(doc, cat_enabled)
                         or (_fmt(num) .. " " .. h.matched_text)
                     -- "10x10 feet" → "3 × 3 m": NxN dimension, both values
                     -- converted (vs the single-value path that ignored the x10).
-                    if not rec._converted and conv.factor and conv.target then
+                    if not rec._converted and conv.factor and conv.target
+                       and not FootFree._IMPERIAL.tags[conv.target] then
                         local nxn = _conv_nxn(rec.matched_text, conv.factor, conv.target)
                         if nxn then
                             rec._converted = _display(rec.matched_text) .. " = " .. nxn
@@ -3869,6 +4330,31 @@ local function _fast_scan_matches(doc, cat_enabled)
                         end)() then
                             seen_start[r.start] = true
                             seen_end[r["end"]] = true
+                        -- Currency veto ("$50 m" = fifty million dollars, not
+                        -- fifty meters). The symbol often shares the hit's own
+                        -- WORD with the digits, hiding it from the word-based
+                        -- prev_text — so also read the raw characters just
+                        -- before the hit (same trick as the glued-number
+                        -- fallback in the main loop).
+                        elseif e.money and (function()
+                            local pv = r.prev_text or ""
+                            if pv:match("%$%s*$") or pv:match("£%s*$")
+                               or pv:match("€%s*$") then return true end
+                            local pfx, off = _xpointer_offset(r.start)
+                            if pfx ~= r.start and off and off > 0 then
+                                local okr, pre = pcall(function()
+                                    return doc:getTextFromXPointers(
+                                        pfx .. tostring(math.max(0, off - 4)), r.start)
+                                end)
+                                if okr and pre and (pre:match("%$%s*$")
+                                   or pre:match("£%s*$") or pre:match("€%s*$")) then
+                                    return true
+                                end
+                            end
+                            return false
+                        end)() then
+                            seen_start[r.start] = true
+                            seen_end[r["end"]] = true
                         elseif not seen_start[r.start] then
                             seen_start[r.start] = true
                             seen_end[r["end"]] = true
@@ -3884,11 +4370,27 @@ local function _fast_scan_matches(doc, cat_enabled)
         end
     end
 
-    if maybe_primes then run_passes(_PRIME_PATS) end
+    -- Literal passes are direction-specific: primes and °F are imperial
+    -- SOURCE notations; °C is the metric-direction twin.
+    if dir_imperial then
+        local has_degc = (cat_enabled["temperature"] ~= false)
+            and ((not ok_t) or (not bt)
+                 or bt:find(FootFree._IMPERIAL.degc, 1, true) ~= nil)
+        if has_degc then run_passes(FootFree._IMPERIAL.temp_pats) end
+        -- Single-letter aliases ("1.8m", "500g") — see unit_pats for why
+        -- these can't ride in the main alternation.
+        local upats = {}
+        for _, e in ipairs(FootFree._IMPERIAL.unit_pats) do
+            if cat_enabled[e.cat] ~= false then upats[#upats + 1] = e end
+        end
+        if #upats > 0 then run_passes(upats) end
+    else
+        if maybe_primes then run_passes(_PRIME_PATS) end
 
-    local has_degf = (cat_enabled["temperature"] ~= false)
-        and ((not ok_t) or (not bt) or bt:find(_DEGF, 1, true) ~= nil)
-    if has_degf then run_passes(_TEMP_PATS) end
+        local has_degf = (cat_enabled["temperature"] ~= false)
+            and ((not ok_t) or (not bt) or bt:find(_DEGF, 1, true) ~= nil)
+        if has_degf then run_passes(_TEMP_PATS) end
+    end
 
     -- Drop overlapping spans. The main loop only deduped by END xpointer
     -- (seen_end), so a compound height that didn't merge — e.g. a "foot" hit
@@ -3915,14 +4417,15 @@ function FootFree:init()
     self._debug_report      = self._dev_mode
     self._scanned           = false  -- set true once a scan/sidecar-load completes (6.1)
     self._tap_mode          = G_reader_settings:readSetting("footcream_tap_mode") or 1
-    -- _enabled is the user's own on/off preference, persisted so it survives
-    -- restarts. It is independent of the conversion mode: switching modes (or
-    -- reverting/removing a book's data) must never silently flip it. The
-    -- mode-1 highlight loop is separately guarded against drawing on
-    -- already-converted (mode 3) text in _drawHighlights, so _enabled no
-    -- longer needs to be force-cleared in mode 3.
-    local saved_enabled = G_reader_settings:readSetting("footcream_enabled")
-    self._enabled = (saved_enabled ~= false)
+    -- _enabled is PER-BOOK ("Enable Footcream in this book"): loaded from the
+    -- book's doc_settings in onReaderReady, default true. It is independent
+    -- of the conversion mode: switching modes (or reverting/removing a
+    -- book's data) must never silently flip it. The old GLOBAL
+    -- footcream_enabled setting is retired (it meant "global" in mode 1 but
+    -- "this book" in modes 2/3 — user-flagged as confusing 2026-07-14);
+    -- clean up the stale key so nothing resurrects it.
+    self._enabled = true
+    G_reader_settings:delSetting("footcream_enabled")
     -- Distinguish pounds (weight vs £) and UK volumes are always on — their
     -- menu toggles were removed to slim the plugin down.
     self._distinguish_pounds= true
@@ -3961,6 +4464,14 @@ end
 -- ── Scan ─────────────────────────────────────────────────────────────────────
 
 function FootFree:onReaderReady()
+    -- A mode change from the picker can convert/revert the book, which
+    -- reloads the document and replaces this plugin instance — close any
+    -- picker left open by the previous instance (its rows point at dead
+    -- state). Class attribute for exactly that reason.
+    if FootFree._mode_overlay then
+        UIManager:close(FootFree._mode_overlay)
+        FootFree._mode_overlay = nil
+    end
     local doc = self.ui.document
     if not doc or not doc.file then return end
 
@@ -4078,6 +4589,26 @@ function FootFree:onReaderReady()
         UIManager:scheduleIn(0.2, function() self:_revertMetricEdition(doc) end)
         return
     end
+
+    -- Per-book opt-out ("Enable Footcream in this book" unchecked, stored in
+    -- the book's own metadata): no scanning, loading, prompting or drawing
+    -- for this book. Placed after the recovery blocks above (safety-critical
+    -- regardless) — and a disabled book that is somehow still converted
+    -- (e.g. a dismissed revert) gets its original text back first.
+    self._enabled = self.ui.doc_settings:readSetting("footcream_disabled") ~= true
+    if not self._enabled then
+        if _is_metric_mode(doc.file) then
+            logger.info("FootFree: disabled in this book but converted — reverting")
+            UIManager:scheduleIn(0.2, function() self:_revertMetricEdition(doc) end)
+            return
+        end
+        logger.info("FootFree: disabled in this book — skipping")
+        self._all_matches   = nil
+        self._current_boxes = {}
+        self._scanned       = false
+        return
+    end
+
     -- Book is converted, but in a different mode than the active one — an
     -- inconsistent leftover (e.g. mode changed while a different book was
     -- open). Mode 1 must not draw imperial-position highlights over converted
@@ -4086,11 +4617,25 @@ function FootFree:onReaderReady()
     -- convert mode (2⇄3 switch), queue the re-apply in the new style: the
     -- _pending_rescan flow reverts → rescans → applies with the current mode.
     if _is_metric_mode(doc.file) then
-        local _, _, amode = _read_metric_version(doc.file)
-        amode = amode or 3   -- pre-stamp conversions were always mode 3
+        local _, _, amode, adir = _read_metric_version(doc.file)
+        amode = amode or 3        -- pre-stamp conversions were always mode 3
+        adir  = adir or "metric"  -- pre-stamp conversions were always metric
         if self._tap_mode ~= amode then
             logger.info("FootFree: converted book opened in a different mode — reverting for consistency")
             if self._tap_mode >= 2 then FootFree._pending_reapply = doc.file end
+            UIManager:scheduleIn(0.2, function() self:_revertMetricEdition(doc) end)
+            return
+        end
+        -- Same for the direction: the baked-in text is for another preferred
+        -- system (us vs uk count too — stones, imperial pints). Revert, then
+        -- re-apply in the active direction: the preserved sidecar fails the
+        -- direction check on reload, so the reapply leg falls back to a
+        -- fresh scan before converting.
+        if FootFree._IMPERIAL.preferred() ~= adir then
+            logger.info("FootFree: converted book's direction is " .. adir
+                        .. ", preference is " .. FootFree._IMPERIAL.preferred()
+                        .. " — reverting to reconvert")
+            FootFree._pending_reapply = doc.file
             UIManager:scheduleIn(0.2, function() self:_revertMetricEdition(doc) end)
             return
         end
@@ -4171,10 +4716,8 @@ function FootFree:onReaderReady()
                 UIManager:scheduleIn(0.2, refresh)
             else
                 self._confirm(
-                    "Footcream's converter has improved since this book was "
-                        .. "converted to metric.\n\nUpdate the in-text conversions "
-                        .. "now? This restores the original text, rescans it, then "
-                        .. "re-applies the conversion with the new logic.",
+                    "Footcream's converter has improved — update this book's "
+                        .. "in-text conversions?",
                     "Update now", refresh, "Not now")
             end
             return
@@ -4602,50 +5145,9 @@ local function _show_styling_dialog(plugin)
         fill_color   = Blitbuffer.COLOR_WHITE,
     }
 
-    -- Radio marker, drawn (not a font glyph) so the fills and dark-mode
-    -- behaviour are exact. Selected: a big filled-black disc with a smaller
-    -- solid-white disc inside. Unselected: a thin black ring (empty). Drawn
-    -- black-on-white always; KOReader's global night-mode inversion flips it to
-    -- white-on-black for free. Defined here (function scope) rather than as a
-    -- top-level local — the main chunk is at Lua's 200-locals ceiling.
-    -- Edges are anti-aliased by per-pixel coverage (paintCircle is hard-edged
-    -- and looked jagged at this size): coverage ≈ how far the pixel is inside
-    -- the relevant radius, blended over the white background as a grey value.
-    local _RadioDot = Widget:extend{ size = 0, selected = false }
-    function _RadioDot:getSize() return Geom:new{ w = self.size, h = self.size } end
-    function _RadioDot:paintTo(bb, x, y)
-        local sz   = self.size
-        local ro   = sz / 2                              -- outer radius
-        local cx   = x + ro - 0.5                         -- centre on the pixel grid
-        local cy   = y + ro - 0.5
-        local ri   = self.selected and (ro * 0.5) or nil  -- inner white radius
-        local rh   = ro - math.max(1.3, ro * 0.26)        -- ring inner edge (unselected)
-        local function cover(d, edge) -- 1 inside, 0 outside, linear across the edge
-            local c = edge + 0.5 - d
-            if c < 0 then return 0 elseif c > 1 then return 1 else return c end
-        end
-        for py = 0, sz - 1 do
-            for px = 0, sz - 1 do
-                local dx, dy = (x + px) - cx, (y + py) - cy
-                local d = math.sqrt(dx * dx + dy * dy)
-                local v   -- final grey 0..255; nil = leave background untouched
-                if self.selected then
-                    local co = cover(d, ro)               -- black-disc coverage
-                    if co > 0 then
-                        local cin = cover(d, ri)          -- white-inner coverage
-                        v = 255 * (1 - co)                -- white bg → black disc
-                        v = v * (1 - cin) + 255 * cin     -- white inner over the disc
-                    end
-                else
-                    local c = cover(d, ro) - cover(d, rh) -- ring = outer minus hole
-                    if c > 0 then v = 255 * (1 - c) end
-                end
-                if v then
-                    bb:paintRect(x + px, y + py, 1, 1, Blitbuffer.Color8(math.floor(v + 0.5)))
-                end
-            end
-        end
-    end
+    -- Shared drawn radio marker (see the class-level definition by
+    -- _UnderlinePreview — also used by the Mode picker dialog).
+    local _RadioDot = FootFree._RadioDot
 
     -- One option = the radio dot + its label, both wrapped in a single tappable
     -- container so a tap anywhere on the item (dot OR label) selects it. The dot
@@ -4870,6 +5372,284 @@ local function _show_styling_dialog(plugin)
     UIManager:show(overlay, "ui")
 end
 
+-- Visual mode picker: one worked sentence rendered the three ways — a live
+-- underline in the user's styling, the parenthetical gloss, and the in-place
+-- replacement — each row tappable. Shown OVER the open Footcream menu (the
+-- caller doesn't close it, and the Mode item sets keep_menu_open): closing
+-- the picker drops the user back into the menu instead of onto the bare
+-- page. Direction-aware: under an imperial preference the sample flips to a
+-- metric original with imperial output. touchmenu_instance (optional) is the
+-- TouchMenu the Mode item lives in — used to refresh its labels after a mode
+-- change while it stays open behind the picker.
+function FootFree:_showModeDialog(touchmenu_instance)
+    local InputContainer   = require("ui/widget/container/inputcontainer")
+    local FrameContainer   = require("ui/widget/container/framecontainer")
+    local CenterContainer  = require("ui/widget/container/centercontainer")
+    local HorizontalGroup  = require("ui/widget/horizontalgroup")
+    local VerticalGroup    = require("ui/widget/verticalgroup")
+    local VerticalSpan     = require("ui/widget/verticalspan")
+    local OverlapGroup     = require("ui/widget/overlapgroup")
+    local MovableContainer = require("ui/widget/container/movablecontainer")
+    local TextWidget       = require("ui/widget/textwidget")
+    local Button           = require("ui/widget/button")
+    local GestureRange     = require("ui/gesturerange")
+    local Screen           = require("device").screen
+    local Font             = require("ui/font")
+
+    local sc = function(n) return Screen:scaleBySize(n) end
+    local sw, sh = Screen:getWidth(), Screen:getHeight()
+
+    -- Worked example, direction-aware: under an imperial preference the
+    -- book's original text is metric and the conversion is imperial.
+    local imp  = FootFree._IMPERIAL.preferred() ~= "metric"
+    local pre  = "The hallway was "
+    local orig = imp and "1.8 m" or "six feet"
+    local conv = imp and "5 ft 11 in" or "1.8 m"
+    local post = " wide."
+
+    local sample_face  = Font:getFace("infofont", 17)
+    local caption_face = Font:getFace("infofont", 13)
+    local overlay
+    local movable
+
+    -- Only one picker at a time (a mode change re-renders it in place by
+    -- closing + reopening — see pick()).
+    if FootFree._mode_overlay then
+        UIManager:close(FootFree._mode_overlay)
+        FootFree._mode_overlay = nil
+    end
+
+    -- Row 1's sample carries a live underline under the original phrase, in
+    -- the user's current styling (same widget the Styling preview uses).
+    local ul_text = TextWidget:new{ text = orig, face = sample_face }
+    local ul_size = ul_text:getSize()
+    local sample1 = HorizontalGroup:new{
+        align = "center",
+        TextWidget:new{ text = pre, face = sample_face },
+        OverlapGroup:new{
+            dimen = ul_size,
+            _UnderlinePreview:new{
+                width      = ul_size.w,
+                height     = ul_size.h,
+                style      = self._underline_style,
+                color      = _underline_color(self._underline_color),
+                line_width = sc(self._underline_width),
+                raw_width  = self._underline_width,
+                color_pct  = self._underline_color,
+            },
+            ul_text,
+        },
+        TextWidget:new{ text = post, face = sample_face },
+    }
+
+    local rows = {
+        { mode = 1, sample = sample1,
+          caption = "Underline only — tap it to see " .. conv .. ".",
+          caption2 = "The book file is never changed." },
+        { mode = 2,
+          sample = TextWidget:new{ text = pre .. orig .. " (" .. conv .. ")" .. post,
+                                   face = sample_face },
+          caption = "Both units, written into the book's text.",
+          caption2 = "Reversible." },
+        { mode = 3,
+          sample = TextWidget:new{ text = pre .. conv .. post, face = sample_face },
+          caption = "Converted only, written into the book's text.",
+          caption2 = "Reversible." },
+    }
+
+    -- User-initiated close (Close button, Back, tap outside): only the
+    -- picker closes — the user lands back in the still-open menu (user
+    -- feedback 2026-07-14). If a mode change happened, the book catches up
+    -- when the MENU closes: _reconcileModeWithBook is armed on the menu's
+    -- close_callback (TouchMenu's tap-outside/✕ paths run it), so the
+    -- convert question / revert appears over the book, never over menu or
+    -- picker.
+    local function close_overlay()
+        FootFree._mode_overlay = nil
+        self._mode_dialog_offset = nil
+        UIManager:close(overlay, "ui")
+        if not self._mode_reconcile_pending then return end
+        self._mode_reconcile_pending = nil
+        -- If the convert question comes up and the user declines, it
+        -- restores the mode from before the picker (nil = no change to
+        -- restore, e.g. picks that netted out back to the start).
+        local prior = self._mode_before_picker
+        self._mode_before_picker = nil
+        local restore = prior ~= self._tap_mode and prior or nil
+        if not touchmenu_instance then
+            -- No menu to wait for — reconcile right away.
+            self:_reconcileModeWithBook(restore)
+            return
+        end
+        -- Arm once per menu instance; the flags live on the plugin so a
+        -- second picker session in the same menu just updates the pending
+        -- state (keeping the FIRST session's restore mode — the last mode
+        -- the book was actually stable in).
+        if not self._reconcile_on_menu_close then
+            self._reconcile_on_menu_close = true
+            self._reconcile_restore = restore
+        end
+        if not touchmenu_instance._footcream_reconcile_hooked then
+            touchmenu_instance._footcream_reconcile_hooked = true
+            local orig_close = touchmenu_instance.close_callback
+            touchmenu_instance.close_callback = function(...)
+                if orig_close then orig_close(...) end
+                if self._reconcile_on_menu_close then
+                    self._reconcile_on_menu_close = nil
+                    local r = self._reconcile_restore
+                    self._reconcile_restore = nil
+                    self:_reconcileModeWithBook(r)
+                end
+            end
+        end
+    end
+
+    local function pick(mode)
+        if mode == self._tap_mode then return end
+        -- The picker only changes the mode SETTING — instantly (dot moves,
+        -- menu label refreshes via touchmenu_instance:updateItems()) — and
+        -- stays open, as does the menu behind it. All document work (the
+        -- convert question, revert/re-apply) is deferred to close_overlay
+        -- via _mode_reconcile_pending. The flag lives on the instance: the
+        -- re-render below replaces this closure's upvalues.
+        self._tap_mode = mode
+        G_reader_settings:saveSetting("footcream_tap_mode", mode)
+        logger.info("Footcream: mode→" .. mode .. " (picker; book reconciles on close)")
+        self._mode_reconcile_pending = true
+        if touchmenu_instance then
+            pcall(function() touchmenu_instance:updateItems() end)
+        end
+        -- Re-render with the dot on the new mode, keeping the dragged
+        -- position across the close + reopen.
+        self._mode_dialog_offset = movable and movable:getMovedOffset()
+        FootFree._mode_overlay = nil
+        UIManager:close(overlay, "ui")
+        self:_showModeDialog(touchmenu_instance)
+    end
+
+    -- Caption grey: dark enough to read comfortably on e-ink (0x55 was too
+    -- dim — user feedback 2026-07-14).
+    local grey = Blitbuffer.Color8(0x3A)
+    local body = { align = "left" }
+    table.insert(body, TextWidget:new{
+        text = "How should conversions appear?",
+        face = Font:getFace("infofont", 18),
+        bold = true,
+    })
+    table.insert(body, VerticalSpan:new{ width = sc(14) })
+    for i, r in ipairs(rows) do
+        -- FrameContainer (not WidgetContainer) records its absolute screen
+        -- rect in .dimen on every paint, so the tap GestureRange tracks the
+        -- row wherever the modal is dragged to.
+        -- The dot is top-aligned with the row and boxed to the SAMPLE line's
+        -- height, so it centres on the heading rather than on the whole
+        -- sample+captions block (user feedback 2026-07-14).
+        local sample_h = r.sample:getSize().h
+        local frame = FrameContainer:new{
+            bordersize = 0,
+            padding    = sc(6),
+            HorizontalGroup:new{
+                align = "top",
+                CenterContainer:new{
+                    dimen = Geom:new{ w = sc(15), h = sample_h },
+                    FootFree._RadioDot:new{ size = sc(15),
+                                            selected = (self._tap_mode == r.mode) },
+                },
+                WidgetContainer:new{ dimen = Geom:new{ w = sc(9), h = 1 } },
+                VerticalGroup:new{
+                    align = "left",
+                    r.sample,
+                    -- Sample→caption gap trimmed to 40% of the original
+                    -- sc(5) (user feedback 2026-07-14).
+                    VerticalSpan:new{ width = sc(2) },
+                    TextWidget:new{ text = r.caption,  face = caption_face, fgcolor = grey },
+                    TextWidget:new{ text = r.caption2, face = caption_face, fgcolor = grey },
+                },
+            },
+        }
+        local item = InputContainer:new{ frame }
+        item.ges_events = {
+            Tap = { GestureRange:new{ ges = "tap", range = function() return frame.dimen end } },
+        }
+        item.onTap = function() pick(r.mode); return true end
+        table.insert(body, item)
+        if i < #rows then
+            table.insert(body, VerticalSpan:new{ width = sc(12) })
+        end
+    end
+    local options = VerticalGroup:new(body)
+
+    -- Close spans the options' full width (measured after construction).
+    local full_w = options:getSize().w
+    local close_natural_h = Button:new{ text = "Close", width = full_w }:getSize().h
+    local close_button = Button:new{
+        text   = "Close",
+        width  = full_w,
+        height = math.floor(close_natural_h * 1.2 + 0.5),
+        callback = close_overlay,
+    }
+
+    local card = FrameContainer:new{
+        padding_top    = sc(14),
+        padding_bottom = sc(12),
+        padding_left   = sc(16),
+        padding_right  = sc(16),
+        radius         = sc(12),
+        bordersize     = Screen:scaleBySize(1.5),
+        background     = Blitbuffer.COLOR_WHITE,
+        VerticalGroup:new{
+            align = "left",
+            options,
+            VerticalSpan:new{ width = sc(14) },
+            close_button,
+        },
+    }
+
+    -- movable declared up top so pick() can read the dragged offset before
+    -- the re-render; the offset survives the close + reopen.
+    movable = MovableContainer:new{ card }
+    if self._mode_dialog_offset then
+        movable:setMovedOffset(self._mode_dialog_offset)
+    end
+
+    overlay = InputContainer:new{
+        key_events = {
+            Close = { { "Back" } },
+        },
+        -- Tap anywhere outside the card closes the picker (and lands you
+        -- back in the still-open menu). Inside the card the tap falls
+        -- through to the option rows.
+        ges_events = {
+            TapClose = {
+                GestureRange:new{
+                    ges = "tap",
+                    range = Geom:new{ x = 0, y = 0, w = sw, h = sh },
+                },
+            },
+        },
+        CenterContainer:new{
+            dimen = Geom:new{ w = sw, h = sh },
+            movable,
+        },
+    }
+
+    function overlay:onTapClose(_, ges)
+        if card.dimen and ges.pos:intersectWith(card.dimen) then
+            return false  -- inside the card: let the rows take it
+        end
+        close_overlay()
+        return true
+    end
+
+    function overlay:onClose()
+        close_overlay()
+        return true
+    end
+
+    FootFree._mode_overlay = overlay
+    UIManager:show(overlay, "ui")
+end
+
 function FootFree:_finishScan(doc, all_matches, t_per_pat, t_total, in_subprocess, debug_report)
     -- Words that may follow a *weight* "N stone" — anything else following it
     -- (a concrete noun: cuffs, spheres, foundation, wall) marks it as the rock,
@@ -5041,9 +5821,28 @@ function FootFree:_finishScan(doc, all_matches, t_per_pat, t_total, in_subproces
             -- "one's feet" / "one's foot" — possessive, never a count. The number
             -- "one" is glued to an apostrophe-s (straight ' or curly ’ = U+2019).
             if mt:find("one'") or mt:find("one\226\128\153") then drop_foot = true end
-            -- "shifting/swaying weight from one foot to the other" — idiom, not a
-            -- distance. Anchored on "the other" so "one foot to the left" survives.
-            if nxt:match("^%s*to the other") then drop_foot = true end
+            -- "shifting/swaying weight from one foot to the other/another" —
+            -- idiom, not a distance. Anchored on "the other"/"another" so
+            -- "one foot to the left" survives. ("to another" ×3 in the Nesbø
+            -- translations — first metric corpus, 2026-07-13.)
+            if nxt:match("^%s*to the other") or nxt:match("^%s*to another") then
+                drop_foot = true
+            end
+            local pwl = pw and pw:lower()
+            -- "one hand, then one foot" (climbing) — enumerated limbs, and a
+            -- hand this close to a lone "one foot" is never a distance.
+            if footn == 1 and _last_words(prev, 4):lower():find("hand", 1, true) then
+                drop_foot = true
+            end
+            -- "moving under one foot" / "Move one foot to just outside …" — a
+            -- single covered/placed body part. "under one foot of snow" (real
+            -- depth) survives via the "of" tail; larger values ("under six
+            -- feet of earth") are ungated by footn == 1.
+            if footn == 1 and (pwl == "under" or pwl == "move" or pwl == "moved"
+               or pwl == "moves" or pwl == "moving")
+               and not nxt:match("^%s*of ") then
+                drop_foot = true
+            end
             -- "with two feet instead of four" — a leg/limb-count comparison: the
             -- trailing cardinal is bare (no unit, closed by a comma/period), so
             -- it's anatomy, not a length. A genuine distance restated would carry
@@ -5114,7 +5913,9 @@ function FootFree:_finishScan(doc, all_matches, t_per_pat, t_total, in_subproces
         -- ("6ft", "6 ft", "six-foot"), so this never drops a genuine unit.
         if keep and not _ends_prime then
             local best
-            for _, u in ipairs(_UNIT_SUFFIXES) do
+            local sufs = FootFree._IMPERIAL.preferred() ~= "metric"
+                and FootFree._IMPERIAL.suffixes or _UNIT_SUFFIXES
+            for _, u in ipairs(sufs) do
                 if u ~= "°F" then
                     local ul = u:lower()
                     if #ul > 0 and mt:sub(-#ul) == ul and (not best or #ul > #best) then
@@ -5322,20 +6123,30 @@ local function _idiom_guard(original)
     if o == "one foot" or o == "a foot" then return _FOOT_IDIOM_NEXT end
     return nil
 end
-function FootFree:_applyMetricEdition(doc, skip_confirm)
+-- cancel_restore_mode (optional): mode to fall back to when the user
+-- DECLINES the confirm — set only for picker-originated changes, so a
+-- canceled pick snaps back to the mode the picker opened with instead of
+-- stranding the book unconverted in a convert mode. Book-originated prompts
+-- (new book under an established convert mode, Enable toggle, tap) pass
+-- nothing: declining those means "not this book", not "change my mode".
+function FootFree:_applyMetricEdition(doc, skip_confirm, cancel_restore_mode)
+    -- Which way this conversion goes ("metric"/"imperial"), for the dialogs.
+    local imp = FootFree._IMPERIAL.preferred() ~= "metric"
+    local dir_word = imp and "imperial" or "metric"
     if _is_metric_mode(doc.file) then
         UIManager:show(InfoMessage:new{
-            text = "This book is already in metric edition.\nUse 'Remove Footcream data from this book' (Advanced) first.",
+            text = "This book is already converted.\nUse 'Remove Footcream data from this book' (Advanced) first.",
             timeout = 4,
         })
         return
     end
     if not self._all_matches or #self._all_matches == 0 then
-        -- Distinguish "scanned, genuinely no imperial units" from "not scanned
-        -- yet" — the two used to share the misleading "scan first" message.
+        -- Distinguish "scanned, genuinely no units" from "not scanned yet" —
+        -- the two used to share the misleading "scan first" message.
         UIManager:show(InfoMessage:new{
             text = self._scanned
-                and "No imperial measurements found in this book — nothing to convert."
+                and string.format("No %s measurements found in this book — nothing to convert.",
+                                  imp and "metric" or "imperial")
                 or  "No hints yet — scan the book first.",
             timeout = 3,
         })
@@ -5344,17 +6155,35 @@ function FootFree:_applyMetricEdition(doc, skip_confirm)
     -- Both convert modes rewrite the book's own text. Confirm first — this is
     -- easy to trigger inadvertently (e.g. via the Enable toggle while the
     -- global mode happens to be set to convert).
+    -- One line only — the how/undo details live in the Mode picker captions
+    -- and the long-press help texts (the old second paragraph read as
+    -- clutter; user feedback 2026-07-14).
     if not skip_confirm then
+        local on_cancel
+        if cancel_restore_mode then
+            on_cancel = function()
+                self._tap_mode = cancel_restore_mode
+                G_reader_settings:saveSetting("footcream_tap_mode", cancel_restore_mode)
+                logger.info("Footcream: convert declined — mode restored to "
+                            .. cancel_restore_mode)
+                UIManager:show(Notification:new{
+                    text = "Kept mode: " .. self:_modeLabel(cancel_restore_mode),
+                })
+                if self.view then UIManager:setDirty(self.view.dialog, "ui") end
+            end
+        end
         self._confirm(
             self._tap_mode == 2
-                and "Add metric conversions alongside this book's measurements?\n\nEach one is inserted in parentheses — \"six feet (1.8 m)\" — keeping the original text. You can undo it any time with 'Remove Footcream data from this book' (Advanced)."
-                or  "Convert this book's measurements to metric?\n\nThe book's text is rewritten in place. You can undo it any time with 'Remove Footcream data from this book' (Advanced).",
+                and string.format("Add %s conversions alongside this book's measurements?",
+                                  dir_word)
+                or  string.format("Convert this book's measurements to %s?",
+                                  dir_word),
             "Convert", function()
                 -- Breadcrumb: distinguishes "tap never registered" (ghost
                 -- dialog) from "apply failed" when diagnosing a stuck convert.
                 logger.info("FootFree: convert confirmed")
                 self:_doApplyMetricEdition(doc)
-            end)
+            end, nil, on_cancel)
         return
     end
     self:_doApplyMetricEdition(doc)
@@ -5440,6 +6269,19 @@ function FootFree:_doApplyMetricEdition(doc)
             rep.expected = kept_count[original]
         end
     end
+    -- Imperial direction: the same collision exists for money-vetoed metric
+    -- occurrences ("$2m" is millions; "9mm" next to a count word is handled
+    -- positionally; enumerations are skipped positionally). The scanner
+    -- suppresses those per-occurrence, but the global rewrite can't — so
+    -- stamp EVERY rep with its kept count and let the rewriter skip any
+    -- phrase whose textual occurrences outnumber the scanner-approved ones.
+    -- Leaving a colliding genuine measurement unconverted beats converting a
+    -- money amount (same trade-off as the pounds guard above).
+    if FootFree._IMPERIAL.preferred() ~= "metric" then
+        for original, rep in pairs(rep_of) do
+            rep.expected = kept_count[original]
+        end
+    end
 
     local patches = _patches_path(doc.file)
     local Metric = _metric_module()
@@ -5459,10 +6301,12 @@ function FootFree:_doApplyMetricEdition(doc)
     -- rewriter needs its two-phase pass), mode 3 replaces.
     local apply_opts = self._tap_mode == 2 and { append = true } or nil
     local apply_mode = self._tap_mode
+    local dir_word   = FootFree._IMPERIAL.preferred() ~= "metric"
+                       and "imperial" or "metric"
     Trapper:wrap(function()
         local completed, result = Trapper:dismissableRunInSubprocess(function()
             return Metric.apply(doc.file, patches, reps, apply_opts)
-        end, "Converting to metric…", true)
+        end, "Converting to " .. dir_word .. "…", true)
         if not completed then return end  -- dismissed by the user
         result = result or ""
         if result:match("^OK:") then
@@ -5476,8 +6320,8 @@ function FootFree:_doApplyMetricEdition(doc)
                 -- convert "refused"). This is the diagnostic for the Kobo report.
                 UIManager:show(InfoMessage:new{
                     text = string.format(
-                        "Couldn't convert this book in place.\n\n%d measurement%s were found, but none could be matched in the book's text — its markup/format may not be supported for in-text conversion.\n\nThe 'Underline units, tap for metric' mode still works for this book.",
-                        #reps, #reps == 1 and "" or "s"),
+                        "Couldn't convert this book in place.\n\n%d measurement%s were found, but none could be matched in the book's text — its markup/format may not be supported for in-text conversion.\n\nThe '%s' mode still works for this book.",
+                        #reps, #reps == 1 and "" or "s", self:_modeLabel(1)),
                     timeout = 10,
                 })
                 return
@@ -5497,7 +6341,8 @@ function FootFree:_doApplyMetricEdition(doc)
             -- The pre-conversion hint count rides along so the menu status line
             -- keeps reporting the book's full unit count while converted, and
             -- the applied mode so open/mode-switch flows can tell the styles apart.
-            _write_metric_version(doc.file, hint_total, apply_mode)
+            _write_metric_version(doc.file, hint_total, apply_mode,
+                                  FootFree._IMPERIAL.preferred())
             -- Marks the post-reload onReaderReady (fresh plugin instance —
             -- hence the class field) to announce the conversion from the
             -- stamp: with the echo scan gone, no scan notice will fire.
@@ -5506,7 +6351,7 @@ function FootFree:_doApplyMetricEdition(doc)
             self.ui:reloadDocument(nil, true)
         else
             UIManager:show(InfoMessage:new{
-                text = "Could not apply metric edition.\n" .. tostring(result),
+                text = "Could not convert this book.\n" .. tostring(result),
                 timeout = 5,
             })
         end
@@ -5623,32 +6468,99 @@ function FootFree:_revertMetricEdition(doc, on_done)
     end)
 end
 
--- Switch to a convert mode (2 = metric alongside original, 3 = replace).
--- Handles all starting states: unconverted → apply in the new style;
--- already converted in the SAME style → nothing to do; converted in the
--- OTHER style → revert, then the _pending_rescan flow rescans the restored
--- text and re-applies with the (already saved) new mode. The "Enable
+-- Bring the open book in line with the ACTIVE mode (self._tap_mode, already
+-- saved by the caller). State-based and idempotent — handles every starting
+-- point: unconverted + convert mode → apply (with its confirm question);
+-- converted in the SAME mode → nothing; converted in another mode (or in a
+-- convert mode while mode 1 is active) → revert, and for convert modes the
+-- _pending_reapply flow re-applies from the preserved sidecar after the
+-- reload. Called when the mode picker CLOSES: the picker changes the mode
+-- setting instantly, but document work — and the convert question — waits
+-- until the user is back at the book (user request 2026-07-14). The "Enable
 -- Footcream" preference is deliberately left untouched.
-function FootFree:_switchConvertMode(new_mode, mode_name)
-    self._tap_mode = new_mode
-    G_reader_settings:saveSetting("footcream_tap_mode", new_mode)
-    logger.info("Footcream: mode→" .. new_mode .. " — " .. mode_name)
-    self.ui:handleEvent(Event:new("CloseReaderMenu"))
+function FootFree:_reconcileModeWithBook(cancel_restore_mode)
     local doc = self.ui.document
     if not doc then return end
+    -- A per-book-disabled book never converts (its underlines are hidden
+    -- and it was restored on disable) — mode changes only take effect here
+    -- once the book is re-enabled.
+    if not self._enabled then return end
     if _is_metric_mode(doc.file) then
         local _, _, amode = _read_metric_version(doc.file)
-        if (amode or 3) == new_mode then return end
+        if (amode or 3) == self._tap_mode then return end
         -- Re-apply from the preserved original-text sidecar after the revert
         -- (no rescan); _pending_rescan is reserved for the flows that WANT a
         -- fresh scan (version refresh, manual "Rescan & reconvert").
-        FootFree._pending_reapply = doc.file
+        if self._tap_mode >= 2 then
+            FootFree._pending_reapply = doc.file
+        end
         UIManager:scheduleIn(0.3, function() self:_revertMetricEdition(doc) end)
         return
     end
-    -- Apply after the menu closes; _applyMetricEdition handles the
-    -- "no scan data yet" case gracefully.
-    UIManager:scheduleIn(0.3, function() self:_applyMetricEdition(doc) end)
+    if self._tap_mode >= 2 then
+        -- Apply after the menu closes; _applyMetricEdition handles the
+        -- "no scan data yet" case gracefully. Declining its convert question
+        -- restores cancel_restore_mode (the pre-picker mode) so a canceled
+        -- picker change doesn't strand the book in an unconverted convert
+        -- mode.
+        UIManager:scheduleIn(0.3, function()
+            self:_applyMetricEdition(doc, nil, cancel_restore_mode)
+        end)
+    elseif self.view then
+        -- Back to mode 1 on an unconverted book: repaint so the underlines
+        -- show right away.
+        UIManager:setDirty(self.view.dialog, "ui")
+    end
+end
+
+-- "Convert units to" switch (metric / us / uk). Flips the conversion
+-- direction: the open book rescans, and a converted book reverts first, then
+-- reconverts in the new direction (revert → the reload's direction-mismatch
+-- sidecar check forces a fresh scan → re-apply in the active mode).
+function FootFree:_setPreferred(v)
+    if FootFree._IMPERIAL.preferred() == v then return end
+    G_reader_settings:saveSetting("footcream_preferred_system", v)
+    logger.info("Footcream: preferred units → " .. v)
+    local doc = self.ui.document
+    if not doc then return end
+    -- Per-book-disabled book: the setting is saved (it steers every other
+    -- book), but this book is left alone — no rescan, no conversion.
+    if not self._enabled then return end
+    if _is_metric_mode(doc.file) then
+        -- Converted in the old direction — restore the original text, then
+        -- the reapply leg rescans and reconverts under the new preference.
+        FootFree._pending_reapply = doc.file
+        self.ui:handleEvent(Event:new("CloseReaderMenu"))
+        UIManager:scheduleIn(0.3, function() self:_revertMetricEdition(doc) end)
+        return
+    end
+    -- Rescan the open book in the new direction.
+    os.remove(_sidecar_path(doc.file))
+    self._all_matches   = nil
+    self._current_boxes = {}
+    self._scanned       = false
+    if self.view then UIManager:setDirty(self.view.dialog, "ui") end
+    if _is_english(doc) then
+        self.ui:handleEvent(Event:new("CloseReaderMenu"))
+        -- In a convert mode, offer the conversion once the rescan lands —
+        -- same flow as opening a new book with auto-scan on.
+        if self._tap_mode >= 2 and self._enabled then
+            self._after_scan = function()
+                UIManager:scheduleIn(0.5, function()
+                    local d = self.ui.document
+                    if d and self._tap_mode >= 2 and self._enabled
+                       and not _is_metric_mode(d.file)
+                       and self._all_matches and #self._all_matches > 0 then
+                        self:_applyMetricEdition(d)
+                    end
+                end)
+            end
+        end
+        UIManager:scheduleIn(0.3, function()
+            local d = self.ui.document
+            if d then self:_startScan(d) end
+        end)
+    end
 end
 
 -- Build self._reverse_matches: positions of the converted strings in the
@@ -6840,7 +7752,40 @@ end
 
 -- ── Menu ──────────────────────────────────────────────────────────────────────
 
+-- Mode labels follow the Preferred-units direction: under an imperial
+-- preference the conversions ARE imperial, so "tap for metric" would lie.
+-- (Modes 2/3 stay disabled there, but their greyed labels flip too — a
+-- greyed "Imperial only" reads as "not available yet", which is the truth.)
+function FootFree:_modeLabel(mode)
+    local unit = FootFree._IMPERIAL.preferred() ~= "metric" and "imperial" or "metric"
+    if mode == 3 then
+        return (unit == "metric" and "Metric" or "Imperial") .. " only (in text)"
+    elseif mode == 2 then
+        return (unit == "metric" and "Metric" or "Imperial")
+            .. " alongside original (in text)"
+    end
+    return "Underline units, tap for " .. unit
+end
+
 function FootFree:addToMainMenu(menu_items)
+    -- Long-press explainers per category (both scan directions listed).
+    local cat_help = {
+        length = "Inches, feet, yards, miles, fathoms, furlongs, leagues, cubits"
+            .. " — and in the imperial direction: millimeters, centimeters,"
+            .. " meters, kilometers.",
+        weight = "Ounces, pounds and stone — and in the imperial direction:"
+            .. " grams and kilos. Tons are deliberately not converted (the word"
+            .. " is too ambiguous).",
+        temperature = "°F and \"degrees Fahrenheit\" — and in the imperial"
+            .. " direction, °C and \"degrees Celsius\".",
+        volume = "Pints, quarts, gallons and fluid ounces — and in the imperial"
+            .. " direction, liters and milliliters. UK and US gallons differ;"
+            .. " Footcream picks the right one from the book.",
+        speed = "Miles per hour and knots — and in the imperial direction,"
+            .. " km/h and meters per second.",
+        area = "Acres and square miles/feet/yards — and in the imperial"
+            .. " direction, hectares and square kilometers/meters/centimeters.",
+    }
     local cat_items = {}
     for _, c in ipairs({
         { key = "length",      label = "Length & Distance" },
@@ -6853,6 +7798,7 @@ function FootFree:addToMainMenu(menu_items)
         local key = c.key
         table.insert(cat_items, {
             text = c.label,
+            help_text = cat_help[key],
             checked_func = function()
                 return self._cat_enabled[key] ~= false
             end,
@@ -6876,6 +7822,9 @@ function FootFree:addToMainMenu(menu_items)
             table.insert(items, {
                 text_func = function()
                     if not self.ui.document then return "No book open" end
+                    if not self._enabled then
+                        return "Footcream is off in this book"
+                    end
                     local n = self._all_matches and #self._all_matches or 0
                     -- Converted (mode-3) book: _all_matches holds only the
                     -- leftovers the rewrite skipped, but this line must keep
@@ -6899,112 +7848,164 @@ function FootFree:addToMainMenu(menu_items)
                         return "Not yet scanned"
                     end
                 end,
+                help_text = "How many measurements Footcream found in this book. "
+                    .. "The count always shows everything that was found, "
+                    .. "whichever mode you are in.",
                 enabled_func = function() return false end,
             })
 
-            -- 2. Enable Footcream — universal toggle, behaviour depends on mode
+            -- 2. Enable Footcream in this book — PER-BOOK opt-out (one
+            -- meaning, one scope; the old toggle was global in mode 1 and
+            -- per-book in modes 2/3 — user-flagged as confusing 2026-07-14).
+            -- The flag lives in the book's own .sdr metadata; the global
+            -- mode keeps steering every other book. A true global off is
+            -- KOReader's plugin management.
             table.insert(items, {
-                text = "Enable Footcream",
+                text = "Enable Footcream in this book",
+                help_text = "Turn Footcream off for this book only: no "
+                    .. "underlines, no conversions, no prompts — and a "
+                    .. "converted book gets its original text back. Other "
+                    .. "books are unaffected, and the choice is remembered "
+                    .. "for this book. To disable Footcream everywhere, use "
+                    .. "KOReader's plugin management.",
+                enabled_func = function()
+                    return self.ui.document ~= nil and not self._doc_unsupported
+                end,
                 checked_func = function()
-                    if self._tap_mode >= 2 then
-                        -- Checked = metric edition is currently applied to this book
-                        return self.ui.document ~= nil
-                            and _is_metric_mode(self.ui.document.file)
-                    else
-                        -- Checked = hints are visible
-                        return self._enabled
-                    end
+                    return self.ui.document ~= nil and self._enabled
                 end,
                 callback = function()
                     local doc = self.ui.document
-                    if self._tap_mode >= 2 then
-                        -- Convert modes: toggle applies or reverts the metric edition.
-                        -- Close the menu first (and let it settle) so the convert
-                        -- confirmation / progress isn't drawn over the open menu —
-                        -- that "ghost popup" swallowed the first tap.
-                        self.ui:handleEvent(Event:new("CloseReaderMenu"))
-                        UIManager:scheduleIn(0.3, function()
-                            if doc and _is_metric_mode(doc.file) then
-                                logger.info("Footcream: Enable toggled OFF → reverting")
-                                self:_revertMetricEdition(doc)
-                            elseif doc then
-                                logger.info("Footcream: Enable toggled ON → applying")
-                                self:_applyMetricEdition(doc)
-                            end
-                        end)
+                    if not doc then return end
+                    self._enabled = not self._enabled
+                    if self._enabled then
+                        self.ui.doc_settings:delSetting("footcream_disabled")
                     else
-                        -- Mode 1: toggle hints on/off
-                        self._enabled = not self._enabled
-                        G_reader_settings:saveSetting("footcream_enabled", self._enabled)
-                        logger.info("Footcream: hints " .. (self._enabled and "ON" or "OFF"))
+                        self.ui.doc_settings:saveSetting("footcream_disabled", true)
+                    end
+                    logger.info("Footcream: " .. (self._enabled and "enabled" or "disabled")
+                                .. " in this book")
+                    if not self._enabled then
+                        if _is_metric_mode(doc.file) then
+                            -- Off means untouched text — restore the conversion.
+                            self.ui:handleEvent(Event:new("CloseReaderMenu"))
+                            UIManager:scheduleIn(0.3, function()
+                                self:_revertMetricEdition(doc)
+                            end)
+                        else
+                            self._current_boxes = {}
+                            if self.view then UIManager:setDirty(self.view.dialog, "ui") end
+                        end
+                    else
+                        -- Re-enabled: run the same load-or-scan flow as opening
+                        -- the book (idempotent; recovery/consistency checks are
+                        -- no-ops on a clean book). Underlines/conversion offers
+                        -- come back exactly as on a fresh open.
+                        self:onReaderReady()
                         if self.view then UIManager:setDirty(self.view.dialog, "ui") end
                     end
                 end,
             })
 
-            -- 3. Mode (shows active mode name in the label)
+            -- 3. Convert units to (conversion direction, a.k.a. the preferred
+            -- system; both directions support all three modes).
             table.insert(items, {
                 text_func = function()
-                    local name = self._tap_mode == 3 and "Metric only (in text)"
-                        or self._tap_mode == 2 and "Metric alongside original (in text)"
-                        or "Underline units, tap for metric"
-                    return "Mode: " .. name
+                    local pref = FootFree._IMPERIAL.preferred()
+                    local name = pref == "us" and "Imperial (US)"
+                        or pref == "uk" and "Imperial (UK)" or "Metric"
+                    return "Convert units to: " .. name
                 end,
+                help_text = "The unit system you want to read in. Metric converts "
+                    .. "imperial measurements (feet, miles, °F) to metric. The "
+                    .. "Imperial options do the reverse: they find metric "
+                    .. "measurements (meters, kilometers, kilos, °C) and show "
+                    .. "imperial values. Works in every mode; a converted book "
+                    .. "is restored and reconverted when you switch.",
                 sub_item_table = {
                     {
-                        text = "Underline units, tap for metric",
-                        checked_func = function() return self._tap_mode == 1 end,
-                        radio = true,
-                        callback = function()
-                            local doc = self.ui.document
-                            local was_convert = self._tap_mode >= 2
-                            -- Set new mode before any reload so it persists.
-                            -- Note: the "Enable Footcream" preference is left
-                            -- untouched — switching modes must not flip it.
-                            self._tap_mode = 1
-                            G_reader_settings:saveSetting("footcream_tap_mode", 1)
-                            logger.info("Footcream: mode→1 (interactive hints)")
-                            if was_convert and doc and _is_metric_mode(doc.file) then
-                                -- Book is in metric edition — revert it, then hints will show
-                                logger.info("Footcream: reverting metric edition before switching to mode 1")
-                                self.ui:handleEvent(Event:new("CloseReaderMenu"))
-                                self:_revertMetricEdition(doc)
-                            end
+                        text = "Metric",
+                        help_text = "Convert imperial measurements (feet, miles, "
+                            .. "pounds, °F, gallons…) to metric.",
+                        checked_func = function()
+                            return FootFree._IMPERIAL.preferred() == "metric"
                         end,
+                        radio = true,
+                        callback = function() self:_setPreferred("metric") end,
                     },
                     {
-                        text = "Metric alongside original (in text)",
-                        checked_func = function() return self._tap_mode == 2 end,
-                        radio = true,
-                        callback = function()
-                            self:_switchConvertMode(2, "metric alongside original (in text)")
+                        text = "Imperial (US)",
+                        help_text = "Convert metric measurements to US units: "
+                            .. "meters become feet and inches (\"1.8 m\" → "
+                            .. "\"5 ft 11 in\"), kilometers become miles, kilos "
+                            .. "become pounds, °C becomes °F, liters become "
+                            .. "quarts and gallons.",
+                        checked_func = function()
+                            return FootFree._IMPERIAL.preferred() == "us"
                         end,
+                        radio = true,
+                        callback = function() self:_setPreferred("us") end,
                     },
                     {
-                        text = "Metric only (in text)",
-                        checked_func = function() return self._tap_mode == 3 end,
-                        radio = true,
-                        callback = function()
-                            self:_switchConvertMode(3, "metric only (in text)")
+                        text = "Imperial (UK)",
+                        help_text = "Like Imperial (US), but with UK measures: "
+                            .. "body weights in stones (\"75 kg\" → \"11 st 11 lb\") "
+                            .. "and volumes in imperial pints and gallons.",
+                        checked_func = function()
+                            return FootFree._IMPERIAL.preferred() == "uk"
                         end,
+                        radio = true,
+                        callback = function() self:_setPreferred("uk") end,
                     },
                 },
             })
 
-            -- 4. Auto-scan
+            -- 4. Mode (shows active mode name in the label). Opens the visual
+            -- picker — a sample sentence rendered in each of the three modes,
+            -- with a real styled underline — because the mode NAMES alone
+            -- didn't explain what the modes DO to the page. keep_menu_open +
+            -- no CloseReaderMenu: the picker floats OVER the open menu, so
+            -- closing it drops the user back into the menu (a plain in-menu
+            -- submenu was tried, but TouchMenu rows can't control spacing,
+            -- caption color, or show a styled underline). Only an actual mode
+            -- change closes the menu (see pick() in _showModeDialog).
+            table.insert(items, {
+                text_func = function()
+                    return "Mode: " .. self:_modeLabel(self._tap_mode)
+                end,
+                help_text = "How conversions are shown while you read. Opens a "
+                    .. "picker showing a sample sentence in each of the three "
+                    .. "modes; the change is applied to the book when you leave "
+                    .. "the menu. The two \"written into the text\" modes "
+                    .. "rewrite the book file itself — fully reversible at any "
+                    .. "time. In the \"converted only\" mode, the Advanced "
+                    .. "option \"Show original unit in tooltip\" lets you tap a "
+                    .. "converted value to see the original text.",
+                keep_menu_open = true,
+                -- TouchMenu passes itself to callbacks; the picker uses it
+                -- to updateItems() after a mode change so the "Mode: <label>"
+                -- row refreshes live in the still-open menu. The mode active
+                -- at THIS fresh open is what a canceled convert question
+                -- restores (recorded here, not in _showModeDialog — the
+                -- picker re-renders itself on every pick).
+                callback = function(touchmenu_instance)
+                    self._mode_before_picker = self._tap_mode
+                    self:_showModeDialog(touchmenu_instance)
+                end,
+            })
+
+            -- 5. Auto-scan
             table.insert(items, {
                 text = "Auto-scan when opening a new book",
+                help_text = "Scan every new book automatically when you open it. "
+                    .. "Only English books are scanned — other languages are left "
+                    .. "alone. Turn this off to scan books one by one with "
+                    .. "\"Scan book\".",
                 checked_func = function() return self._auto_scan end,
                 callback = function()
                     self._auto_scan = not self._auto_scan
                     G_reader_settings:saveSetting("footcream_auto_scan", self._auto_scan)
                 end,
-            })
-
-            -- 5. Unit categories
-            table.insert(items, {
-                text = "Unit categories",
-                sub_item_table = cat_items,
             })
 
             -- 6. Scan / Rescan book
@@ -7016,8 +8017,14 @@ function FootFree:addToMainMenu(menu_items)
                     end
                     return "Scan book"
                 end,
+                help_text = "Scan this book now, or scan it again from scratch. "
+                    .. "The scan runs in the background, so you can keep reading "
+                    .. "while it works. Results are saved, so reopening the book "
+                    .. "later is instant.",
                 enabled_func = function()
+                    -- Greyed while Footcream is off in this book.
                     return self.ui.document ~= nil and not self._doc_unsupported
+                        and self._enabled
                 end,
                 callback = function()
                     local doc = self.ui.document
@@ -7056,10 +8063,8 @@ function FootFree:addToMainMenu(menu_items)
                         -- with their own settle delays).
                         UIManager:scheduleIn(0.3, function()
                             self._confirm(
-                                "This book is currently converted to metric. " ..
-                                    "Footcream will restore the original text, rescan " ..
-                                    "it, then re-apply the conversion with the fresh " ..
-                                    "data.\n\nContinue?",
+                                "This book is converted — rescan it and "
+                                    .. "re-apply the conversion?",
                                 "Rescan & reconvert", function()
                                     -- Revert runs async now; once it finishes and
                                     -- reloads, scan the restored text (a short delay
@@ -7080,6 +8085,10 @@ function FootFree:addToMainMenu(menu_items)
 
             table.insert(items, {
                 text = "Styling",
+                help_text = "Customise how underlines look (solid or wavy, "
+                    .. "intensity, thickness) and the tooltip (size, unit icon), "
+                    .. "with a live preview. Drag the dialog around if it covers "
+                    .. "the text you want to see.",
                 callback = function()
                     self.ui:handleEvent(Event:new("CloseReaderMenu"))
                     UIManager:scheduleIn(0.1, function()
@@ -7092,6 +8101,9 @@ function FootFree:addToMainMenu(menu_items)
                 text_func = function()
                     return "Check for updates (v" .. _installed_version() .. ")"
                 end,
+                help_text = "Check GitHub for a newer Footcream release and "
+                    .. "install it in place. Needs Wi-Fi; you'll be asked to "
+                    .. "restart KOReader when it's done.",
                 keep_menu_open = true,
                 callback = function()
                     self:_checkForUpdate()
@@ -7101,9 +8113,23 @@ function FootFree:addToMainMenu(menu_items)
             -- Advanced — kept last
             table.insert(items, {
                 text = "Advanced",
+                help_text = "Extra options: unit categories, rounding, "
+                    .. "original-unit tooltips, error reporting to the "
+                    .. "developer, per-book cleanup, and debug tools.",
                 sub_item_table = {
                     {
+                        text = "Unit categories",
+                        help_text = "Choose which kinds of measurements are "
+                            .. "converted. Anything you untick is ignored "
+                            .. "everywhere — no underlines, popups or in-text "
+                            .. "conversions for that category.",
+                        sub_item_table = cat_items,
+                    },
+                    {
                         text = "Smart rounding for conversions",
+                        help_text = "Round conversions to friendly, readable "
+                            .. "values — \"90 m\" instead of \"91.44 m\". Turn "
+                            .. "off if you prefer exact numbers.",
                         checked_func = function() return self._smart_rounding end,
                         callback = function()
                             self._smart_rounding = not self._smart_rounding
@@ -7122,7 +8148,19 @@ function FootFree:addToMainMenu(menu_items)
                         end,
                     },
                     {
-                        text = "Show original unit in tooltip (Metric only mode)",
+                        text_func = function()
+                            -- Names the mode it belongs to, which follows the
+                            -- preferred units ("Metric only" / "Imperial only").
+                            local unit = FootFree._IMPERIAL.preferred() ~= "metric"
+                                         and "Imperial" or "Metric"
+                            return "Show original unit in tooltip (" .. unit
+                                .. " only mode)"
+                        end,
+                        help_text = "In the \"only (in text)\" mode, underline the "
+                            .. "converted values so you can tap any of them and "
+                            .. "see the original text. Handy if you want to "
+                            .. "double-check a conversion against what the "
+                            .. "author wrote.",
                         checked_func = function() return self._show_original end,
                         callback = function()
                             self._show_original = not self._show_original
@@ -7150,6 +8188,13 @@ function FootFree:addToMainMenu(menu_items)
                     },
                     {
                         text = "Long-press units to send errors to the developer",
+                        help_text = "Flag bad conversions while you read: "
+                            .. "long-press a unit (or select text Footcream "
+                            .. "missed) and the error is sent anonymously to the "
+                            .. "developer. Each flag contains the book title, the "
+                            .. "measurement, its conversion and the surrounding "
+                            .. "sentence — nothing else. Works offline: flags are "
+                            .. "queued and sent when you're connected.",
                         checked_func = function() return self._share_reports end,
                         callback = function()
                             self._share_reports = not self._share_reports
@@ -7178,6 +8223,10 @@ function FootFree:addToMainMenu(menu_items)
                     },
                     {
                         text = "Remove Footcream data from this book",
+                        help_text = "Undo everything for this book: restore the "
+                            .. "original text, remove all underlines and delete "
+                            .. "the saved scan. The book file goes back to "
+                            .. "exactly how it was before Footcream touched it.",
                         enabled_func = function()
                             if not self.ui.document then return false end
                             if _is_metric_mode(self.ui.document.file) then return true end
@@ -7215,9 +8264,16 @@ function FootFree:addToMainMenu(menu_items)
                     },
                     {
                         text = "Debug",
+                        help_text = "See exactly what the scan found in this "
+                            .. "book, and manage errors you've flagged on this "
+                            .. "device.",
                         sub_item_table = {
                             {
                                 text = "Units in book (list)",
+                                help_text = "Every measurement found in this "
+                                    .. "book, with its detected value and "
+                                    .. "conversion. Long-press an entry to flag "
+                                    .. "it as wrong.",
                                 enabled_func = function()
                                     return self.ui.document ~= nil
                                         and self._all_matches ~= nil
@@ -7229,6 +8285,11 @@ function FootFree:addToMainMenu(menu_items)
                             },
                             {
                                 text = "View flagged errors",
+                                help_text = "Show the errors you've flagged on "
+                                    .. "this device. They're kept in a plain-text "
+                                    .. "file (koreader/footcream/"
+                                    .. "flagged_errors.txt) that you can also "
+                                    .. "attach to a GitHub issue.",
                                 separator = true,
                                 callback = function()
                                     self:_showFlaggedErrors()
@@ -7236,6 +8297,9 @@ function FootFree:addToMainMenu(menu_items)
                             },
                             {
                                 text = "Clear flagged errors",
+                                help_text = "Delete the local flagged-errors "
+                                    .. "file. Reports that were already sent to "
+                                    .. "the developer are not affected.",
                                 callback = function()
                                     self:_clearFlaggedErrors()
                                 end,
@@ -7245,7 +8309,6 @@ function FootFree:addToMainMenu(menu_items)
                 },
             })
 
-            -- 8. Styling — opens a live-preview dialog for underline appearance
             return items
         end,
     }
