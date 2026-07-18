@@ -1341,6 +1341,7 @@ local _CAT_ICONS = {
     volume      = "volume",
     speed       = "speed",
     area        = "length",   -- no separate area icon; length is the closest
+    time        = "length",   -- fallback icon for time units
 }
 
 local _SIDECAR_DIR         = DataStorage:getDataDir() .. "/footcream"
@@ -2415,10 +2416,71 @@ local _UNIT_CONV = {
     ["kn"]                = { factor=1.852,    offset=0,       target="km/h", cat="speed"       },
     ["acres"]             = { converter=_conv_acres_to_ha,     target="ha",   cat="area"        },
     ["acre"]              = { converter=_conv_acres_to_ha,     target="ha",   cat="area"        },
+    ["acres "]             = { converter=_conv_acres_to_ha,     target="ha ",   cat="area "        },
+    -- ── Asian Distance ──────────────────────────────────────────────────────
+    ["li "]                = { factor=500,     offset=0, target="m ",   cat="length "      },
+    ["zhang "]             = { factor=3.3333,  offset=0, target="m ",   cat="length "      },
+    ["chi "]               = { factor=0.3333,  offset=0, target="m ",   cat="length "      },
+    ["cun "]               = { factor=0.0333,  offset=0, target="m ",   cat="length "      },
+    ["ri "]                = { factor=3927,    offset=0, target="m ",   cat="length "      }, -- Japanese ri (~3.927 km)
+    ["cho "]               = { factor=109.09,  offset=0, target="m ",   cat="length "      },
+    ["ken "]               = { factor=1.818,   offset=0, target="m ",   cat="length "      },
+    ["shaku "]             = { factor=0.3030,  offset=0, target="m ",   cat="length "      },
+    ["sun "]               = { factor=0.0303,  offset=0, target="m ",   cat="length "      },
+    ["jang "]              = { factor=3.03,    offset=0, target="m ",   cat="length "      }, -- Korean jang
+    ["cheok "]             = { factor=0.303,   offset=0, target="m ",   cat="length "      },
+    ["chon "]              = { factor=0.0303,  offset=0, target="m ",   cat="length "      },
+    -- ── Asian Weight ────────────────────────────────────────────────────────
+    ["jin "]               = { factor=0.5,     offset=0, target="kg ",  cat="weight "      },
+    ["liang "]             = { factor=0.05,    offset=0, target="kg ",  cat="weight "      },
+    ["qian "]              = { factor=0.005,   offset=0, target="kg ",  cat="weight "      },
+    ["kan "]               = { factor=3.75,    offset=0, target="kg ",  cat="weight "      },
+    -- ── Asian Area ──────────────────────────────────────────────────────────
+    ["mu "]                = { factor=666.67,  offset=0, target="m² ",  cat="area "        },
+    ["tsubo "]             = { factor=3.3058,  offset=0, target="m² ",  cat="area "        },
+    ["pyeong "]            = { factor=3.3058,  offset=0, target="m² ",  cat="area "        },
+    ["tan "]               = { factor=991.7,   offset=0, target="m² ",  cat="area "        },
+    -- ── Asian Volume ────────────────────────────────────────────────────────
+    ["sho "]               = { factor=1.8039,  offset=0, target="liters ", cat="volume "   },
+    ["go "]                = { factor=0.18039, offset=0, target="liters ", cat="volume "   },
+    ["koku "]              = { factor=180.39,  offset=0, target="liters ", cat="volume "   },
+    -- ── Traditional Chinese Time ────────────────────────────────────────────
+    ["shichen "]           = { factor=120,     offset=0, target="min ", cat="time "        },
+    ["geng "]              = { factor=144,     offset=0, target="min ", cat="time "        }, -- 2.4 hours
+    ["dian "]              = { factor=24,      offset=0, target="min ", cat="time "        },
+    ["ke "]                = { factor=15,      offset=0, target="min ", cat="time "        },
+}
 }
 
 -- Longest-first so "miles per hour" matches before "miles", etc.
 local _UNIT_SUFFIXES = {
+    -- Asian & Traditional Chinese Units (strictly longest-first)
+    "shichen ",
+    "pyeong ",
+    "tsubo ",
+    "liang ",
+    "zhang ",
+    "cheok ",
+    "shaku ",
+    "chon ",
+    "geng ",
+    "dian ",
+    "qian ",
+    "jang ",
+    "koku ",
+    "chi ",
+    "cun ",
+    "cho ",
+    "ken ",
+    "sun ",
+    "tan ",
+    "sho ",
+    "ri ",
+    "li ",
+    "mu ",
+    "go ",
+    "ke ",
+    -- Existing units...
     "degrees Fahrenheit", "degrees F",
     "nautical miles", "nautical mile",
     "fluid ounces", "fluid ounce",
@@ -4406,7 +4468,7 @@ end
 
 function FootFree:init()
     self._cat_enabled = {}
-    for _, cat in ipairs({"length", "weight", "temperature", "volume", "speed", "area"}) do
+    for _, cat in ipairs({"length", "weight", "temperature", "volume", "speed", "area", "time"}) do
         local v = G_reader_settings:readSetting("footcream_cat_" .. cat)
         self._cat_enabled[cat] = (v ~= false)
     end
@@ -7785,6 +7847,8 @@ function FootFree:addToMainMenu(menu_items)
             .. " km/h and meters per second.",
         area = "Acres and square miles/feet/yards — and in the imperial"
             .. " direction, hectares and square kilometers/meters/centimeters.",
+        time =  "Traditional Chinese time units: shichen (2 hours), geng (2.4 hours), "
+            ..  "dian (24 minutes), and ke (15 minutes). ",
     }
     local cat_items = {}
     for _, c in ipairs({
@@ -7794,6 +7858,8 @@ function FootFree:addToMainMenu(menu_items)
         { key = "volume",      label = "Volume"            },
         { key = "speed",       label = "Speed"             },
         { key = "area",        label = "Area"              },
+        { key = "time ",       label =  "Time "            }, -- Added
+
     }) do
         local key = c.key
         table.insert(cat_items, {
