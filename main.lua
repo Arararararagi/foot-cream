@@ -576,6 +576,7 @@ local _HARSH_TOLERANCE = 0.04   -- 4%
 local _HARSH_TARGETS = {
     cm = true, kg = true, g = true,
     ["km/h"] = true, km = true, liters = true, mL = true,
+    ["kW"] = true, ["kJ"] = true, ["kPa"] = true,
 }
 
 local function _round_to_int(v)
@@ -654,7 +655,8 @@ FootFree._IMPERIAL = {
     -- time), mph=mph, acres=acres.
     tags = { ftin=true, ["in"]=true, mi=true, lboz=true, oz=true,
              ["°F"]=true, vol=true, mph=true, acres=true,
-             sqft=true, sqmi=true, sqin=true },
+             sqft=true, sqmi=true, sqin=true,
+             hp=true, btu=true, psi=true },
 
     -- The user's preferred system: "metric" (default) | "us" | "uk".
     preferred = function()
@@ -743,6 +745,17 @@ FootFree._IMPERIAL = {
         ["kph"]                  = { factor=0.621371,  offset=0,  target="mph",   cat="speed" },
         ["meters per second"]    = { factor=2.23694,   offset=0,  target="mph",   cat="speed" },
         ["metres per second"]    = { factor=2.23694,   offset=0,  target="mph",   cat="speed" },
+        -- ── Energy (metric source → imperial target) ──────────────────────────
+        ["kilowatts"]            = { factor=1.34102,   offset=0,  target="hp",    cat="energy" },
+        ["kilowatt"]             = { factor=1.34102,   offset=0,  target="hp",    cat="energy" },
+        ["kW"]                   = { factor=1.34102,   offset=0,  target="hp",    cat="energy" },
+        ["kilojoules"]           = { factor=0.947817,  offset=0,  target="btu",   cat="energy" },
+        ["kilojoule"]            = { factor=0.947817,  offset=0,  target="btu",   cat="energy" },
+        ["kJ"]                   = { factor=0.947817,  offset=0,  target="btu",   cat="energy" },
+        -- ── Pressure (metric source → imperial target) ────────────────────────
+        ["kilopascals"]          = { factor=0.145038,  offset=0,  target="psi",   cat="pressure" },
+        ["kilopascal"]           = { factor=0.145038,  offset=0,  target="psi",   cat="pressure" },
+        ["kPa"]                  = { factor=0.145038,  offset=0,  target="psi",   cat="pressure" },
     },
 
     -- Longest-first, like _UNIT_SUFFIXES (suffix identification + shy-book
@@ -762,6 +775,8 @@ FootFree._IMPERIAL = {
         "kilometers an hour", "kilometres an hour",
         "meters per second", "metres per second",
         "degrees Celsius", "degrees centigrade", "centigrade", "Celsius",
+        "kilowatts", "kilowatt", "kilojoules", "kilojoule",
+        "kilopascals", "kilopascal",
         "millimeters", "millimetres", "millimeter", "millimetre",
         "centimeters", "centimetres", "centimeter", "centimetre",
         "kilometers", "kilometres", "kilometer", "kilometre",
@@ -772,7 +787,7 @@ FootFree._IMPERIAL = {
         -- AFTER kilometers/centimeters/millimeters: "meters" is a tail of all
         -- three, and _identify_unit takes the first tail match.
         "meters", "metres", "meter", "metre",
-        "km/h", "kph", "ml", "km", "cm", "mm", "kg", "m", "g",
+        "km/h", "kph", "kW", "kJ", "kPa", "ml", "km", "cm", "mm", "kg", "m", "g",
     },
 
     -- Eighth-inch fraction display for small lengths ("⅜ in", "1¼ in").
@@ -801,7 +816,8 @@ FootFree._IMPERIAL = {
         if not _smart_rounding_enabled() then
             local plain = { ftin = "ft", ["in"] = "in", mi = "mi", lboz = "lb",
                             oz = "oz", ["°F"] = "°F", mph = "mph", acres = "acres",
-                            sqft = "sq ft", sqmi = "sq mi", sqin = "sq in" }
+                            sqft = "sq ft", sqmi = "sq mi", sqin = "sq in",
+                            hp = "hp", btu = "BTU", psi = "psi" }
             if target == "vol" then
                 return _fmt(v * (uk and 0.219969 or 0.264172)) .. " gal"
             end
@@ -895,6 +911,12 @@ FootFree._IMPERIAL = {
             out = (r >= 10 and _fmt(_round_to_int(r)) or _fmt(r)) .. " sq mi"
         elseif target == "sqin" then
             out = _fmt(a) .. " sq in"
+        elseif target == "hp" then
+            out = _fmt(_round_to_int(a)) .. " hp"
+        elseif target == "btu" then
+            out = _fmt(_round_to_int(a)) .. " BTU"
+        elseif target == "psi" then
+            out = _fmt(_round_to_int(a)) .. " psi"
         else
             out = _fmt(a) .. " " .. tostring(target)
         end
@@ -932,12 +954,44 @@ local function _conv_foot_inch_to_m(text)
 end
 
 -- "6′9″" / "6'8"" → metres
+-- Prime/quote marks for the literal passes. Feet: ASCII ', U+2019 ', U+2032 ′.
+-- Inches: ASCII ", U+201D ", U+2033 ″. (U+201C is an OPENING quote — never a
+-- measure — so it stays out.) Held in ONE class-attached table (the chunk sits
+-- near LuaJIT's 200-locals ceiling; no top-level helper slots to spare).
+local _PRIME_MARKS = {}
+do
+    local alts = {}
+    for k in pairs(_VULGAR_FRAC) do alts[#alts + 1] = k end
+    _PRIME_MARKS.vfrac   = "(" .. table.concat(alts, "|") .. ")"
+    _PRIME_MARKS.ft      = "('|\226\128\153|\226\128\178)"
+    _PRIME_MARKS.in_mark = "(\"|\226\128\157|\226\128\179)"
+    _PRIME_MARKS.rsquote = "\226\128\153"   -- ' U+2019
+    _PRIME_MARKS.rdquote = "\226\128\157"   -- " U+201D
+end
+
+-- "6′9″" / "6'8"" / "6'8½"" / "6'8" → metres. Handles the typographic
+-- apostrophe (') and the closing double quote (") as marks. The inches half
+-- may carry a decimal or a vulgar fraction ("6'8½"" = 8.5 in). The inches
+-- value must be < 12, so a bare trailing number that isn't really inches
+-- ("6'140") can't become a bogus height.
 local function _conv_prime_to_m(text)
     local clean = _display(text)
-    local f, i = clean:match("^([0-9]+)" .. _PRIME .. "([0-9]+)")
-    if not f then f, i = clean:match("^([0-9]+)'([0-9]+)") end
-    if f and i then
-        return _fmt_height(tonumber(f) * 0.3048 + tonumber(i) * 0.0254) .. " m"
+    local f = clean:match("^([0-9][0-9.,]*)")
+    if not f then return nil end
+    local rest = clean:sub(#f + 1):gsub("^%s*", "")
+    local mk = 0
+    if rest:sub(1, 1) == "'" then mk = 1
+    elseif rest:sub(1, 3) == _PRIME_MARKS.rsquote then mk = 3
+    elseif rest:sub(1, 3) == _PRIME then mk = 3
+    else return nil end
+    local i = rest:sub(mk + 1)
+    for _, inch in ipairs({ '"', _PRIME_MARKS.rdquote, _DPRIME }) do
+        if i:sub(-#inch) == inch then i = i:sub(1, -#inch - 1); break end
+    end
+    local ft = _parse_num(f)
+    local in_ = _parse_num(i)
+    if ft and in_ and in_ < 12 then
+        return _fmt_height(ft * 0.3048 + in_ * 0.0254) .. " m"
     end
     return nil
 end
@@ -985,10 +1039,13 @@ end
 -- "4′ × 2″" / "4' × 2"" dimension → "1.2 m by 5.1 cm"
 local function _conv_dim_to_m_cm(text)
     local clean = _display(text)
-    local f = clean:match("^([0-9]+)")
-    local i = clean:match(".*[^0-9]([0-9]+)")
+    local f = clean:match("^([0-9][0-9.,]*)")
+    local i = clean:match(".*[^0-9]([0-9][0-9.,]*)")
     if f and i then
-        return _fmt(tonumber(f) * 0.3048) .. " m by " .. _fmt(tonumber(i) * 2.54) .. " cm"
+        local nf, ni = _parse_num(f), _parse_num(i)
+        if nf and ni then
+            return _fmt(nf * 0.3048) .. " m by " .. _fmt(ni * 2.54) .. " cm"
+        end
     end
     return nil
 end
@@ -1103,6 +1160,12 @@ local _UNIT_CONV_UK = {
     ["fluid ounces"] = { factor=28.4131,  offset=0, target="mL", cat="volume" },
     ["fluid ounce"]  = { factor=28.4131,  offset=0, target="mL", cat="volume" },
     ["fl oz"]        = { factor=28.4131,  offset=0, target="mL", cat="volume" },
+    ["gills"]        = { factor=0.142065, offset=0, target="liters", cat="volume" },
+    ["gill"]         = { factor=0.142065, offset=0, target="liters", cat="volume" },
+    -- Long/imperial ton (2240 lb). The UK flavor's volumes/long ton are always
+    -- on for en-GB books (same mechanism as gallons).
+    ["tons"]         = { factor=1016.05,  offset=0, target="kg", cat="weight" },
+    ["ton"]          = { factor=1016.05,  offset=0, target="kg", cat="weight" },
 }
 
 -- ── Pounds context classifier (weight vs. £ currency) ────────────────────────
@@ -1255,6 +1318,33 @@ local function _pound_currency_wins(window, num)
     return cscore > wscore
 end
 
+-- Ton classifier: is "N tons" a real weight, or the figurative "a lot"? Mirrors
+-- the pound classifier's weighted-decision shape. The "ton(s)" word itself is
+-- deliberately NOT a weight cue (it would tie every case). `window` is the
+-- lowercased prev+next context. A hard register-tonnage cue (ship volume, not
+-- mass) means not a weight, full stop. Class-attached (not a chunk local): the
+-- chunk sits near LuaJIT's 200-locals ceiling — same convention as _IMPERIAL.
+FootFree._TON = {}
+FootFree._TON.figure = {
+    fun=true, work=true, trouble=true, stuff=true, things=true,
+    bricks=true, paperwork=true, people=true, food=true, times=true,
+    worry=true, worries=true, ideas=true, advice=true, nonsense=true,
+}
+FootFree._TON.tonnage = { tonnage=true, displacement=true, deadweight=true }
+FootFree._TON.wins = function(window, num)
+    if window:find("tonnage") or window:find("displacement")
+       or window:find("deadweight") then return true end
+    local fscore, wscore = 0, 0
+    for word in window:gmatch("%a+") do
+        if FootFree._TON.figure[word] then fscore = fscore + 1 end
+        if _WEIGHT_WORDS[word] and word ~= "ton" and word ~= "tons"
+           and word ~= "tonne" and word ~= "tonnes" then
+            wscore = wscore + 1
+        end
+    end
+    return fscore > wscore
+end
+
 -- Window-truncation helpers. The scan stores 15 context words each side (the
 -- pound currency classifier needs the wide view), but the number/range/idiom
 -- logic and the legacy filters are tuned for 8 — these trim back to the 8 words
@@ -1342,6 +1432,8 @@ local _CAT_ICONS = {
     speed       = "speed",
     area        = "length",   -- no separate area icon; length is the closest
     time        = "length",   -- fallback icon for time units
+    energy      = "speed",    -- closest available icon
+    pressure    = "temp",     -- closest available icon
 }
 
 local _SIDECAR_DIR         = DataStorage:getDataDir() .. "/footcream"
@@ -2346,6 +2438,12 @@ local function _apply_settings_to_matches(matches, distinguish_pounds, use_uk_vo
                 local window = ((r.prev_text or "") .. " " .. (r.next_text or "")):lower()
                 if _pound_currency_wins(window, r._num) then keep = false end
             end
+            -- Tons: figurative ("tons of fun", "a ton of work") and ship
+            -- register-tonnage are not weights.
+            if mt:find("ton") then
+                local window = ((r.prev_text or "") .. " " .. (r.next_text or "")):lower()
+                if FootFree._TON.wins(window, r._num) then keep = false end
+            end
         end
 
         if keep then table.insert(result, r) end
@@ -2393,6 +2491,25 @@ local _UNIT_CONV = {
     ["ounce"]             = { factor=28.3495,  offset=0,       target="g",    cat="weight"      },
     ["oz"]                = { factor=28.3495,  offset=0,       target="g",    cat="weight"      },
     ["stone"]             = { factor=6.35029,  offset=0,       target="kg",   cat="weight"      },
+    -- Short ton (US) 2000 lb. The long/imperial ton (2240 lb) and the metric
+    -- tonne live in _UNIT_CONV_UK / _IMPERIAL.conv respectively. TONS were
+    -- deliberately absent for years (README note): the word doubles as a
+    -- figurative "a lot" and as ship register-tonnage. A _ton_figurative_wins
+    -- classifier now suppresses those senses; see _apply_settings_to_matches.
+    ["tons"]              = { factor=907.185,  offset=0,       target="kg",   cat="weight"      },
+    ["ton"]               = { factor=907.185,  offset=0,       target="kg",   cat="weight"      },
+    -- Gem/precious-metal weight: 1 carat = 0.2 g. "N-karat" gold fineness
+    -- (spelled with a k) is never matched; "N carat gold" (fineness, spelled
+    -- with a c) is suppressed by a gold-context guard in _finishScan.
+    ["carats"]            = { factor=0.2,      offset=0,       target="g",    cat="weight"      },
+    ["carat"]             = { factor=0.2,      offset=0,       target="g",    cat="weight"      },
+    -- Russian pre-metric units, common in translated 19th-c. prose.
+    ["versts"]            = { factor=1.0668,   offset=0,       target="km",   cat="length"      },
+    ["verst"]             = { factor=1.0668,   offset=0,       target="km",   cat="length"      },
+    ["arshins"]           = { factor=0.7112,   offset=0,       target="m",    cat="length"      },
+    ["arshin"]            = { factor=0.7112,   offset=0,       target="m",    cat="length"      },
+    ["poods"]             = { factor=16.3805,  offset=0,       target="kg",   cat="weight"      },
+    ["pood"]              = { factor=16.3805,  offset=0,       target="kg",   cat="weight"      },
     ["°F"]                = { factor=5/9,      offset=-32*5/9, target="°C",   cat="temperature" },
     ["degrees Fahrenheit"]= { factor=5/9,      offset=-32*5/9, target="°C",   cat="temperature" },
     ["degrees F"]         = { factor=5/9,      offset=-32*5/9, target="°C",   cat="temperature" },
@@ -2408,12 +2525,34 @@ local _UNIT_CONV = {
     ["fluid ounces"]      = { factor=29.5735,  offset=0,       target="mL",   cat="volume"      },
     ["fluid ounce"]       = { factor=29.5735,  offset=0,       target="mL",   cat="volume"      },
     ["fl oz"]             = { factor=29.5735,  offset=0,       target="mL",   cat="volume"      },
+    ["gills"]             = { factor=0.118294, offset=0,       target="liters", cat="volume"    },
+    ["gill"]              = { factor=0.118294, offset=0,       target="liters", cat="volume"    },
     ["mph"]               = { factor=1.60934,  offset=0,       target="km/h", cat="speed"       },
     ["miles per hour"]    = { factor=1.60934,  offset=0,       target="km/h", cat="speed"       },
     ["miles an hour"]     = { factor=1.60934,  offset=0,       target="km/h", cat="speed"       },
     ["knots"]             = { factor=1.852,    offset=0,       target="km/h", cat="speed"       },
     ["knot"]              = { factor=1.852,    offset=0,       target="km/h", cat="speed"       },
     ["kn"]                = { factor=1.852,    offset=0,       target="km/h", cat="speed"       },
+    -- ── Energy ──────────────────────────────────────────────────────────────
+    ["horsepower"]        = { factor=0.745700, offset=0,       target="kW",   cat="energy"      },
+    ["horse power"]       = { factor=0.745700, offset=0,       target="kW",   cat="energy"      },
+    ["hp"]                = { factor=0.745700, offset=0,       target="kW",   cat="energy"      },
+    ["BTUs"]              = { factor=1.05506,  offset=0,       target="kJ",   cat="energy"      },
+    ["BTU"]               = { factor=1.05506,  offset=0,       target="kJ",   cat="energy"      },
+    ["British thermal units"] = { factor=1.05506, offset=0,    target="kJ",   cat="energy"      },
+    ["British thermal unit"]  = { factor=1.05506, offset=0,    target="kJ",   cat="energy"      },
+    -- Food "calories" (kilocalories) → kilojoules.
+    ["calories"]          = { factor=4.184,    offset=0,       target="kJ",   cat="energy"      },
+    ["calorie"]           = { factor=4.184,    offset=0,       target="kJ",   cat="energy"      },
+    -- ── Pressure ─────────────────────────────────────────────────────────────
+    ["psi"]               = { factor=6.89476,  offset=0,       target="kPa",  cat="pressure"    },
+    ["pounds per square inch"] = { factor=6.89476, offset=0,   target="kPa",  cat="pressure"    },
+    ["atmospheres"]       = { factor=101.325,  offset=0,       target="kPa",  cat="pressure"    },
+    ["atmosphere"]        = { factor=101.325,  offset=0,       target="kPa",  cat="pressure"    },
+    ["atm"]               = { factor=101.325,  offset=0,       target="kPa",  cat="pressure"    },
+    ["mmHg"]              = { factor=0.133322, offset=0,       target="kPa",  cat="pressure"    },
+    ["millimeters of mercury"] = { factor=0.133322, offset=0,  target="kPa",  cat="pressure"    },
+    ["millimeter of mercury"]  = { factor=0.133322, offset=0,  target="kPa",  cat="pressure"    },
     ["acres"]             = { converter=_conv_acres_to_ha,     target="ha",   cat="area"        },
     ["acre"]              = { converter=_conv_acres_to_ha,     target="ha",   cat="area"        },
     ["acres "]             = { converter=_conv_acres_to_ha,     target="ha ",   cat="area "        },
@@ -2450,7 +2589,6 @@ local _UNIT_CONV = {
     ["dian "]              = { factor=24,      offset=0, target="min ", cat="time "        },
     ["ke "]                = { factor=15,      offset=0, target="min ", cat="time "        },
 }
-}
 
 -- Longest-first so "miles per hour" matches before "miles", etc.
 local _UNIT_SUFFIXES = {
@@ -2483,18 +2621,27 @@ local _UNIT_SUFFIXES = {
     -- Existing units...
     "degrees Fahrenheit", "degrees F",
     "nautical miles", "nautical mile",
+    "British thermal units", "British thermal unit",
+    "pounds per square inch",
+    "millimeters of mercury", "millimeter of mercury",
     "fluid ounces", "fluid ounce",
     "miles per hour", "miles an hour",
+    "horse power", "horsepower",
     "fl oz", "fathoms", "fathom", "furlongs", "furlong",
     "leagues", "league",
     "gallons", "gallon", "quarts", "quart",
     "cubits", "cubit",
     "knots", "knot", "pounds", "pound",
     "ounces", "ounce", "pints", "pint",
+    "carats", "carat", "tons", "ton",
+    "versts", "verst", "arshins", "arshin",
+    "poods", "pood", "gills", "gill",
     "acres", "acre", "stone", "yards", "yard",
     "miles", "mile", "feet", "foot", "inches", "inch",
+    "atmospheres", "atmosphere", "calories", "calorie",
     "yds", "yd", "lbs", "lb", "nmi", "gal",
-    "mph", "kn", "ft", "mi", "oz", "pt", "qt", "°F",
+    "BTUs", "BTU", "mmHg", "atm",
+    "mph", "kn", "ft", "mi", "oz", "pt", "qt", "psi", "hp", "°F",
 }
 
 local function _identify_unit(text, list)
@@ -2682,11 +2829,11 @@ end
 -- BEFORE the number — for idioms like "own two feet" / "with one foot" — strip
 -- the trailing number word(s) first, then return the last remaining word.
 local function _word_before_number(prev)
-    local p = (prev or ""):gsub("%s+$", "")
+    local p = (prev or ""):gsub("%s+$", ""):gsub("[%.,;:!?]+$", "")
     while true do
         local w = p:match("([%w]+)%s*$")
         if w and _is_number_word(w) then
-            p = p:gsub("[%w]+%s*$", ""):gsub("%s+$", "")
+            p = p:gsub("[%w]+%s*$", ""):gsub("%s+$", ""):gsub("[%.,;:!?]+$", "")
         else
             break
         end
@@ -2711,7 +2858,7 @@ local function _prev_num_words(prev)
     -- here — neither joins compound numbers, and _detect_back_range matches
     -- its em-dash range connector on the RAW prev before this ever runs.
     -- (The en-dash is left alone: it IS a range connector glyph.)
-    s = s:gsub("\226\128\148", " "):gsub("\226\128\166", " "):gsub("%s+$", "")
+    s = s:gsub("\226\128\148", " "):gsub("\226\128\166", " "):gsub("%s+$", ""):gsub("[%.,;:!?]+$", "")
     -- Fractional "<frac> of a/an [unit]" form ("two thirds of a mile"): the
     -- word-walk below can't cross "of", so handle it up front. The fraction is
     -- the word(s) just before "of a/an"; _parse_num knows these (e.g. prefix
@@ -3257,7 +3404,7 @@ local _VAGUE_ORDER = {
 -- is a BARE multiplier ("a few hundred", not "a few two hundred") preceded by a
 -- vague quantifier — so precise amounts ("two hundred pounds") are untouched.
 local function _detect_vague(prev)
-    local p = (prev or ""):lower():gsub("%s+$", "")
+    local p = (prev or ""):lower():gsub("%s+$", ""):gsub("[%.,;:!?]+$", "")
     local mword = p:match("([%a]+)$")
     local mult = mword and _VAGUE_MULTIPLIERS[mword]
     if not mult then return nil end
@@ -3326,14 +3473,19 @@ end
 
 -- Prime/apostrophe notation (6′8″, 3″, 5'11", 4′ × 2″) isn't anchored on a unit
 -- word, so these run as their own findAllText passes (longest-first so the
--- feet+inches form claims "6′8″" before the bare feet/inches forms).
+-- feet+inches form claims "6′8″" before the bare feet/inches forms). All marks
+-- (ASCII + U+2019/U+201D + Unicode primes) are handled; inches may carry a
+-- vulgar-fraction glyph ("6'8½\""). The penultimate pattern is the bare
+-- compound "6'4" (US shorthand, no closing inch mark).
 local _PRIME_PATS = {
-    { pat = _ND.."(".._PRIME.."|')[ ]*".._TIMES.."[ ]*[0-9]+(".._DPRIME.."|\")",
+    { pat = _ND.._PRIME_MARKS.ft.."[ ]*".._TIMES.."[ ]*[0-9][0-9.,]*".._PRIME_MARKS.in_mark,
       converter = _conv_dim_to_m_cm, target = "m×cm", cat = "length" },
-    { pat = _ND.."(".._PRIME.."|')[0-9]+(".._DPRIME.."|\")",
+    { pat = _ND.._PRIME_MARKS.ft.."[ ]*[0-9][0-9.,]*".._PRIME_MARKS.vfrac.."?".._PRIME_MARKS.in_mark,
       converter = _conv_prime_to_m, target = "m", cat = "length" },
-    { pat = _ND.."(".._PRIME.."|')",   factor = 0.3048, offset = 0, target = "m",  cat = "length" },
-    { pat = _ND.."(".._DPRIME.."|\")", factor = 2.54,   offset = 0, target = "cm", cat = "length" },
+    { pat = _ND.._PRIME_MARKS.ft.."[0-9][0-9.,]*",
+      converter = _conv_prime_to_m, target = "m", cat = "length" },
+    { pat = _ND.._PRIME_MARKS.ft,   factor = 0.3048, offset = 0, target = "m",  cat = "length" },
+    { pat = _ND.._PRIME_MARKS.in_mark,   factor = 2.54,   offset = 0, target = "cm", cat = "length" },
 }
 
 -- All °F (degree-symbol form) handling runs as dedicated literal passes, like
@@ -3784,7 +3936,7 @@ local function _fast_scan_matches(doc, cat_enabled)
            -- "1 /10; inch". A tight "19-3/10 miles" / "1-3/8 inches" is a clean
            -- ASCII mixed fraction and must convert — sweep batch 2.)
            and not (h.prev_text or ""):match("%d%s+/%s*%d+%s*;?%s*$")
-           and not _is_range_start((h.next_text or ""):lower(), (unit or ""):lower()) then
+            and not _is_range_start((h.next_text or ""):lower(), (unit or ""):lower()) then
             local p = (h.prev_text or ""):lower()
             local ulow = (unit or ""):lower()
 
@@ -4144,7 +4296,7 @@ local function _fast_scan_matches(doc, cat_enabled)
                                 cand = nx
                                 local t = text_of(rec["end"], cand)
                                 if t then
-                                    local norm = t:lower():gsub("%-", " "):gsub("^[%s,]+", ""):gsub("%s+$", "")
+                                    local norm = t:lower():gsub("%-", " "):gsub("^[%s,]+", ""):gsub("%s+$", ""):gsub("[%.,;:!?]+$", "")
                                     if norm == phrase then rend = cand; break end
                                 end
                             end
@@ -4204,7 +4356,7 @@ local function _fast_scan_matches(doc, cat_enabled)
                                 cand = nx
                                 local t = text_of(rec["end"], cand)
                                 if t then
-                                    local norm = t:lower():gsub("^[%s,]+", ""):gsub("%s+$", "")
+                                    local norm = t:lower():gsub("^[%s,]+", ""):gsub("%s+$", ""):gsub("[%.,;:!?]+$", "")
                                     if norm == phrase then rend = cand; break end
                                 end
                             end
@@ -4289,7 +4441,7 @@ local function _fast_scan_matches(doc, cat_enabled)
                                 cand = nx2
                                 local t = text_of(h["end"], cand)
                                 if t then
-                                    local norm = t:lower():gsub("%-", " "):gsub("^[%s,]+", ""):gsub("%s+$", "")
+                                    local norm = t:lower():gsub("%-", " "):gsub("^[%s,]+", ""):gsub("%s+$", ""):gsub("[%.,;:!?]+$", "")
                                     if norm == phrase then rend = cand; break end
                                 end
                             end
@@ -4353,6 +4505,7 @@ local function _fast_scan_matches(doc, cat_enabled)
     local maybe_primes = (not ok_t) or (not bt)
         or bt:find(_PRIME, 1, true) or bt:find(_DPRIME, 1, true)
         or bt:find("%d'") or bt:find('%d"')
+        or bt:find("%d" .. _PRIME_MARKS.rsquote) or bt:find("%d" .. _PRIME_MARKS.rdquote)
     -- Literal-match passes (primes, °F): run longest-first, deduped by start AND
     -- end xpointer so a range claims its span before the single-value pass can
     -- re-match an endpoint. seen_end is shared with the main unit loop above.
@@ -4420,9 +4573,21 @@ local function _fast_scan_matches(doc, cat_enabled)
                         elseif not seen_start[r.start] then
                             seen_start[r.start] = true
                             seen_end[r["end"]] = true
-                            r._search = e
-                            r._cat = e.cat
-                            out[#out + 1] = r
+                            -- A converter pattern (compound heights, dimensions)
+                            -- that can't actually convert the span (e.g. the
+                            -- bare "6'4" form where the trailing number is ≥12
+                            -- inches: "6'140") must not emit a display-only
+                            -- match. Verify before keeping.
+                            local conv_ok = true
+                            if e.converter then
+                                local okc, cv = pcall(e.converter, r.matched_text)
+                                conv_ok = okc and cv ~= nil
+                            end
+                            if conv_ok then
+                                r._search = e
+                                r._cat = e.cat
+                                out[#out + 1] = r
+                            end
                         else
                             seen_end[r["end"]] = true  -- block tail sub-matches
                         end
@@ -4468,7 +4633,7 @@ end
 
 function FootFree:init()
     self._cat_enabled = {}
-    for _, cat in ipairs({"length", "weight", "temperature", "volume", "speed", "area", "time"}) do
+    for _, cat in ipairs({"length", "weight", "temperature", "volume", "speed", "area", "time", "energy", "pressure"}) do
         local v = G_reader_settings:readSetting("footcream_cat_" .. cat)
         self._cat_enabled[cat] = (v ~= false)
     end
@@ -5929,7 +6094,8 @@ function FootFree:_finishScan(doc, all_matches, t_per_pat, t_total, in_subproces
             local mt1 = r.matched_text:sub(1, 1)
             if mt1 == "'" or mt1 == '"'
                or r.matched_text:sub(1, 3) == _PRIME
-               or r.matched_text:sub(1, 3) == _DPRIME then
+               or r.matched_text:sub(1, 3) == _DPRIME
+               or r.matched_text:sub(1, 3) == _PRIME_MARKS.rsquote then
                 keep = false
             end
         end
@@ -5947,6 +6113,8 @@ function FootFree:_finishScan(doc, all_matches, t_per_pat, t_total, in_subproces
         local _mt_end1 = r.matched_text:sub(-1)
         local _ends_prime = _mt_end1 == "'" or _mt_end1 == '"'
             or r.matched_text:sub(-3) == _PRIME or r.matched_text:sub(-3) == _DPRIME
+            or r.matched_text:sub(-3) == _PRIME_MARKS.rsquote
+            or r.matched_text:sub(-3) == _PRIME_MARKS.rdquote
         if not _ends_prime and (r.next_text or ""):match("^[a-zA-Z]") then
             -- The letter can also come from the NEXT BLOCK: when the match
             -- ends at its node's last character (sign/label paragraphs —
@@ -6034,12 +6202,32 @@ function FootFree:_finishScan(doc, all_matches, t_per_pat, t_total, in_subproces
         -- ./,/;/etc. is punctuation ending quoted text.
         do
             local body
-            if r.matched_text:sub(-3) == _PRIME or r.matched_text:sub(-3) == _DPRIME then
+            if r.matched_text:sub(-3) == _PRIME or r.matched_text:sub(-3) == _DPRIME
+               or r.matched_text:sub(-3) == _PRIME_MARKS.rsquote
+               or r.matched_text:sub(-3) == _PRIME_MARKS.rdquote then
                 body = r.matched_text:sub(1, -4)
             elseif r.matched_text:sub(-1) == "'" or r.matched_text:sub(-1) == '"' then
                 body = r.matched_text:sub(1, -2)
             end
-            if body and not body:sub(-1):match("%d") then keep = false end
+            if body then
+                -- The char right before the mark must look like a measurement
+                -- end: a digit OR a vulgar-fraction glyph ("6'8½\"", "4½\"") —
+                -- anything else (a period, a letter) means the quote closed a
+                -- word or a sentence, not a measurement.
+                local endok = body:sub(-1):match("%d")
+                    or _VULGAR_FRAC[body:sub(-2)] ~= nil
+                    or _VULGAR_FRAC[body:sub(-3)] ~= nil
+                if not endok then keep = false end
+                -- Speech-close guard: a digit-preceded quote that closes quoted
+                -- speech ("He's 6," she said) is punctuation, not an inch/feet
+                -- mark. A real mark is followed by a word or dimension
+                -- ("6\" tall", "6\" × 4\""); a closing quote is followed
+                -- immediately by punctuation.
+                if endok then
+                    local nxt = (r.next_text or ""):gsub("^%s+", "")
+                    if nxt:match("^[%.,;:!?%)%]]") then keep = false end
+                end
+            end
         end
         -- Product model numbers: a comma between the number and the unit (e.g.
         -- "VTS989, kn") never appears in real measurements.
@@ -6065,6 +6253,15 @@ function FootFree:_finishScan(doc, all_matches, t_per_pat, t_total, in_subproces
         if keep and r._search.target == "liters" and mt:find("pint") then
             for w in (prev .. " " .. nxt):gmatch("[%w'\226\128\153%-]+") do
                 if _DRINK_WORDS[w:lower()] then keep = false; break end
+            end
+        end
+        -- Carat vs gold fineness: "24 carat gold" is a PURITY grade (24/24 =
+        -- pure), not a weight — the diamond-size reading ("a two-carat stone")
+        -- is the one worth converting. "karat" (with a k) is never matched at
+        -- all; suppress the "carat" spelling when "gold" is nearby.
+        if keep and r._search.target == "g" and mt:find("carat") then
+            for w in (prev .. " " .. nxt):gmatch("[%w'\226\128\153%-]+") do
+                if w:lower() == "gold" then keep = false; break end
             end
         end
         -- Mangled vulgar fraction: some EPUBs render "¾" as "3 4'" — a lone
@@ -6181,7 +6378,7 @@ local _FOOT_IDIOM_NEXT = {
     "grounded", "braced", "firmly", "on",
 }
 local function _idiom_guard(original)
-    local o = original:lower():gsub("^%s+", ""):gsub("%s+$", "")
+    local o = original:lower():gsub("^%s+", ""):gsub("%s+$", ""):gsub("[%.,;:!?]+$", "")
     if o == "one foot" or o == "a foot" then return _FOOT_IDIOM_NEXT end
     return nil
 end
@@ -6327,7 +6524,8 @@ function FootFree:_doApplyMetricEdition(doc)
     -- Converting currency is worse than leaving a colliding genuine weight as
     -- imperial — and that weight still converts in the positional Mode 1.
     for original, rep in pairs(rep_of) do
-        if original:lower():find("pound") then
+        if original:lower():find("pound") or original:lower():find(" ton")
+           or original:lower() == "ton" or original:lower() == "tons" then
             rep.expected = kept_count[original]
         end
     end
@@ -7068,12 +7266,12 @@ function FootFree:_showUnitList()
         local before = text_of(walk(r.start, CTX_WORDS, false), r.start) or ""
         local after  = r["end"] and (text_of(r["end"], walk(r["end"], CTX_WORDS, true)) or "") or ""
         local ctx = before .. " [" .. unit .. "] " .. after
-        ctx = ctx:gsub("%s+", " "):gsub("^%s+", ""):gsub("%s+$", "")
+        ctx = ctx:gsub("%s+", " "):gsub("^%s+", ""):gsub("%s+$", ""):gsub("[%.,;:!?]+$", "")
         -- Extraction failed (no end xp, or both sides empty) — fall back to the
         -- saved context so the row is never blank.
         if not r["end"] or (before == "" and after == "") then
             ctx = ((r.prev_text or "") .. (r.matched_text or "") .. (r.next_text or ""))
-                :gsub("%s+", " "):gsub("^%s+", ""):gsub("%s+$", "")
+                :gsub("%s+", " "):gsub("^%s+", ""):gsub("%s+$", ""):gsub("[%.,;:!?]+$", "")
         end
         return ctx
     end
@@ -7595,7 +7793,7 @@ function FootFree:_ctxAround(doc, start_xp, end_xp, mid)
     local after  = end_xp and (text_of(end_xp, walk(end_xp, 12, true)) or "") or ""
     if before == "" and after == "" then return nil end
     return (before .. " [" .. mid .. "] " .. after)
-        :gsub("%s+", " "):gsub("^%s+", ""):gsub("%s+$", "")
+        :gsub("%s+", " "):gsub("^%s+", ""):gsub("%s+$", ""):gsub("[%.,;:!?]+$", "")
 end
 
 -- Build the same item shape _showUnitList's rows carry (what _flagError
@@ -7608,7 +7806,7 @@ function FootFree:_flagItemFromMatch(r)
     local ctx = r["end"] and self:_ctxAround(doc, r.start, r["end"], unit) or nil
     if not ctx then
         ctx = ((r.prev_text or "") .. (r.matched_text or "") .. (r.next_text or ""))
-            :gsub("%s+", " "):gsub("^%s+", ""):gsub("%s+$", "")
+            :gsub("%s+", " "):gsub("^%s+", ""):gsub("%s+$", ""):gsub("[%.,;:!?]+$", "")
     end
     return {
         text    = string.format("%s (%s)  →  %s\n…%s…", unit, valstr, conv, ctx),
@@ -7847,8 +8045,12 @@ function FootFree:addToMainMenu(menu_items)
             .. " km/h and meters per second.",
         area = "Acres and square miles/feet/yards — and in the imperial"
             .. " direction, hectares and square kilometers/meters/centimeters.",
-        time =  "Traditional Chinese time units: shichen (2 hours), geng (2.4 hours), "
-            ..  "dian (24 minutes), and ke (15 minutes). ",
+        time = "Traditional Chinese time units: shichen (2 hours), geng (2.4"
+            .. " hours), dian (24 minutes), and ke (15 minutes).",
+        energy = "Horsepower, BTUs and food calories — and in the imperial"
+            .. " direction, kilowatts and kilojoules.",
+        pressure = "PSI, atmospheres and mmHg — and in the imperial direction,"
+            .. " kilopascals.",
     }
     local cat_items = {}
     for _, c in ipairs({
@@ -7858,8 +8060,9 @@ function FootFree:addToMainMenu(menu_items)
         { key = "volume",      label = "Volume"            },
         { key = "speed",       label = "Speed"             },
         { key = "area",        label = "Area"              },
-        { key = "time ",       label =  "Time "            }, -- Added
-
+        { key = "time",        label = "Time"              },
+        { key = "energy",      label = "Energy"            },
+        { key = "pressure",    label = "Pressure"          },
     }) do
         local key = c.key
         table.insert(cat_items, {
@@ -8379,5 +8582,19 @@ function FootFree:addToMainMenu(menu_items)
         end,
     }
 end
+
+-- Test-suite hook (tests/run.lua loads this chunk behind KOReader stubs).
+-- Same convention as FootFree._IMPERIAL / _REPORTING: pure helpers attached to
+-- the class so the headless suite can drive them; zero cost in production.
+FootFree._TEST = {
+    convert         = _convert,
+    display         = _display,
+    parse_num       = _parse_num,
+    smart_round     = _smart_round,
+    fmt_dist        = _fmt_dist,
+    apply_settings  = _apply_settings_to_matches,
+    load_sidecar    = _load_sidecar_raw,
+    is_uk_book      = _is_uk_book,
+}
 
 return FootFree
