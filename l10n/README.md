@@ -1,10 +1,5 @@
 # Footcream Translations
 
-> **Setup pending:** the Crowdin project below hasn't been created yet. The
-> repo side is ready — templates committed, `crowdin.yml` in place, licence
-> set — but the crowdin.com project still has to be requested. See "Setting up
-> the Crowdin project" at the bottom. Until then the link is a placeholder.
-
 Footcream is translated by the community through [Crowdin][crowdin-project].
 Anyone can contribute a translation there without installing anything —
 create a free account, pick a language, and start translating.
@@ -23,8 +18,14 @@ Translations are split into two components, deliberately:
 
 | Component | Strings | Words | Status |
 |---|---|---|---|
-| **Labels** — menu items, buttons, dialogs, notifications | 138 | ~580 | **required** |
+| **Labels** — menu items, buttons, dialogs, notifications | 139 | ~580 | **required** |
 | **Help texts** — the long-press explainers | 27 | ~740 | optional |
+
+Every string carries a **translator note** explaining where in the interface
+it appears and what it does — which menu it sits under, which dialog a button
+belongs to, or the sentence a fragment gets slotted into. Crowdin shows these
+above the editing box. If a note is missing, wrong, or doesn't answer your
+question, that's a bug worth reporting.
 
 The 27 help texts are only ~16% of the strings but over half the words. So
 finishing **Labels** alone — roughly an hour — makes the entire interface
@@ -148,38 +149,37 @@ a language stuck at "translated but unreviewed" can't ship.
 
 ## Setting up the Crowdin project
 
-**Done (repo side):**
+The project exists and is synced. What's in place:
 
 - `l10n/templates/*.pot` committed on `main` — the sources Crowdin reads.
+  Committed rather than gitignored: Crowdin needs the template to seed a
+  language that has no `.po` yet.
 - `plugin/crowdin.yml` — the source→translation file mapping, kept in the repo
   so it's reviewable rather than clicked through a web form. It carries no
   credentials; `project_id` / `api_token` come from the environment.
-- `plugin/l10n/LOCALES` — the directory names the plugin can actually load.
-- Licence set to AGPL-3.0-or-later.
+- `plugin/l10n/LOCALES` — the directory names the plugin can actually load,
+  regenerated from KOReader's own translations submodule by
+  `builder/sync_locales.py`.
+- 58 target languages, set in one call by `builder/crowdin_set_languages.py`.
+- Licence set to AGPL-3.0-or-later; proofreading on, so a language needs a
+  second speaker's approval before it can ship.
+- **Push Sources OFF** and **Always import new translations OFF** — see "Don't
+  hand-edit the .po files in git" above.
+- Crowdin pushes to the `l10n_main` service branch, which is merged only when
+  a release is cut. `release.sh` refuses to release if that branch is ahead
+  and hasn't been looked at.
 - `builder/check.sh` fails the build on a bad language mapping or an unknown
-  locale directory (stages 7 and 8).
+  locale directory (stages 7 and 8); `builder/verify_crowdin_sync.sh` checks
+  the directory names Crowdin actually wrote.
 
-**Remaining (account side, a maintainer has to do by hand):**
+Still to do:
 
-1. Create a free account at crowdin.com.
-2. Apply for the free **open-source plan** — a reviewed request, so expect a
-   wait. Point it at `https://github.com/Fank1/foot-cream`.
-3. Create the project and connect the GitHub integration. With `crowdin.yml`
-   committed, the file mapping comes from the repo; you shouldn't have to
-   define source files by hand in the UI.
-4. Set the **translation license** to `AGPL-3.0-or-later`
-   (<https://www.gnu.org/licenses/agpl-3.0.html>) — same as the plugin, which
-   is what lets translations ship inside it.
-5. Turn on **proofreading**, so the "a second speaker approves" gate is
-   enforced by the tool rather than being a convention in this file.
-6. Prefer the integration mode that opens **pull requests** rather than
-   pushing straight to `main`, so nothing lands unseen.
-7. **Verify the language mapping before the first sync.** `crowdin.yml` maps
-   Crowdin language IDs to the directory names the plugin loads. The keys were
-   written from the expected IDs and not all of them are verified — check them
-   against Crowdin's own language list. A wrong key silently misfiles a
-   language; `builder/check.sh` catches the result, but only after files exist.
-8. Replace the `crowdin-project` link below with the real project URL.
+1. Apply for the free **open-source plan** at
+   <https://crowdin.com/page/open-source-project-setup-request>. Their
+   criterion is a repo at least 3 months old, which this one meets from
+   2026-09-23.
+2. Add screenshots in Crowdin so translators can see strings in place, not
+   just read about them.
 
 ### Why the language mapping matters more than it looks
 
