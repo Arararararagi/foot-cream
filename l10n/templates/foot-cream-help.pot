@@ -18,7 +18,6 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=INTEGER; plural=EXPRESSION;\n"
 
-#. Long-press explainers per category (both scan directions listed).
 #: main.lua:8191
 msgid ""
 "Inches, feet, yards, miles, fathoms, furlongs, leagues, cubits — and in the "
