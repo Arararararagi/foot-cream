@@ -1,0 +1,77 @@
+# Crowdin target languages for Footcream
+#
+# Add exactly these in the Crowdin project's Target Languages picker.
+# Generated from KOReader's own locale set (koreader-translations, at the
+# commit KOReader pins) cross-referenced with Crowdin's live language list.
+# Regenerate with: builder/sync_locales.py --write, then rebuild the
+# crowdin.yml mapping and run builder/check_crowdin_map.py.
+#
+# 58 languages.
+
+Crowdin language             Crowdin id   lands in
+--------------------------------------------------------------
+Afrikaans                    af           l10n/af_ZA/
+Arabic                       ar           l10n/ar/
+Basque                       eu           l10n/eu/
+Belarusian                   be           l10n/be/
+Bengali                      bn           l10n/bn/
+Bulgarian                    bg           l10n/bg_BG/
+Catalan                      ca           l10n/ca/
+Chinese Simplified           zh-CN        l10n/zh_CN/
+Chinese Traditional          zh-TW        l10n/zh_TW/
+Croatian                     hr           l10n/hr/
+Czech                        cs           l10n/cs/
+Danish                       da           l10n/da/
+Dutch                        nl           l10n/nl_NL/
+English, United Kingdom      en-GB        l10n/en_GB/
+Esperanto                    eo           l10n/eo/
+Estonian                     et           l10n/et/
+Finnish                      fi           l10n/fi/
+French                       fr           l10n/fr/
+Galician                     gl           l10n/gl/
+Georgian                     ka           l10n/ka/
+German                       de           l10n/de/
+Greek                        el           l10n/el/
+Hebrew                       he           l10n/he/
+Hindi                        hi           l10n/hi/
+Hungarian                    hu           l10n/hu/
+Indonesian                   id           l10n/id/
+Irish                        ga-IE        l10n/ga/
+Italian                      it           l10n/it_IT/
+Japanese                     ja           l10n/ja/
+Kabyle                       kab          l10n/kab/
+Kannada                      kn           l10n/kn/
+Korean                       ko           l10n/ko_KR/
+Latvian                      lv           l10n/lv/
+Lithuanian                   lt           l10n/lt_LT/
+Macedonian                   mk           l10n/mk/
+Malay                        ms           l10n/ms/
+Norwegian Bokmal             nb           l10n/nb_NO/
+Norwegian Nynorsk            nn-NO        l10n/nn/
+Odia                         or           l10n/or/
+Persian                      fa           l10n/fa/
+Polish                       pl           l10n/pl/
+Portuguese                   pt-PT        l10n/pt_PT/
+Portuguese, Brazilian        pt-BR        l10n/pt_BR/
+Romanian                     ro           l10n/ro/
+Russian                      ru           l10n/ru/
+Serbian (Cyrillic)           sr           l10n/sr/
+Sinhala                      si-LK        l10n/si/
+Slovak                       sk           l10n/sk/
+Slovenian                    sl           l10n/sl/
+Spanish                      es-ES        l10n/es/
+Swedish                      sv-SE        l10n/sv/
+Thai                         th           l10n/th/
+Turkish                      tr           l10n/tr/
+Ukrainian                    uk           l10n/uk/
+Urdu (India)                 ur-IN        l10n/ur/
+Uzbek                        uz           l10n/uz/
+Vietnamese                   vi           l10n/vi/
+Welsh                        cy           l10n/cy/
+
+Not available (KOReader has them, Crowdin does not):
+  ia     Interlingua
+  ie     Interlingue
+  ro_MD  Moldovan Romanian — Crowdin offers only `ro` (ro-RO); adding it
+         would collide with Romanian and one would overwrite the other.
+These simply stay untranslated and fall back to English.

@@ -96,7 +96,9 @@ files:
         uk_UA: uk
         ur_IN: ur
         uz_UZ: uz
-
+        vi_VN: vi
+        zh_CN: zh_CN
+        zh_TW: zh_TW
   # Optional set — the long-press explainers (27 strings, over half the words).
   # A language ships on Labels alone; these fall back to English per string.
   - source: /l10n/templates/foot-cream-help.pot
