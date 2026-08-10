@@ -3,7 +3,7 @@ msgstr ""
 "Project-Id-Version: foot-cream\n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2026-08-07 21:16+0200\n"
-"PO-Revision-Date: 2026-08-10 12:20\n"
+"PO-Revision-Date: 2026-08-10 13:20\n"
 "Last-Translator: \n"
 "Language-Team: Latvian\n"
 "Language: lv_LV\n"
@@ -17,7 +17,6 @@ msgstr ""
 "X-Crowdin-File: /main/l10n/templates/foot-cream-help.pot\n"
 "X-Crowdin-File-ID: 10\n"
 
-#. Long-press explainers per category (both scan directions listed).
 #: main.lua:8191
 msgid "Inches, feet, yards, miles, fathoms, furlongs, leagues, cubits — and in the imperial direction: millimeters, centimeters, meters, kilometers."
 msgstr ""
