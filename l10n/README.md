@@ -132,20 +132,29 @@ translations flow Crowdin → repo, and neither direction is contested.
 
 ## Review — how a language ships
 
-The maintainer doesn't speak most of these languages and can't judge whether
-a translation reads well, so shipping is gated on **review by a second
-speaker**, not on the maintainer's approval:
+**Your translation is not held behind an approval queue.** Footcream is a
+small plugin and gating on a second speaker would mostly mean languages
+sitting unshipped waiting for a reviewer who never arrives. What you submit
+goes out in the next release.
 
-1. Someone translates the **Labels** component.
-2. A *different* speaker proofreads and approves it in Crowdin.
-3. Automated checks must pass — placeholder integrity (`%1` present and
-   matching), correct plural-form count, and `msgfmt -c` at build time (`builder/check.sh`).
-   These catch the errors that actually break the UI, and they need no
-   knowledge of the language.
-4. The language is then added to the next release.
+What is checked is only what a machine can check without knowing the
+language — placeholder integrity (`%1` present and matching), correct
+plural-form count, and `msgfmt -c` at build time (`builder/check.sh`).
+Those are the errors that actually break the interface. Crowdin flags the
+first two as you type.
 
-If you'd like to review rather than translate, that's genuinely as useful —
-a language stuck at "translated but unreviewed" can't ship.
+The trade is honest: nobody is double-checking whether your wording reads
+well, so please **don't submit machine translation you haven't read**. An
+obviously-wrong string is worse for a reader than an English one, because
+English at least looks deliberate. If you spot a bad translation in a
+shipped language, fixing it in Crowdin is welcome and needs no permission —
+proofreading is on, so you can approve strings you're confident in and flag
+ones you aren't.
+
+Partly-done languages ship too: **Skip untranslated strings** is on in the
+project's export settings, so strings you haven't translated are left out of
+the `.po` entirely and fall back to English one string at a time. There is
+no threshold to clear before your work is worth shipping.
 
 ## Setting up the Crowdin project
 
@@ -161,8 +170,16 @@ The project exists and is synced. What's in place:
   regenerated from KOReader's own translations submodule by
   `builder/sync_locales.py`.
 - 58 target languages, set in one call by `builder/crowdin_set_languages.py`.
-- Licence set to AGPL-3.0-or-later; proofreading on, so a language needs a
-  second speaker's approval before it can ship.
+- Licence set to AGPL-3.0-or-later. Proofreading is on, but **not** used as a
+  ship gate (`Export translations with a specific number of approvals` is
+  off) — deliberately: see "Review" above.
+- **Skip untranslated strings** is on in Project Settings -> Export. This is a
+  web-UI setting, NOT a `crowdin.yml` key — the config file governs file
+  mapping, not export filtering. Without it Crowdin fills untranslated
+  strings with the English source, so a language at 5% comes back looking
+  complete and the `.po` stops being a usable progress signal. For gettext it
+  omits those strings entirely, which is what the runtime's per-string
+  fallback already expects.
 - **Push Sources OFF** and **Always import new translations OFF** — see "Don't
   hand-edit the .po files in git" above.
 - Crowdin pushes to the `l10n_main` service branch, which is merged only when
