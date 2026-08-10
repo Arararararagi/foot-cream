@@ -1,8 +1,10 @@
 # Footcream Translations
 
-> **Setup pending:** the Weblate project below hasn't been created yet — see
-> "Setting up the Weblate project" at the bottom of this file. Until then the
-> link is a placeholder, not a live page.
+> **Setup pending:** the Weblate project below hasn't been created yet — the
+> repo side is ready (templates are committed), but the hosted.weblate.org
+> project still has to be requested. See "Setting up the Weblate project" at
+> the bottom of this file. Until then the link is a placeholder, not a live
+> page.
 
 Footcream is translated by the community through [Weblate][weblate-project].
 Anyone can contribute a translation there without installing anything —
@@ -114,9 +116,14 @@ a language stuck at "translated but unreviewed" can't ship.
 
 ## Setting up the Weblate project
 
-Not done yet — Weblate's free hosting for libre/open-source projects is a
-manual request, not self-service, so this needs a one-time setup step by a
-project maintainer:
+**Done:** the templates below are committed and on `main` (2026-08-10), so the
+repo side is ready — there is something for Weblate to point at and to seed new
+languages from.
+
+**Remaining** — all account work on hosted.weblate.org, which a maintainer has
+to do by hand (free hosting for libre projects is a reviewed request, not
+self-service). The form's exact fields change over time; follow the current one
+rather than this list word-for-word.
 
 1. Sign in at hosted.weblate.org (or create an account).
 2. Request a new project pointing at `https://github.com/Fank1/foot-cream`.
@@ -129,12 +136,19 @@ project maintainer:
    Paths are relative to the REPO root, and the repo root is this `plugin/`
    directory — `Fank1/foot-cream` mirrors `plugin/`, not the whole `foot-free`
    working tree. A `plugin/l10n/...` mask matches nothing.
-3. Enable the **review workflow** in project settings (Settings → Workflow →
-   "Enable reviews"), which is what makes step 2 of the review gate above
-   possible.
-4. Run `builder/build_l10n.sh` once and commit, so the templates exist for
-   Weblate's first sync.
+3. Enable the **review workflow** in project settings, which is what makes the
+   "a second speaker must approve" gate above enforceable rather than a
+   convention written in a README.
+4. Give Weblate a way to push translations back. Either grant its GitHub
+   identity push access, or have it push to a fork and open pull requests.
+   **Prefer the pull-request route:** translations then arrive as reviewable
+   diffs instead of direct commits to `main`, so nothing lands unseen.
 5. Update the `weblate-project` link below to the real project URL.
+
+Note for whoever does this: a commit on `main` ships nothing to users. The
+in-plugin updater reads `releases/latest` and installs the release ASSET
+(`release.sh`), so translations can land in the repo and wait there until a
+release is actually cut.
 
 [weblate-project]: https://hosted.weblate.org/engage/foot-cream/
 [koreader-weblate]: https://hosted.weblate.org/engage/koreader/
