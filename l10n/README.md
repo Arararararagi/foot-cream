@@ -84,6 +84,14 @@ sk, sl, sr, sv, th, tr, uk, ur, uz
 Don't see your language listed and want to add it? Request it on the
 Weblate project page — Weblate can add new languages on demand.
 
+## Licence
+
+Translations are contributed under the same licence as Footcream itself,
+**AGPL-3.0-or-later** — the same one KOReader uses. This is what lets a
+translation ship inside the plugin; a translation under different terms
+couldn't be distributed with it. When creating or editing the Weblate project,
+set its *translation license* to `AGPL-3.0-or-later` to match.
+
 ## Instructions for translators
 
 - If a term is unfamiliar, look it up rather than guessing — a wrong
