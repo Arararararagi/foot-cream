@@ -65,3 +65,7 @@ T("two gills (UK) -> 0.3 liters", function()
     assert_conv("He drank two gills of ale.", "two gills", "= 0.3 liters",
         { uk_volumes = true, language = "en-GB" })
 end)
+
+T("green around the gills is a fish idiom, not a volume", function()
+    assert_no_match("He looked green around the gills.", "gills")
+end)

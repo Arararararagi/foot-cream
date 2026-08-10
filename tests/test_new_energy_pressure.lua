@@ -69,3 +69,16 @@ end)
 T("24 carat — no conversion", function()
     assert_no_match("24 carat gold is pure.", "carat")
 end)
+
+-- ══════════════════════════════════════════════════════════════════════════════
+-- Guard: "atmosphere" is only a pressure with a NUMBER ("1 atmosphere"), not
+-- the figurative mood sense ("an atmosphere of dread") that an article would
+-- otherwise feed into.
+-- ══════════════════════════════════════════════════════════════════════════════
+T("an atmosphere of suspense is NOT a pressure", function()
+    assert_no_match("There was an atmosphere of suspense in the room.", "atmosphere")
+end)
+
+T("an atmosphere of dread is NOT a pressure", function()
+    assert_no_match("An atmosphere of dread hung over the hall.", "atmosphere")
+end)

@@ -71,6 +71,11 @@ NOTE: Although Claude Code helped a lot in the writing of Lua, I have QA:ed this
 | 🔧 Pressure    | psi / pounds per square inch         | kPa            |
 | 🔧 Pressure    | atmosphere / atmospheres / atm       | kPa            |
 | 🔧 Pressure    | mmHg / millimeters of mercury        | kPa            |
+| 📏 Length       | li / zhang / chi / cun / ri / cho / ken / shaku / sun / jang / cheok / chon (*) | m / km |
+| ⚖️ Weight       | jin / liang / qian / kan (*)          | kg             |
+| 🧪 Volume       | shō / gō / koku                      | L              |
+| 🟩 Area         | mu / tan / tsubo / pyeong (*)        | m²             |
+| ⏱ Time         | shichen / geng / dian / ke           | min            |
 
 *Volumes follow the book's locale: UK imperial vs. US measures. Energy and pressure categories work in both directions (imperial↔metric).*
 
@@ -79,6 +84,8 @@ NOTE: Although Claude Code helped a lot in the writing of Lua, I have QA:ed this
 **Height notation**: curly-quote primes (*6′4″*) and bare compound notation (*6'4*) are detected and converted to metric (*1.93 m*). Fractional inches (*5 ft 9½ in*) are supported. A speech-close guard prevents false positives on dialogue markers like *6'4" she said*.
 
 > **A note on tons:** Footcream converts *tons* using a context classifier. Standing weights (*"weighed ten tons"*) convert to kilograms (*≈ 9 000 kg*), while register tonnage (*"displacement of 50 000 tons"*) and figurative uses (*"tons of trouble"*) are left untouched. Carat is similarly guarded: *"18 carat gold"* (fineness) is preserved, while *"a 2-carat diamond"* (weight) converts to grams.
+
+> **A note on Asian/transliteration units (\*) and other short spellings:** these stage in historical-CJK fiction (wuxia etc.), but several spell like English words (*"go"*, *"sun"*, *"tan"*, *"ken"*, *"mu"*, *"li"*). So the short ones (≤ 4 letters) only convert when the **book** clearly uses them — at least two distinct transliteration units somewhere in it — **and** the number is written as digits (*"30 li"*). That keeps *"in one go"* (an idiom, not 0.18 litres) and *"she got a tan"* from ever converting, while *"the caravan went 30 li, the farm covered 2 mu"* converts normally. Longer spellings (*"zhang"*, *"shichen"*, *"koku"*) are unambiguous and convert freely.
 
 ***
 

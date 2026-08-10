@@ -2555,69 +2555,90 @@ local _UNIT_CONV = {
     ["millimeter of mercury"]  = { factor=0.133322, offset=0,  target="kPa",  cat="pressure"    },
     ["acres"]             = { converter=_conv_acres_to_ha,     target="ha",   cat="area"        },
     ["acre"]              = { converter=_conv_acres_to_ha,     target="ha",   cat="area"        },
-    ["acres "]             = { converter=_conv_acres_to_ha,     target="ha ",   cat="area "        },
     -- ── Asian Distance ──────────────────────────────────────────────────────
-    ["li "]                = { factor=500,     offset=0, target="m ",   cat="length "      },
-    ["zhang "]             = { factor=3.3333,  offset=0, target="m ",   cat="length "      },
-    ["chi "]               = { factor=0.3333,  offset=0, target="m ",   cat="length "      },
-    ["cun "]               = { factor=0.0333,  offset=0, target="m ",   cat="length "      },
-    ["ri "]                = { factor=3927,    offset=0, target="m ",   cat="length "      }, -- Japanese ri (~3.927 km)
-    ["cho "]               = { factor=109.09,  offset=0, target="m ",   cat="length "      },
-    ["ken "]               = { factor=1.818,   offset=0, target="m ",   cat="length "      },
-    ["shaku "]             = { factor=0.3030,  offset=0, target="m ",   cat="length "      },
-    ["sun "]               = { factor=0.0303,  offset=0, target="m ",   cat="length "      },
-    ["jang "]              = { factor=3.03,    offset=0, target="m ",   cat="length "      }, -- Korean jang
-    ["cheok "]             = { factor=0.303,   offset=0, target="m ",   cat="length "      },
-    ["chon "]              = { factor=0.0303,  offset=0, target="m ",   cat="length "      },
+    ["li"]                 = { factor=500,     offset=0, target="m",      cat="length"      },
+    ["zhang"]              = { factor=3.3333,  offset=0, target="m",      cat="length"      },
+    ["chi"]                = { factor=0.3333,  offset=0, target="m",      cat="length"      },
+    ["cun"]                = { factor=0.0333,  offset=0, target="m",      cat="length"      },
+    ["ri"]                 = { factor=3927,    offset=0, target="m",      cat="length"      }, -- Japanese ri (~3.927 km)
+    ["cho"]                = { factor=109.09,  offset=0, target="m",      cat="length"      },
+    ["ken"]                = { factor=1.818,   offset=0, target="m",      cat="length"      },
+    ["shaku"]              = { factor=0.3030,  offset=0, target="m",      cat="length"      },
+    ["sun"]                = { factor=0.0303,  offset=0, target="m",      cat="length"      },
+    ["jang"]               = { factor=3.03,    offset=0, target="m",      cat="length"      }, -- Korean jang
+    ["cheok"]              = { factor=0.303,   offset=0, target="m",      cat="length"      },
+    ["chon"]               = { factor=0.0303,  offset=0, target="m",      cat="length"      },
     -- ── Asian Weight ────────────────────────────────────────────────────────
-    ["jin "]               = { factor=0.5,     offset=0, target="kg ",  cat="weight "      },
-    ["liang "]             = { factor=0.05,    offset=0, target="kg ",  cat="weight "      },
-    ["qian "]              = { factor=0.005,   offset=0, target="kg ",  cat="weight "      },
-    ["kan "]               = { factor=3.75,    offset=0, target="kg ",  cat="weight "      },
+    ["jin"]                = { factor=0.5,     offset=0, target="kg",     cat="weight"      },
+    ["liang"]              = { factor=0.05,    offset=0, target="kg",     cat="weight"      },
+    ["qian"]               = { factor=0.005,   offset=0, target="kg",     cat="weight"      },
+    ["kan"]                = { factor=3.75,    offset=0, target="kg",     cat="weight"      },
     -- ── Asian Area ──────────────────────────────────────────────────────────
-    ["mu "]                = { factor=666.67,  offset=0, target="m² ",  cat="area "        },
-    ["tsubo "]             = { factor=3.3058,  offset=0, target="m² ",  cat="area "        },
-    ["pyeong "]            = { factor=3.3058,  offset=0, target="m² ",  cat="area "        },
-    ["tan "]               = { factor=991.7,   offset=0, target="m² ",  cat="area "        },
+    ["mu"]                 = { factor=666.67,  offset=0, target="m²",     cat="area"        },
+    ["tsubo"]              = { factor=3.3058,  offset=0, target="m²",     cat="area"        },
+    ["pyeong"]             = { factor=3.3058,  offset=0, target="m²",     cat="area"        },
+    ["tan"]                = { factor=991.7,   offset=0, target="m²",     cat="area"        },
     -- ── Asian Volume ────────────────────────────────────────────────────────
-    ["sho "]               = { factor=1.8039,  offset=0, target="liters ", cat="volume "   },
-    ["go "]                = { factor=0.18039, offset=0, target="liters ", cat="volume "   },
-    ["koku "]              = { factor=180.39,  offset=0, target="liters ", cat="volume "   },
+    ["sho"]                = { factor=1.8039,  offset=0, target="liters", cat="volume"      },
+    ["go"]                 = { factor=0.18039, offset=0, target="liters", cat="volume"      },
+    ["koku"]               = { factor=180.39,  offset=0, target="liters", cat="volume"      },
     -- ── Traditional Chinese Time ────────────────────────────────────────────
-    ["shichen "]           = { factor=120,     offset=0, target="min ", cat="time "        },
-    ["geng "]              = { factor=144,     offset=0, target="min ", cat="time "        }, -- 2.4 hours
-    ["dian "]              = { factor=24,      offset=0, target="min ", cat="time "        },
-    ["ke "]                = { factor=15,      offset=0, target="min ", cat="time "        },
+    ["shichen"]            = { factor=120,     offset=0, target="min",    cat="time"        },
+    ["geng"]               = { factor=144,     offset=0, target="min",    cat="time"        }, -- 2.4 hours
+    ["dian"]               = { factor=24,      offset=0, target="min",    cat="time"        },
+    ["ke"]                 = { factor=15,      offset=0, target="min",    cat="time"        },
+}
+
+-- Transliteration units (Chinese/Japanese/Korean pre-metric). The SHORT
+-- spellings (≤4 letters) are ordinary English words ("in one go", "get a tan",
+-- "the sun"), so a stray hit in a normal book is almost certainly a false
+-- positive — _finishScan gates them: CLUSTER (≥2 DISTINCT transliteration
+-- units anywhere in the book, long or short) + DIGIT-ONLY (a literally-written
+-- number, so "one go"/"a tan" can never convert). The longer spellings
+-- ("shichen", "zhang", "koku", "tsubo") are unambiguous in English and convert
+-- freely.
+-- Then held on the CLASS (not a chunk local): the chunk sits near LuaJIT's
+-- 200-locals ceiling — same convention as FootFree._TON below.
+FootFree._ASIAN_UNITS = {
+    li = true, zhang = true, chi = true, cun = true, ri = true, cho = true,
+    ken = true, shaku = true, sun = true, jang = true, cheok = true, chon = true,
+    jin = true, liang = true, qian = true, kan = true,
+    mu = true, tsubo = true, pyeong = true, tan = true,
+    sho = true, go = true, koku = true,
+    shichen = true, geng = true, dian = true, ke = true,
 }
 
 -- Longest-first so "miles per hour" matches before "miles", etc.
 local _UNIT_SUFFIXES = {
-    -- Asian & Traditional Chinese Units (strictly longest-first)
-    "shichen ",
-    "pyeong ",
-    "tsubo ",
-    "liang ",
-    "zhang ",
-    "cheok ",
-    "shaku ",
-    "chon ",
-    "geng ",
-    "dian ",
-    "qian ",
-    "jang ",
-    "koku ",
-    "chi ",
-    "cun ",
-    "cho ",
-    "ken ",
-    "sun ",
-    "tan ",
-    "sho ",
-    "ri ",
-    "li ",
-    "mu ",
-    "go ",
-    "ke ",
+    -- Asian & Traditional Chinese Units (strictly longest-first; single
+    -- tokens — the pattern's \b anchors supply the word boundaries)
+    "shichen",
+    "pyeong",
+    "tsubo",
+    "liang",
+    "zhang",
+    "cheok",
+    "shaku",
+    "chon",
+    "geng",
+    "dian",
+    "qian",
+    "jang",
+    "koku",
+    "chi",
+    "cun",
+    "cho",
+    "jin",
+    "kan",
+    "ken",
+    "sun",
+    "tan",
+    "sho",
+    "ri",
+    "li",
+    "mu",
+    "go",
+    "ke",
     -- Existing units...
     "degrees Fahrenheit", "degrees F",
     "nautical miles", "nautical mile",
@@ -6289,6 +6310,44 @@ function FootFree:_finishScan(doc, all_matches, t_per_pat, t_total, in_subproces
             end
         end
         if keep then table.insert(filtered, r) end
+    end
+
+    -- Transliteration-unit gate (false-positive defense for the Asian set). The
+    -- SHORT spellings (≤4 letters) are ordinary English words ("in one go",
+    -- "get a tan", "the sun", "beyond one's ken"), so a stray hit in a normal
+    -- book is almost certainly a false positive. Two rules back them:
+    --   (1) CLUSTER: count every DISTINCT transliteration unit in the book
+    --       (long or short); drop the SHORT ones unless ≥2 distinct exist.
+    --       A genuine wuxia/Japanese/Korean translation mixes several; an
+    --       ordinary English book never does.
+    --   (2) DIGIT-ONLY: in a cluster book a short unit's number must be
+    --       literally written ("10 li"), so spelled-number idioms ("one go",
+    --       "a tan") structurally never convert.
+    -- Longer spellings ("shichen", "zhang", "koku", "tsubo") are unambiguous
+    -- in English and convert freely — the momentum here is FP-suppression, not
+    -- recall.
+    do
+        local asian = function(r)
+            return r._unit and FootFree._ASIAN_UNITS[r._unit]
+        end
+        local short = function(r)
+            return asian(r) and #r._unit <= 4
+        end
+        local distinct, nd = {}, 0
+        for _, r in ipairs(filtered) do
+            if asian(r) and not distinct[r._unit] then
+                distinct[r._unit] = true
+                nd = nd + 1
+            end
+        end
+        for i = #filtered, 1, -1 do
+            if short(filtered[i]) then
+                if nd < 2
+                   or not (filtered[i].prev_text or ""):match("%d[%d.,]*%s*$") then
+                    table.remove(filtered, i)
+                end
+            end
+        end
     end
 
     -- Collapse overlapping spans — but only now, AFTER the legacy false-positive
