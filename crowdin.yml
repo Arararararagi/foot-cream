@@ -28,73 +28,74 @@ files:
         # UI. builder/build_l10n.sh rejects unknown directories so a bad
         # mapping fails the build instead of shipping.
         #
-        # ── VERIFY BEFORE FIRST SYNC ───────────────────────────────────────
-        # The keys below are Crowdin language IDs and the values are the
-        # directory names Footcream requires (see plugin/l10n/LOCALES).
-        # Check each key against Crowdin's own language list when you create
-        # the project — some of the less common languages here may use a
-        # different ID or not exist there at all. A missing key is harmless
-        # (the guard catches it); a WRONG key silently misfiles a language.
-        de_DE: de
-        fr_FR: fr
-        es_ES: es
-        it_IT: it_IT
-        nl_NL: nl_NL
-        pt_BR: pt_BR
-        pt_PT: pt_PT
-        pl_PL: pl
-        ru_RU: ru
-        uk_UA: uk
-        cs_CZ: cs
-        sk_SK: sk
-        sl_SI: sl
-        hr_HR: hr
-        sr_SP: sr
-        bg_BG: bg_BG
-        ro_RO: ro
-        hu_HU: hu
-        el_GR: el
-        tr_TR: tr
-        sv_SE: sv
-        da_DK: da
-        fi_FI: fi
-        nb_NO: nb_NO
-        nn_NO: nn
-        et_EE: et
-        lv_LV: lv
-        lt_LT: lt_LT
-        en_GB: en_GB
-        ja_JP: ja
-        ko_KR: ko_KR
-        th_TH: th
-        id_ID: id
-        ms_MY: ms
-        he_IL: he
+        # ── VERIFIED 2026-08-10 ────────────────────────────────────────────
+        # Generated from Crowdin's live language list
+        # (GET https://api.crowdin.com/api/v2/languages, public, no auth) and
+        # cross-checked against plugin/l10n/LOCALES — NOT hand-guessed. Keys
+        # are the %locale_with_underscore% Crowdin emits; values are the
+        # directory names the plugin loads.
+        #
+        # Not present, deliberately:
+        #   ia, ie  — Interlingua/Interlingue: Crowdin doesn't offer them.
+        #   ro_MD   — Crowdin has only `ro` (ro-RO); no Moldovan Romanian, so
+        #             it would collide with `ro` and one would overwrite the
+        #             other. KOReader users on ro_MD fall back to English.
+        # Re-run builder/check_crowdin_map.py after any edit here.
+        af_ZA: af_ZA
         ar_SA: ar
-        fa_IR: fa
-        hi_IN: hi
+        be_BY: be
+        bg_BG: bg_BG
         bn_BD: bn
         ca_ES: ca
-        eu_ES: eu
-        gl_ES: gl
+        cs_CZ: cs
         cy_GB: cy
-        ga_IE: ga
-        mk_MK: mk
-        be_BY: be
-        ka_GE: ka
+        da_DK: da
+        de_DE: de
+        el_GR: el
+        en_GB: en_GB
         eo_UY: eo
-        af_ZA: af_ZA
+        es_ES: es
+        et_EE: et
+        eu_ES: eu
+        fa_IR: fa
+        fi_FI: fi
+        fr_FR: fr
+        ga_IE: ga
+        gl_ES: gl
+        he_IL: he
+        hi_IN: hi
+        hr_HR: hr
+        hu_HU: hu
+        id_ID: id
+        it_IT: it_IT
+        ja_JP: ja
+        ka_GE: ka
+        kab_KAB: kab
         kn_IN: kn
+        ko_KR: ko_KR
+        lt_LT: lt_LT
+        lv_LV: lv
+        mk_MK: mk
+        ms_MY: ms
+        nb_NO: nb_NO
+        nl_NL: nl_NL
+        nn_NO: nn
         or_IN: or
-        ro_MD: ro_MD
+        pl_PL: pl
+        pt_BR: pt_BR
+        pt_PT: pt_PT
+        ro_RO: ro
+        ru_RU: ru
         si_LK: si
-        ur_PK: ur
+        sk_SK: sk
+        sl_SI: sl
+        sr_SP: sr
+        sv_SE: sv
+        th_TH: th
+        tr_TR: tr
+        uk_UA: uk
+        ur_IN: ur
         uz_UZ: uz
-        kab: kab
-        # Still unmapped: ia (Interlingua), ie (Interlingue). Constructed
-        # languages that Crowdin may not offer at all — add them only if its
-        # language list actually has them, with the ID it uses. Leaving a
-        # locale out is harmless; it simply can't be translated there yet.
 
   # Optional set — the long-press explainers (27 strings, over half the words).
   # A language ships on Labels alone; these fall back to English per string.
