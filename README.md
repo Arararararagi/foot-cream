@@ -193,6 +193,6 @@ The plugin runs inside KOReader's own Lua process and uses its internals, and
 matches it. In practice: use it, fork it, modify it freely; if you distribute a
 modified version, ship its source under the same terms.
 
-Community translations contributed through Weblate are under the same licence,
+Community translations contributed through Crowdin are under the same licence,
 so they can be shipped as part of the plugin — see
 [l10n/README.md](l10n/README.md).

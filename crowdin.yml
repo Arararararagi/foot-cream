@@ -1,0 +1,103 @@
+# Crowdin configuration for Footcream.
+#
+# Keeping this in the repo means the source/translation file mapping is
+# reviewable and version-controlled instead of clicked through the web UI —
+# `crowdin` CLI and the GitHub integration both read it.
+#
+# Paths are relative to the REPO root, and the repo root is this directory:
+# Fank1/foot-cream mirrors foot-free/plugin/, not the whole working tree.
+#
+# NO CREDENTIALS HERE. project_id and api_token come from the environment
+# (CROWDIN_PROJECT_ID / CROWDIN_PERSONAL_TOKEN) so this file stays safe to
+# commit to a public repo.
+"preserve_hierarchy": true
+
+files:
+  # Required set — menus, buttons, dialogs, notifications (139 strings).
+  - source: /l10n/templates/foot-cream-labels.pot
+    translation: /l10n/%locale_with_underscore%/labels.po
+    languages_mapping: &footcream_locales
+      locale_with_underscore:
+        # ── WHY THIS SECTION EXISTS ────────────────────────────────────────
+        # At runtime the plugin loads
+        #     l10n/<KOReader's current_lang>/foot-cream.mo
+        # so the directory name must be KOReader's code, not Crowdin's.
+        # Crowdin's default %locale_with_underscore% yields de_DE where
+        # KOReader wants plain de. Get this wrong and the .mo is built,
+        # shipped, and silently never loaded — no error, just an untranslated
+        # UI. builder/build_l10n.sh rejects unknown directories so a bad
+        # mapping fails the build instead of shipping.
+        #
+        # ── VERIFY BEFORE FIRST SYNC ───────────────────────────────────────
+        # The keys below are Crowdin language IDs and the values are the
+        # directory names Footcream requires (see plugin/l10n/LOCALES).
+        # Check each key against Crowdin's own language list when you create
+        # the project — some of the less common languages here may use a
+        # different ID or not exist there at all. A missing key is harmless
+        # (the guard catches it); a WRONG key silently misfiles a language.
+        de_DE: de
+        fr_FR: fr
+        es_ES: es
+        it_IT: it_IT
+        nl_NL: nl_NL
+        pt_BR: pt_BR
+        pt_PT: pt_PT
+        pl_PL: pl
+        ru_RU: ru
+        uk_UA: uk
+        cs_CZ: cs
+        sk_SK: sk
+        sl_SI: sl
+        hr_HR: hr
+        sr_SP: sr
+        bg_BG: bg_BG
+        ro_RO: ro
+        hu_HU: hu
+        el_GR: el
+        tr_TR: tr
+        sv_SE: sv
+        da_DK: da
+        fi_FI: fi
+        nb_NO: nb_NO
+        nn_NO: nn
+        et_EE: et
+        lv_LV: lv
+        lt_LT: lt_LT
+        en_GB: en_GB
+        ja_JP: ja
+        ko_KR: ko_KR
+        th_TH: th
+        id_ID: id
+        ms_MY: ms
+        he_IL: he
+        ar_SA: ar
+        fa_IR: fa
+        hi_IN: hi
+        bn_BD: bn
+        ca_ES: ca
+        eu_ES: eu
+        gl_ES: gl
+        cy_GB: cy
+        ga_IE: ga
+        mk_MK: mk
+        be_BY: be
+        ka_GE: ka
+        eo_UY: eo
+        af_ZA: af_ZA
+        kn_IN: kn
+        or_IN: or
+        ro_MD: ro_MD
+        si_LK: si
+        ur_PK: ur
+        uz_UZ: uz
+        kab: kab
+        # Still unmapped: ia (Interlingua), ie (Interlingue). Constructed
+        # languages that Crowdin may not offer at all — add them only if its
+        # language list actually has them, with the ID it uses. Leaving a
+        # locale out is harmless; it simply can't be translated there yet.
+
+  # Optional set — the long-press explainers (27 strings, over half the words).
+  # A language ships on Labels alone; these fall back to English per string.
+  - source: /l10n/templates/foot-cream-help.pot
+    translation: /l10n/%locale_with_underscore%/help.po
+    languages_mapping: *footcream_locales
