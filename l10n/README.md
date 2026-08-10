@@ -96,6 +96,26 @@ translation ship inside the plugin; a translation under different terms
 couldn't be distributed with it. When creating the Crowdin project,
 set its *translation license* to `AGPL-3.0-or-later` to match.
 
+## Don't hand-edit the .po files in git
+
+Once the Crowdin integration is connected, **Crowdin owns `l10n/<lang>/*.po`.**
+It commits them to a service branch (`l10n_main`) and opens a pull request.
+
+The integration runs with *"Always import new translations from the
+repository"* OFF, which means Crowdin does not read `.po` changes made
+directly in git. So a `.po` edited by hand — even via a merged pull request —
+can be silently overwritten by the next sync, and the contributor's work
+disappears with no error anywhere.
+
+If someone sends a translation as a pull request rather than through Crowdin,
+don't merge it as-is. Either ask them to submit it in Crowdin, or import the
+file there yourself and let the normal sync write it back.
+
+The repo owns the other direction: `l10n/templates/*.pot` is generated from
+`main.lua` by `builder/build_l10n.sh`, and the integration runs with *"Push
+Sources"* OFF so Crowdin can never overwrite it. Sources flow repo → Crowdin,
+translations flow Crowdin → repo, and neither direction is contested.
+
 ## Instructions for translators
 
 - If a term is unfamiliar, look it up rather than guessing — a wrong
