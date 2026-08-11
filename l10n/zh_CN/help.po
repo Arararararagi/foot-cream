@@ -3,7 +3,7 @@ msgstr ""
 "Project-Id-Version: foot-cream\n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2026-08-10 14:40+0200\n"
-"PO-Revision-Date: 2026-08-10 15:43\n"
+"PO-Revision-Date: 2026-08-11 11:57\n"
 "Last-Translator: \n"
 "Language-Team: Chinese Simplified\n"
 "Language: zh_CN\n"
@@ -22,145 +22,145 @@ msgstr ""
 #. units.
 #: main.lua:8442
 msgid "Inches, feet, yards, miles, fathoms, furlongs, leagues, cubits — and in the imperial direction: millimeters, centimeters, meters, kilometers."
-msgstr ""
+msgstr "英寸、英尺、码、英里、英寻、弗隆、里格和腕尺 — 而在英制方向上：毫米、厘米、米、千米。"
 
 #. TRANSLATORS: Long-press explainer for the 'Weight' category. Tons are left alone
 #. on purpose because the word means several different quantities.
 #: main.lua:8445
 msgid "Ounces, pounds and stone — and in the imperial direction: grams and kilos. Tons are deliberately not converted (the word is too ambiguous)."
-msgstr ""
+msgstr "盎司、磅和英石 — 而在英制方向上：克和千克。吨有意不做转换（这个词歧义太大）。"
 
 #. TRANSLATORS: Long-press explainer for the 'Temperature' category.
 #: main.lua:8447
 msgid "°F and \"degrees Fahrenheit\" — and in the imperial direction, °C and \"degrees Celsius\"."
-msgstr ""
+msgstr "°F 和“华氏度” — 而在英制方向上，°C 和“摄氏度”。"
 
 #. TRANSLATORS: Long-press explainer for the 'Volume' category. UK and US pints and
 #. gallons are different sizes, hence the note about the book's origin.
 #: main.lua:8450
 msgid "Pints, quarts, gallons and fluid ounces — and in the imperial direction, liters and milliliters. UK and US gallons differ; Footcream picks the right one from the book."
-msgstr ""
+msgstr "品脱、夸脱、加仑和液量盎司 — 而在英制方向上，升和毫升。英制加仑与美制加仑并不相同；Footcream 会根据书籍内容选择正确的一种。"
 
 #. TRANSLATORS: Long-press explainer for the 'Speed' category.
 #: main.lua:8452
 msgid "Miles per hour and knots — and in the imperial direction, km/h and meters per second."
-msgstr ""
+msgstr "英里每小时和节 — 而在英制方向上，km/h 和米每秒。"
 
 #. TRANSLATORS: Long-press explainer for the 'Area' category.
 #: main.lua:8454
 msgid "Acres and square miles/feet/yards — and in the imperial direction, hectares and square kilometers/meters/centimeters."
-msgstr ""
+msgstr "英亩和平方英里、平方英尺、平方码 — 而在英制方向上，公顷和平方千米、平方米、平方厘米。"
 
 #. TRANSLATORS: Long-press explainer for the hint-count line at the top of 'Menu >
 #. Footcream'.
 #: main.lua:8551
 msgid "How many measurements Footcream found in this book. The count always shows everything that was found, whichever mode you are in."
-msgstr ""
+msgstr "Footcream 在本书中找到的量度数量。无论处于哪种模式，这个数字始终显示找到的全部内容。"
 
 #. TRANSLATORS: Long-press explainer for 'Enable Footcream in this book'.
 #: main.lua:8566
 msgid "Turn Footcream off for this book only: no underlines, no conversions, no prompts — and a converted book gets its original text back. Other books are unaffected, and the choice is remembered for this book. To disable Footcream everywhere, use KOReader's plugin management."
-msgstr ""
+msgstr "仅对本书关闭 Footcream：没有下划线、没有转换、没有询问 — 已转换的书籍会恢复原始正文。其他书籍不受影响，此选择会为本书记住。若要在所有书籍中停用 Footcream，请使用 KOReader 的插件管理。"
 
 #. TRANSLATORS: Long-press explainer for 'Convert units to'.
 #: main.lua:8624
 msgid "The unit system you want to read in. Metric converts imperial measurements (feet, miles, °F) to metric. The Imperial options do the reverse: they find metric measurements (meters, kilometers, kilos, °C) and show imperial values. Works in every mode; a converted book is restored and reconverted when you switch."
-msgstr ""
+msgstr "您希望阅读时使用的单位制。“公制”把英制量度（英尺、英里、°F）转换为公制。英制选项则相反：找出公制量度（米、千米、千克、°C）并显示英制数值。在所有模式中均有效；切换时，已转换的书籍会先恢复再重新转换。"
 
 #. TRANSLATORS: Long-press explainer for the 'Metric' choice.
 #: main.lua:8633
 msgid "Convert imperial measurements (feet, miles, pounds, °F, gallons…) to metric."
-msgstr ""
+msgstr "把英制量度（英尺、英里、磅、°F、加仑…）转换为公制。"
 
 #. TRANSLATORS: Long-press explainer for the 'Imperial (US)' choice. The quoted
 #. measurements are examples of the output; 'm', 'ft' and 'in' are unit symbols and
 #. are not translated.
 #: main.lua:8647
 msgid "Convert metric measurements to US units: meters become feet and inches (\"1.8 m\" → \"5 ft 11 in\"), kilometers become miles, kilos become pounds, °C becomes °F, liters become quarts and gallons."
-msgstr ""
+msgstr "把公制量度转换为美制单位：米变成英尺和英寸（“1.8 m”→“5 ft 11 in”），千米变成英里，千克变成磅，°C 变成 °F，升变成夸脱和加仑。"
 
 #. TRANSLATORS: Long-press explainer for the 'Imperial (UK)' choice. The quoted
 #. measurements are examples of the output; 'kg', 'st' and 'lb' are unit symbols
 #. and are not translated.
 #: main.lua:8662
 msgid "Like Imperial (US), but with UK measures: body weights in stones (\"75 kg\" → \"11 st 11 lb\") and volumes in imperial pints and gallons."
-msgstr ""
+msgstr "与“英制（美国）”类似，但使用英国的量度：体重用英石（“75 kg”→“11 st 11 lb”），容积用英制品脱和加仑。"
 
 #. TRANSLATORS: Long-press explainer for the 'Mode' entry.
 #: main.lua:8689
 msgid "How conversions are shown while you read. Opens a picker showing a sample sentence in each of the three modes; the change is applied to the book when you leave the menu. The two \"written into the text\" modes rewrite the book file itself — fully reversible at any time. In the \"converted only\" mode, the Advanced option \"Show original unit in tooltip\" lets you tap a converted value to see the original text."
-msgstr ""
+msgstr "阅读时转换的显示方式。会打开一个选择界面，用三种模式各展示一个示例句；离开菜单时改动才会应用到书籍。两种“写入正文”的模式会改写书籍文件本身— 随时都可以完全撤销。在“仅转换结果”模式下，高级选项“在提示框中显示原始单位”让您点按转换后的数值即可查看原始正文。"
 
 #. TRANSLATORS: Long-press explainer for 'Auto-scan when opening a new book'.
 #: main.lua:8709
 msgid "Scan every new book automatically when you open it. Only English books are scanned — other languages are left alone. Turn this off to scan books one by one with \"Scan book\"."
-msgstr ""
+msgstr "打开每本新书时自动扫描。只扫描英文书籍 — 其他语言的书籍不受影响。若想用“扫描本书”逐本扫描，请关闭此项。"
 
 #. TRANSLATORS: Long-press explainer for the 'Scan book' / 'Rescan book' entry.
 #: main.lua:8732
 msgid "Scan this book now, or scan it again from scratch. The scan runs in the background, so you can keep reading while it works. Results are saved, so reopening the book later is instant."
-msgstr ""
+msgstr "立即扫描本书，或从头重新扫描一次。扫描在后台运行，因此扫描期间您可以继续阅读。结果会被保存，之后再打开本书是即时的。"
 
 #. TRANSLATORS: Long-press explainer for 'Styling'.
 #: main.lua:8813
 msgid "Customise how underlines look (solid or wavy, intensity, thickness) and the tooltip (size, unit icon), with a live preview. Drag the dialog around if it covers the text you want to see."
-msgstr ""
+msgstr "自定义下划线的外观（实线或波浪线、深浅、粗细）以及提示框（大小、单位图标），并提供实时预览。若窗口挡住了您想看的正文，可以拖动它。"
 
 #. TRANSLATORS: Long-press explainer for 'Check for updates'.
 #: main.lua:8829
 msgid "Check GitHub for a newer Footcream release and install it in place. Needs Wi-Fi; you'll be asked to restart KOReader when it's done."
-msgstr ""
+msgstr "在 GitHub 上检查是否有更新的 Footcream 版本并就地安装。需要 Wi-Fi；完成后会提示您重启 KOReader。"
 
 #. TRANSLATORS: Long-press explainer for the 'Advanced' submenu.
 #: main.lua:8842
 msgid "Extra options: unit categories, rounding, original-unit tooltips, error reporting to the developer, per-book cleanup, and debug tools."
-msgstr ""
+msgstr "额外选项：单位类别、取整、原始单位提示框、向开发者反馈错误、逐本清理以及诊断工具。"
 
 #. TRANSLATORS: Long-press explainer for 'Unit categories'.
 #: main.lua:8849
 msgid "Choose which kinds of measurements are converted. Anything you untick is ignored everywhere — no underlines, popups or in-text conversions for that category."
-msgstr ""
+msgstr "选择哪些种类的量度会被转换。取消勾选的项目在任何地方都会被忽略 — 该类别不会有下划线、提示框或正文内转换。"
 
 #. TRANSLATORS: Long-press explainer for 'Smart rounding for conversions'. The
 #. quoted values are examples; 'm' is the metre symbol, not translated.
 #: main.lua:8858
 msgid "Round conversions to friendly, readable values — \"90 m\" instead of \"91.44 m\". Turn off if you prefer exact numbers."
-msgstr ""
+msgstr "把转换结果取整为便于阅读的数值 — 用“90 m”而不是“91.44 m”。若您更喜欢精确数字，请关闭。"
 
 #. TRANSLATORS: Long-press explainer for 'Show original unit in tooltip'.
 #: main.lua:8899
 msgid "In the \"only (in text)\" mode, underline the converted values so you can tap any of them and see the original text. Handy if you want to double-check a conversion against what the author wrote."
-msgstr ""
+msgstr "在“仅（写入正文）”模式下为转换后的数值加下划线，这样您点按其中任何一个都能看到原始正文。若想把转换结果与作者所写的内容核对一下，这很方便。"
 
 #. TRANSLATORS: Long-press explainer for 'Long-press units to send errors to the
 #. developer'.
 #: main.lua:8934
 msgid "Flag bad conversions while you read: long-press a unit (or select text Footcream missed) and the error is sent anonymously to the developer. Each flag contains the book title, the measurement, its conversion and the surrounding sentence — nothing else. Works offline: flags are queued and sent when you're connected."
-msgstr ""
+msgstr "阅读时反馈错误的转换：长按某个单位（或选中 Footcream 漏掉的文字），错误就会匿名发送给开发者。每条反馈只包含书名、量度、其转换结果以及前后的句子 — 除此之外别无其他。离线也可使用：反馈会排队，联网后发送。"
 
 #. TRANSLATORS: Long-press explainer for 'Remove Footcream data from this book'.
 #: main.lua:8968
 msgid "Undo everything for this book: restore the original text, remove all underlines and delete the saved scan. The book file goes back to exactly how it was before Footcream touched it."
-msgstr ""
+msgstr "撤销对本书所做的一切：恢复原始正文，移除所有下划线，并删除保存的扫描结果。书籍文件会完全回到 Footcream 接触它之前的样子。"
 
 #. TRANSLATORS: Long-press explainer for the 'Debug' submenu.
 #: main.lua:9010
 msgid "See exactly what the scan found in this book, and manage errors you've flagged on this device."
-msgstr ""
+msgstr "查看扫描在本书中究竟找到了什么，并管理您在本设备上反馈过的错误。"
 
 #. TRANSLATORS: Long-press explainer for 'Units in book (list)'.
 #: main.lua:9017
 msgid "Every measurement found in this book, with its detected value and conversion. Long-press an entry to flag it as wrong."
-msgstr ""
+msgstr "本书中找到的每一处量度，以及识别出的数值和转换结果。长按某个条目即可把它反馈为错误。"
 
 #. TRANSLATORS: Long-press explainer for 'View flagged errors'. The path in
 #. parentheses is a file location - leave it as it is.
 #: main.lua:9032
 msgid "Show the errors you've flagged on this device. They're kept in a plain-text file (koreader/footcream/flagged_errors.txt) that you can also attach to a GitHub issue."
-msgstr ""
+msgstr "显示您在本设备上反馈过的错误。它们保存在一个纯文本文件（koreader/footcream/flagged_errors.txt）中，您也可以把它附到 GitHub 的 issue 上。"
 
 #. TRANSLATORS: Long-press explainer for 'Clear flagged errors'.
 #: main.lua:9042
 msgid "Delete the local flagged-errors file. Reports that were already sent to the developer are not affected."
-msgstr ""
+msgstr "删除本地的反馈错误文件。已经发送给开发者的报告不受影响。"
 
