@@ -3,7 +3,7 @@ msgstr ""
 "Project-Id-Version: foot-cream\n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2026-08-10 14:40+0200\n"
-"PO-Revision-Date: 2026-08-11 09:25\n"
+"PO-Revision-Date: 2026-08-11 10:54\n"
 "Last-Translator: \n"
 "Language-Team: Polish\n"
 "Language: pl_PL\n"
@@ -304,7 +304,7 @@ msgid_plural "Converted %1 units in book"
 msgstr[0] "Przeliczono %1 jednostkę w książce"
 msgstr[1] "Przeliczono %1 jednostki w książce"
 msgstr[2] "Przeliczono %1 jednostek w książce"
-msgstr[3] ""
+msgstr[3] "Przeliczono %1 jednostek w książce"
 
 #. TRANSLATORS: Toast after a scan when the mode writes into the book's text but
 #. the conversion hasn't been applied yet. %1 is the number found.
@@ -314,7 +314,7 @@ msgid_plural "Scan complete: %1 units found"
 msgstr[0] "Skanowanie zakończone: znaleziono %1 jednostkę"
 msgstr[1] "Skanowanie zakończone: znaleziono %1 jednostki"
 msgstr[2] "Skanowanie zakończone: znaleziono %1 jednostek"
-msgstr[3] ""
+msgstr[3] "Skanowanie zakończone: znaleziono %1 jednostek"
 
 #. TRANSLATORS: Toast after a scan in underline mode. %1 is the number of
 #. measurements now underlined.
@@ -324,7 +324,7 @@ msgid_plural "Underlined %1 units in book"
 msgstr[0] "Podkreślono %1 jednostkę w książce"
 msgstr[1] "Podkreślono %1 jednostki w książce"
 msgstr[2] "Podkreślono %1 jednostek w książce"
-msgstr[3] ""
+msgstr[3] "Podkreślono %1 jednostek w książce"
 
 #. TRANSLATORS: Name of the unit system being converted TO, inserted as %1 into the
 #. questions and progress messages below ('Convert this book's measurements to
@@ -416,7 +416,9 @@ msgstr[1] "Nie udało się przeliczyć tej książki bezpośrednio w pliku.\n\n"
 msgstr[2] "Nie udało się przeliczyć tej książki bezpośrednio w pliku.\n\n"
 "Znaleziono %1 miar, ale żadnej z nich nie udało się odnaleźć w tekście książki – jej znaczniki lub format mogą nie być obsługiwane przy przeliczaniu w tekście.\n\n"
 "Tryb „%2” nadal działa dla tej książki."
-msgstr[3] ""
+msgstr[3] "Nie udało się przeliczyć tej książki bezpośrednio w pliku.\n\n"
+"Znaleziono %1 miar, ale żadnej z nich nie udało się odnaleźć w tekście książki – jej znaczniki lub format mogą nie być obsługiwane przy przeliczaniu w tekście.\n\n"
+"Tryb „%2” nadal działa dla tej książki."
 
 #. TRANSLATORS: Generic failure when rewriting the book's text didn't work; the
 #. technical reason is appended on the next line, untranslated.
@@ -735,7 +737,7 @@ msgid_plural "%1 hints found in this %2 book"
 msgstr[0] "%1 wynik w tej książce (%2)"
 msgstr[1] "%1 wyniki w tej książce (%2)"
 msgstr[2] "%1 wyników w tej książce (%2)"
-msgstr[3] ""
+msgstr[3] "%1 wyników w tej książce (%2)"
 
 #. TRANSLATORS: Line at the top of 'Menu > Footcream' reporting what the scan
 #. found. %1 is the count, and it is 0 for a book that was scanned and contains no
@@ -748,7 +750,7 @@ msgid_plural "%1 hints found"
 msgstr[0] "Znaleziono %1 wynik"
 msgstr[1] "Znaleziono %1 wyniki"
 msgstr[2] "Znaleziono %1 wyników"
-msgstr[3] ""
+msgstr[3] "Znaleziono %1 wyników"
 
 #. TRANSLATORS: Same menu line, for a book that has never been scanned.
 #: main.lua:8546
