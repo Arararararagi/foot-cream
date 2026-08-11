@@ -3,7 +3,7 @@ msgstr ""
 "Project-Id-Version: foot-cream\n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2026-08-10 14:40+0200\n"
-"PO-Revision-Date: 2026-08-10 15:43\n"
+"PO-Revision-Date: 2026-08-11 11:56\n"
 "Last-Translator: \n"
 "Language-Team: Hungarian\n"
 "Language: hu_HU\n"
@@ -22,145 +22,145 @@ msgstr ""
 #. units.
 #: main.lua:8442
 msgid "Inches, feet, yards, miles, fathoms, furlongs, leagues, cubits — and in the imperial direction: millimeters, centimeters, meters, kilometers."
-msgstr ""
+msgstr "Hüvelyk, láb, yard, mérföld, öl, furlong, liga és könyök — angolszász irányban pedig: milliméter, centiméter, méter, kilométer."
 
 #. TRANSLATORS: Long-press explainer for the 'Weight' category. Tons are left alone
 #. on purpose because the word means several different quantities.
 #: main.lua:8445
 msgid "Ounces, pounds and stone — and in the imperial direction: grams and kilos. Tons are deliberately not converted (the word is too ambiguous)."
-msgstr ""
+msgstr "Uncia, font és stone — angolszász irányban pedig: gramm és kilogramm. A tonnákat szándékosan nem váltja át (a szó túl többértelmű)."
 
 #. TRANSLATORS: Long-press explainer for the 'Temperature' category.
 #: main.lua:8447
 msgid "°F and \"degrees Fahrenheit\" — and in the imperial direction, °C and \"degrees Celsius\"."
-msgstr ""
+msgstr "°F és „Fahrenheit-fok” — angolszász irányban pedig °C és „Celsius-fok”."
 
 #. TRANSLATORS: Long-press explainer for the 'Volume' category. UK and US pints and
 #. gallons are different sizes, hence the note about the book's origin.
 #: main.lua:8450
 msgid "Pints, quarts, gallons and fluid ounces — and in the imperial direction, liters and milliliters. UK and US gallons differ; Footcream picks the right one from the book."
-msgstr ""
+msgstr "Pint, quart, gallon és folyadékuncia — angolszász irányban pedig liter és milliliter. A brit és az amerikai gallon eltér; a Footcream a könyv alapján választja ki a megfelelőt."
 
 #. TRANSLATORS: Long-press explainer for the 'Speed' category.
 #: main.lua:8452
 msgid "Miles per hour and knots — and in the imperial direction, km/h and meters per second."
-msgstr ""
+msgstr "Mérföld per óra és csomó — angolszász irányban pedig km/h és méter per másodperc."
 
 #. TRANSLATORS: Long-press explainer for the 'Area' category.
 #: main.lua:8454
 msgid "Acres and square miles/feet/yards — and in the imperial direction, hectares and square kilometers/meters/centimeters."
-msgstr ""
+msgstr "Hold és négyzetmérföld, -láb, -yard — angolszász irányban pedig hektár és négyzetkilométer, -méter, -centiméter."
 
 #. TRANSLATORS: Long-press explainer for the hint-count line at the top of 'Menu >
 #. Footcream'.
 #: main.lua:8551
 msgid "How many measurements Footcream found in this book. The count always shows everything that was found, whichever mode you are in."
-msgstr ""
+msgstr "Hány mértéket talált a Footcream ebben a könyvben. A szám mindig mindent mutat, ami előkerült, bármelyik módban is van."
 
 #. TRANSLATORS: Long-press explainer for 'Enable Footcream in this book'.
 #: main.lua:8566
 msgid "Turn Footcream off for this book only: no underlines, no conversions, no prompts — and a converted book gets its original text back. Other books are unaffected, and the choice is remembered for this book. To disable Footcream everywhere, use KOReader's plugin management."
-msgstr ""
+msgstr "Kapcsolja ki a Footcreamet csak ehhez a könyvhöz: nincs aláhúzás, nincs átváltás, nincs kérdés — az átváltott könyv pedig visszakapja az eredeti szövegét. A többi könyvet ez nem érinti, és a beállítás megmarad ehhez a könyvhöz. A Footcream mindenhol való kikapcsolásához használja a KOReader bővítménykezelőjét."
 
 #. TRANSLATORS: Long-press explainer for 'Convert units to'.
 #: main.lua:8624
 msgid "The unit system you want to read in. Metric converts imperial measurements (feet, miles, °F) to metric. The Imperial options do the reverse: they find metric measurements (meters, kilometers, kilos, °C) and show imperial values. Works in every mode; a converted book is restored and reconverted when you switch."
-msgstr ""
+msgstr "Az a mértékrendszer, amelyben olvasni szeretne. A „Metrikus” az angolszász mértékeket (láb, mérföld, °F) váltja metrikusra. Az angolszász lehetőségek ennek fordítottját teszik: megkeresik a metrikus mértékeket (méter, kilométer, kilogramm, °C), és angolszász értékeket mutatnak. Minden módban működik; váltáskor az átváltott könyv visszaáll, majd újra átváltásra kerül."
 
 #. TRANSLATORS: Long-press explainer for the 'Metric' choice.
 #: main.lua:8633
 msgid "Convert imperial measurements (feet, miles, pounds, °F, gallons…) to metric."
-msgstr ""
+msgstr "Angolszász mértékek (láb, mérföld, font, °F, gallon…) átváltása metrikusra."
 
 #. TRANSLATORS: Long-press explainer for the 'Imperial (US)' choice. The quoted
 #. measurements are examples of the output; 'm', 'ft' and 'in' are unit symbols and
 #. are not translated.
 #: main.lua:8647
 msgid "Convert metric measurements to US units: meters become feet and inches (\"1.8 m\" → \"5 ft 11 in\"), kilometers become miles, kilos become pounds, °C becomes °F, liters become quarts and gallons."
-msgstr ""
+msgstr "Metrikus mértékek átváltása amerikai egységekre: a méterből láb és hüvelyk lesz („1.8 m” → „5 ft 11 in”), a kilométerből mérföld, a kilogrammból font, a °C-ból °F, a literből quart és gallon."
 
 #. TRANSLATORS: Long-press explainer for the 'Imperial (UK)' choice. The quoted
 #. measurements are examples of the output; 'kg', 'st' and 'lb' are unit symbols
 #. and are not translated.
 #: main.lua:8662
 msgid "Like Imperial (US), but with UK measures: body weights in stones (\"75 kg\" → \"11 st 11 lb\") and volumes in imperial pints and gallons."
-msgstr ""
+msgstr "Mint az „Angolszász (USA)”, de brit mértékekkel: a testsúly stone-ban („75 kg” → „11 st 11 lb”), a térfogat brit pintben és gallonban."
 
 #. TRANSLATORS: Long-press explainer for the 'Mode' entry.
 #: main.lua:8689
 msgid "How conversions are shown while you read. Opens a picker showing a sample sentence in each of the three modes; the change is applied to the book when you leave the menu. The two \"written into the text\" modes rewrite the book file itself — fully reversible at any time. In the \"converted only\" mode, the Advanced option \"Show original unit in tooltip\" lets you tap a converted value to see the original text."
-msgstr ""
+msgstr "Hogyan jelenjenek meg az átváltások olvasás közben. Megnyit egy választót, amely mindhárom módban mutat egy mintamondatot; a változás a menüből kilépve kerül alkalmazásra a könyvre. A két „szövegbe írós” mód magát a könyvfájlt írja át — bármikor teljesen visszavonható. A „csak az átváltott érték” módban a Speciális menü „Eredeti egység mutatása a buborékban” beállítása lehetővé teszi, hogy egy átváltott értékre koppintva lássa az eredeti szöveget."
 
 #. TRANSLATORS: Long-press explainer for 'Auto-scan when opening a new book'.
 #: main.lua:8709
 msgid "Scan every new book automatically when you open it. Only English books are scanned — other languages are left alone. Turn this off to scan books one by one with \"Scan book\"."
-msgstr ""
+msgstr "Minden új könyv automatikus átvizsgálása megnyitáskor. Csak az angol könyveket vizsgálja át — a többi nyelvet érintetlenül hagyja. Kapcsolja ki, ha a könyveket egyenként szeretné átvizsgálni a „Könyv átvizsgálása” paranccsal."
 
 #. TRANSLATORS: Long-press explainer for the 'Scan book' / 'Rescan book' entry.
 #: main.lua:8732
 msgid "Scan this book now, or scan it again from scratch. The scan runs in the background, so you can keep reading while it works. Results are saved, so reopening the book later is instant."
-msgstr ""
+msgstr "Vizsgálja át ezt a könyvet most, vagy vizsgálja át újra az elejétől. Az átvizsgálás a háttérben fut, így közben tovább olvashat. Az eredmények mentésre kerülnek, ezért a könyv későbbi megnyitása azonnali."
 
 #. TRANSLATORS: Long-press explainer for 'Styling'.
 #: main.lua:8813
 msgid "Customise how underlines look (solid or wavy, intensity, thickness) and the tooltip (size, unit icon), with a live preview. Drag the dialog around if it covers the text you want to see."
-msgstr ""
+msgstr "Szabja testre az aláhúzások megjelenését (folytonos vagy hullámos, erősség, vastagság) és a buborékot (méret, egységikon) élő előnézettel. Húzza arrébb az ablakot, ha eltakarja a látni kívánt szöveget."
 
 #. TRANSLATORS: Long-press explainer for 'Check for updates'.
 #: main.lua:8829
 msgid "Check GitHub for a newer Footcream release and install it in place. Needs Wi-Fi; you'll be asked to restart KOReader when it's done."
-msgstr ""
+msgstr "Újabb Footcream-kiadás keresése a GitHubon és telepítése helyben. Wi-Fi szükséges; a végén a rendszer kéri a KOReader újraindítását."
 
 #. TRANSLATORS: Long-press explainer for the 'Advanced' submenu.
 #: main.lua:8842
 msgid "Extra options: unit categories, rounding, original-unit tooltips, error reporting to the developer, per-book cleanup, and debug tools."
-msgstr ""
+msgstr "További lehetőségek: egységkategóriák, kerekítés, eredeti egységet mutató buborékok, hibajelentés a fejlesztőnek, könyvenkénti takarítás és diagnosztikai eszközök."
 
 #. TRANSLATORS: Long-press explainer for 'Unit categories'.
 #: main.lua:8849
 msgid "Choose which kinds of measurements are converted. Anything you untick is ignored everywhere — no underlines, popups or in-text conversions for that category."
-msgstr ""
+msgstr "Válassza ki, mely mértékfajták kerüljenek átváltásra. Amit kivesz, azt mindenhol figyelmen kívül hagyja — az adott kategóriához nem lesz aláhúzás, buborék és szövegbeli átváltás sem."
 
 #. TRANSLATORS: Long-press explainer for 'Smart rounding for conversions'. The
 #. quoted values are examples; 'm' is the metre symbol, not translated.
 #: main.lua:8858
 msgid "Round conversions to friendly, readable values — \"90 m\" instead of \"91.44 m\". Turn off if you prefer exact numbers."
-msgstr ""
+msgstr "Kerekítse az átváltásokat barátságos, olvasható értékekre — „91.44 m” helyett „90 m”. Kapcsolja ki, ha a pontos számokat részesíti előnyben."
 
 #. TRANSLATORS: Long-press explainer for 'Show original unit in tooltip'.
 #: main.lua:8899
 msgid "In the \"only (in text)\" mode, underline the converted values so you can tap any of them and see the original text. Handy if you want to double-check a conversion against what the author wrote."
-msgstr ""
+msgstr "A „csak (a szövegben)” módban húzza alá az átváltott értékeket, hogy bármelyikre koppintva láthassa az eredeti szöveget. Hasznos, ha egy átváltást össze szeretne vetni azzal, amit a szerző írt."
 
 #. TRANSLATORS: Long-press explainer for 'Long-press units to send errors to the
 #. developer'.
 #: main.lua:8934
 msgid "Flag bad conversions while you read: long-press a unit (or select text Footcream missed) and the error is sent anonymously to the developer. Each flag contains the book title, the measurement, its conversion and the surrounding sentence — nothing else. Works offline: flags are queued and sent when you're connected."
-msgstr ""
+msgstr "Jelentse a rossz átváltásokat olvasás közben: koppintson hosszan egy egységre (vagy jelölje ki azt a szöveget, amit a Footcream kihagyott), és a hiba névtelenül a fejlesztőhöz kerül. Minden jelentés a könyv címét, a mértéket, annak átváltását és a körülötte lévő mondatot tartalmazza — semmi mást. Offline is működik: a jelentések sorba állnak, és kapcsolódáskor kerülnek elküldésre."
 
 #. TRANSLATORS: Long-press explainer for 'Remove Footcream data from this book'.
 #: main.lua:8968
 msgid "Undo everything for this book: restore the original text, remove all underlines and delete the saved scan. The book file goes back to exactly how it was before Footcream touched it."
-msgstr ""
+msgstr "Vonjon vissza mindent ennél a könyvnél: állítsa vissza az eredeti szöveget, távolítsa el az összes aláhúzást, és törölje a mentett átvizsgálást. A könyv fájlja pontosan olyan lesz, amilyen azelőtt volt, hogy a Footcream hozzáért."
 
 #. TRANSLATORS: Long-press explainer for the 'Debug' submenu.
 #: main.lua:9010
 msgid "See exactly what the scan found in this book, and manage errors you've flagged on this device."
-msgstr ""
+msgstr "Nézze meg pontosan, mit talált az átvizsgálás ebben a könyvben, és kezelje az ezen az eszközön jelentett hibákat."
 
 #. TRANSLATORS: Long-press explainer for 'Units in book (list)'.
 #: main.lua:9017
 msgid "Every measurement found in this book, with its detected value and conversion. Long-press an entry to flag it as wrong."
-msgstr ""
+msgstr "A könyvben talált összes mérték a felismert értékével és átváltásával. Koppintson hosszan egy bejegyzésre, hogy hibásként jelentse."
 
 #. TRANSLATORS: Long-press explainer for 'View flagged errors'. The path in
 #. parentheses is a file location - leave it as it is.
 #: main.lua:9032
 msgid "Show the errors you've flagged on this device. They're kept in a plain-text file (koreader/footcream/flagged_errors.txt) that you can also attach to a GitHub issue."
-msgstr ""
+msgstr "Az ezen az eszközön jelentett hibák megjelenítése. Egy egyszerű szövegfájlban (koreader/footcream/flagged_errors.txt) tárolódnak, amelyet egy GitHub-hibajegyhez is csatolhat."
 
 #. TRANSLATORS: Long-press explainer for 'Clear flagged errors'.
 #: main.lua:9042
 msgid "Delete the local flagged-errors file. Reports that were already sent to the developer are not affected."
-msgstr ""
+msgstr "A helyi jelentetthiba-fájl törlése. A fejlesztőnek már elküldött jelentéseket ez nem érinti."
 
