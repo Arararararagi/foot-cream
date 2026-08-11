@@ -62,3 +62,27 @@ end)
 T("not two miles away -> 3 km", function()
     assert_conv("The town was not two miles away.", "two miles", "= 3 km")
 end)
+
+-- ── Upstream v1.7.0 guards (merged) ─────────────────────────────────────────
+T("2001's is a year possessive, not 2001 ft", function()
+    assert_no_match("2001's Ghosts of Mars.", "2001")
+end)
+
+T("the 90's is a decade, not 90 ft", function()
+    assert_no_match("He loved the 90's music.", "90")
+end)
+
+T("bare degrees converts only with a cold/hot cue", function()
+    assert_conv("It was 20 degrees below freezing.", "20 degrees", "= -7")
+    assert_no_match("The track banked forty degrees.", "degrees")
+end)
+
+T("twenty-three square leagues is area", function()
+    assert_conv("It covered twenty-three square leagues.", "twenty-three square leagues", "= 540 km")
+end)
+
+T("curly-quote height 6'2\" converts", function()
+    local RSQ = "\226\128\153"  -- ' U+2019
+    local RDQ = "\226\128\157"  -- " U+201D
+    assert_conv("She measured 6" .. RSQ .. "2" .. RDQ .. " tall.", "6", "= 1.88 m")
+end)

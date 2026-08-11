@@ -71,6 +71,15 @@ local ffiutil = {
     -- gettime for _now(); deliberately NO runInSubProcess so the scan runs
     -- synchronously in-process for tests.
     gettime = function() return os.clock() end,
+    -- v1.7.0 i18n: `local T = ffiutil.template` substitutes %1..%n in the
+    -- translated template with the given args.
+    template = function(fmt, ...)
+        local args = { ... }
+        return (fmt:gsub("%%(%d)", function(d)
+            local n = tonumber(d)
+            return args[n] ~= nil and tostring(args[n]) or ""
+        end))
+    end,
 }
 
 local lfs = {
@@ -106,6 +115,18 @@ function M.install()
         ["libs/libkoreader-lfs"]                = lfs,
         ["lfs"]                                 = lfs,
         ["ffi/util"]                            = ffiutil,
+        -- gettext module: `local _ = require("gettext")` returns the translate
+        -- function with .loadMO/.current_lang attached. This Lua build won't
+        -- allow fields on functions, so use a callable table instead.
+        ["gettext"]                             = setmetatable(
+            {
+                loadMO = function() end,
+                current_lang = "en",
+                ngettext = function(singular, plural, n)
+                    return (n == 1) and singular or plural
+                end,
+            },
+            { __call = function(_, s) return s end }),
         ["ui/trapper"]                          = Trapper,
     }
     for name, mod in pairs(slots) do
@@ -114,6 +135,16 @@ function M.install()
     -- The plugin reads the global G_reader_settings; make it visible.
     if not _G.G_reader_settings then
         _G.G_reader_settings = settings
+    end
+    -- v1.7.0 i18n: the plugin calls the KOReader globals _() and T() on every
+    -- user-facing string. Identity stubs keep the scan path working headless.
+    _G._ = _G._ or function(s) return s end
+    _G.T = _G.T or function(fmt, ...)
+        local args = { ... }
+        return (fmt:gsub("%%(%d)", function(d)
+            local n = tonumber(d)
+            return args[n] ~= nil and tostring(args[n]) or ""
+        end))
     end
 end
 

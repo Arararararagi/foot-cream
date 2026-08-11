@@ -14,6 +14,21 @@ if not ok_lfs then ok_lfs, lfs = pcall(require, "lfs") end
 if not ok_lfs then lfs = nil end
 -- ffi/util provides runInSubProcess / isSubProcessDone for background work
 local ok_ffiutil, ffiutil = pcall(require, "ffi/util")
+local _  = require("gettext")
+local T  = ffiutil.template
+
+-- Out-of-tree plugins aren't part of KOReader's own l10n project (the core
+-- GetText textdomain is hardcoded to "koreader", one .mo per language), so
+-- Footcream ships its own compiled translations and merges them into the
+-- SAME lookup table gettext() reads from — loadMO() only adds entries, it
+-- doesn't clear what's already loaded (only changeLang() does that), so this
+-- is safe to run after core's own translations are in place. Must happen
+-- before any module-level table literal below calls _(), so it runs here
+-- rather than in FootFree:init() (which only runs once a book is opened).
+do
+    local plugin_dir = (debug.getinfo(1, "S").source or ""):match("@?(.*)/[^/]*$") or "."
+    _.loadMO(plugin_dir .. "/l10n/" .. tostring(_.current_lang) .. "/foot-cream.mo")
+end
 
 local FootFree = WidgetContainer:extend{
     name     = "foot-cream",
@@ -31,11 +46,18 @@ local FootFree = WidgetContainer:extend{
 -- ── Unicode constants (decimal-escaped UTF-8) ─────────────────────────────────
 local _PRIME  = "\226\128\178"   -- ′  U+2032
 local _DPRIME = "\226\128\179"   -- ″  U+2033
+-- Curly/smart-quote twins of the ASCII apostrophe/quote — most commercial
+-- EPUBs are typeset with these, not straight ASCII, for shorthand height
+-- notation ("6’2”"). Recognized everywhere the straight forms are (issue #2).
+-- Class attributes, not `local`s — see the 200-local ceiling note in
+-- references/gotchas.md.
+FootFree._CAPOS  = "\226\128\153"   -- '  U+2019 curly right single quote (apostrophe)
+FootFree._CDQ    = "\226\128\157"   -- "  U+201D curly right double quote
 local _ENDASH = "\226\128\147"   -- –  U+2013
 local _TIMES  = "\195\151"       -- ×  U+00D7
 local _SUP2   = "\194\178"       -- ²  U+00B2 (superscript two)
 
-local CACHE_VERSION = 59  -- bumped: metric→imperial direction ("Preferred units": metric/us/uk; sidecars carry a direction field, matches can now target imperial compound formats). (58 was: hyphen-glued attributive fractions parse — "<ordinal>-of-a-<unit>-thick/long" reads as 1/denominator ("a third-of-a-mile-thick" = 540 m; "quarter-of-a" worked already via _WORD_NUMS, ordinals like "third" were nil because bare ordinals are ambiguous — the glued "-of-a" tail disambiguates). (57 was: bare-article "a million miles" (incl. "an hour"/"away" forms) suppressed as hyperbole — user-approved 2026-07-06, all 7 corpus hits figurative; digits and real multiples ("two million miles", "half a million miles") still convert. (56 was: URL path fragments never convert (digit/letter slash in matched_text — "178650/League" was 860 000 km); "N-foot-by-M-foot" dimension adjectives convert both sides ("twenty-foot-by-hundred-foot" = 6 × 30 m, was a bare 6 m). (55 was: shy-book plain passes enforce true \\b via adjacent-char probes on BOTH sides (plain-path contexts are word-based, so "15 mi|nutes"/"one kn|ows" looked clean and inflated matches 3-6x). (54 was: soft-hyphen books (U+00AD in the text) scan via per-alias PLAIN findAllText passes — the regex path returns span-shifted/missing hits in such books (The Rise and Fall of the Dinosaurs: "1,700 miles" never hit, "seven-ton" garbled). (53 was: new-test-books sweep fixes — em-dash/ellipsis glued to the number no longer defeats _prev_num_words ("too far—eleven feet six inches", "off course by…sixty miles", "park—four acres"); fused digit+unit forms hit via a digit lookbehind in _FAST_UNIT_PAT ("260lbs", "6ft"); banking vocabulary (bank/account/bills/untraceable) added to the soft-currency cues. (52 was: "for a mile" article cue (user-approved) + attributive-tail guard ("ran a mile RELAY" is a compound noun — the batch-2 motion-verb cues were wrongly converting it). (51 was: tight U+2044 fractions from sup/sub-span markup ("21⁄2-inch" = 2½, "13⁄16-inch" = 13/16 — improper-looking numerator reads as a mixed number, proper as a plain fraction). 50 was: corpus-sweep batch 2 follow-ups — prime matches re-check the coordinate/astronomy vocab on the tail of their own paragraph (the 5-word hit window missed "ABERRATION … is established 20″"); spaced U+2044 mixed fractions parse ("2 1 ⁄ 2 -inch plank" = 2.5); _prev_num_words' article-fraction tail requires both words ("half LONG" no longer reads 0.5, which spawned a bogus 0.5–1000 range eating "…a mile and a half long and 1000 ft. deep"). (49 was: batch 2 — FP guards for closing-quote/middle-dot/arcsecond; enumeration lists; ASCII mixed fractions; million; article-mile directional/motion cues; at-a-time ≤ 2; "<digit> of a mile" fraction guard. 48 was: foot-idiom positional cues gated ≤ 2.)
+local CACHE_VERSION = 65  -- fork: merged upstream v1.7.0 (64) — the fork's added units (carat, ton, verst/arshin/pood, gill, hp/BTU/psi, Asian transliterations) change match/convert output, so sidecars from 64 (no such units) and earlier fork builds must be rescanned. (64 was: the year/decade possessive guard for a bare feet-mark ("2001's", "the 90's") ACTUALLY WORKS now. It shipped in 63 but was inert: it tested next_text for a leading "s", and crengine builds context word-by-word — "2001’s" is one token, so the possessive "s" is swallowed and next_text starts at " Ghosts of Mars". The test could never fire, so reports #11-13 (2001’ = 600 m) were still live; VM-verified 2026-08-07, 5 false positives in smoketest5 CH49. Now reads the actual next character from the document via _xpointer_offset, the same one-char xpointer read the mid-word guard below already uses (a genuine height reads a space there: "6’ wide"). (63 was: "square <unit>" now recognizes "league"/"leagues" (was missing from _AREA_CONV entirely — the "square" cue had nothing to convert with, so "twenty-three square leagues" was a total miss, report #10). "<count>-toed/-legged/-clawed/-pawed/etc. feet/foot" no longer reads as a distance — anatomy, not a measurement (report #9: "three-toed feet" was reading as 91 cm; the shared _parse_num word-number fallback treats a hyphen right after a number word as an ordinary compound-number boundary, the same mechanism that composes "twenty-three", so it doesn't distinguish "three-toed" from "twenty-three"). (62 was: shorthand height notation (issue #2) now recognizes curly/smart quotes ("6’2”"), not just straight ASCII/true-prime — most commercial EPUBs are typeset this way, which is why it looked entirely broken to the reporter. A digit-adjacent bare feet-mark ('/′/’) immediately followed by "s" is now read as a year/decade possessive or plural ("2001's", "the 90's"), not a height — closes the false positive in reports #11-13 ("2001's Ghosts of Mars" was reading as 2001 ft = 600 m). (61 was: bare "degrees" (no F/Fahrenheit qualifier) now converts as a Fahrenheit temperature when a nearby word suggests one (cold/hot/warm/chill/freez.../temperature/weather/humid/...); default is still to leave it alone (angle, rotation, proof, heading, latitude). Spelled "minus" before a number now negates it ("minus seventy degrees" = -70), matching the existing symbolic-dash handling. "N degrees below zero" is suppressed rather than mis-signed (residual — reports #14-33). (60 was: hyphenated adjectival "square <unit>" compounds ("a 250,000-square-foot room", "a three-million-square-foot cave") now detect as area — the "square" cue check missed the hyphen glue and fell through to the linear-foot factor, badly wrong and missing the ² (reports #22-24). (59 was: metric→imperial direction ("Preferred units": metric/us/uk; sidecars carry a direction field, matches can now target imperial compound formats). (58 was: hyphen-glued attributive fractions parse — "<ordinal>-of-a-<unit>-thick/long" reads as 1/denominator ("a third-of-a-mile-thick" = 540 m; "quarter-of-a" worked already via _WORD_NUMS, ordinals like "third" were nil because bare ordinals are ambiguous — the glued "-of-a" tail disambiguates). (57 was: bare-article "a million miles" (incl. "an hour"/"away" forms) suppressed as hyperbole — user-approved 2026-07-06, all 7 corpus hits figurative; digits and real multiples ("two million miles", "half a million miles") still convert. (56 was: URL path fragments never convert (digit/letter slash in matched_text — "178650/League" was 860 000 km); "N-foot-by-M-foot" dimension adjectives convert both sides ("twenty-foot-by-hundred-foot" = 6 × 30 m, was a bare 6 m). (55 was: shy-book plain passes enforce true \\b via adjacent-char probes on BOTH sides (plain-path contexts are word-based, so "15 mi|nutes"/"one kn|ows" looked clean and inflated matches 3-6x). (54 was: soft-hyphen books (U+00AD in the text) scan via per-alias PLAIN findAllText passes — the regex path returns span-shifted/missing hits in such books (The Rise and Fall of the Dinosaurs: "1,700 miles" never hit, "seven-ton" garbled). (53 was: new-test-books sweep fixes — em-dash/ellipsis glued to the number no longer defeats _prev_num_words ("too far—eleven feet six inches", "off course by…sixty miles", "park—four acres"); fused digit+unit forms hit via a digit lookbehind in _FAST_UNIT_PAT ("260lbs", "6ft"); banking vocabulary (bank/account/bills/untraceable) added to the soft-currency cues. (52 was: "for a mile" article cue (user-approved) + attributive-tail guard ("ran a mile RELAY" is a compound noun — the batch-2 motion-verb cues were wrongly converting it). (51 was: tight U+2044 fractions from sup/sub-span markup ("21⁄2-inch" = 2½, "13⁄16-inch" = 13/16 — improper-looking numerator reads as a mixed number, proper as a plain fraction). 50 was: corpus-sweep batch 2 follow-ups — prime matches re-check the coordinate/astronomy vocab on the tail of their own paragraph (the 5-word hit window missed "ABERRATION … is established 20″"); spaced U+2044 mixed fractions parse ("2 1 ⁄ 2 -inch plank" = 2.5); _prev_num_words' article-fraction tail requires both words ("half LONG" no longer reads 0.5, which spawned a bogus 0.5–1000 range eating "…a mile and a half long and 1000 ft. deep"). (49 was: batch 2 — FP guards for closing-quote/middle-dot/arcsecond; enumeration lists; ASCII mixed fractions; million; article-mile directional/motion cues; at-a-time ≤ 2; "<digit> of a mile" fraction guard. 48 was: foot-idiom positional cues gated ≤ 2.)
 local _REVERSE_VERSION = 2  -- v2: ordered originals per converted string (position-aware reverse lookup)
 
 -- ── Number prefixes ───────────────────────────────────────────────────────────
@@ -470,6 +492,18 @@ local function _detected_value_str(text)
     if #vals == 1 then return vals[1] end
     return table.concat(vals, is_range and _ENDASH or ", ")
 end
+
+-- ── Decimal mark: always ".", deliberately ──────────────────────────────────
+-- Footcream formatted the decimal mark from the UI language for one release
+-- cycle ("1,8 m" for the 41 comma languages) and it was reverted before
+-- shipping. The reason is the in-text modes: the converted number is written
+-- into the reader's own book file, so a German UI put "1,8 m" into a
+-- paragraph where the author wrote "1.8" — visibly inconsistent WITHIN ONE
+-- PARAGRAPH, which reads as a typo rather than a courtesy. Inferring a number
+-- format from someone's interface language is a guess about what they want;
+-- if this comes back it should be an explicit "format preference" setting.
+-- The thousands separator is a space everywhere (SI, unambiguous) and predates
+-- all of this.
 
 -- For compound feet+inches heights, _fmt's 1-decimal rounding loses too much
 -- (6'4" -> "1.9 m" hides a ~3cm range). Always show centimeter precision.
@@ -953,11 +987,16 @@ local function _conv_foot_inch_to_m(text)
     return nil
 end
 
--- "6′9″" / "6'8"" → metres
+-- "6′9″" / "6'8"" / "6'8½"" / "6'8" → metres. Handles the typographic
+-- apostrophe (') and the closing double quote (") as marks. The inches half
+-- may carry a decimal or a vulgar fraction ("6'8½"" = 8.5 in). The inches
+-- value must be < 12, so a bare trailing number that isn't really inches
+-- ("6'140") can't become a bogus height.
 -- Prime/quote marks for the literal passes. Feet: ASCII ', U+2019 ', U+2032 ′.
 -- Inches: ASCII ", U+201D ", U+2033 ″. (U+201C is an OPENING quote — never a
 -- measure — so it stays out.) Held in ONE class-attached table (the chunk sits
--- near LuaJIT's 200-locals ceiling; no top-level helper slots to spare).
+-- near LuaJIT's 200-locals ceiling; no top-level helper slots to spare). The
+-- U+2019/U+201D curly marks here subsume upstream's _CAPOS/_CDQ handling.
 local _PRIME_MARKS = {}
 do
     local alts = {}
@@ -969,11 +1008,6 @@ do
     _PRIME_MARKS.rdquote = "\226\128\157"   -- " U+201D
 end
 
--- "6′9″" / "6'8"" / "6'8½"" / "6'8" → metres. Handles the typographic
--- apostrophe (') and the closing double quote (") as marks. The inches half
--- may carry a decimal or a vulgar fraction ("6'8½"" = 8.5 in). The inches
--- value must be < 12, so a bare trailing number that isn't really inches
--- ("6'140") can't become a bogus height.
 local function _conv_prime_to_m(text)
     local clean = _display(text)
     local f = clean:match("^([0-9][0-9.,]*)")
@@ -1345,6 +1379,50 @@ FootFree._TON.wins = function(window, num)
     return fscore > wscore
 end
 
+-- ── Bare "degrees" temperature cue classifier ───────────────────────────────
+-- Bare "degrees" (no °F/°C, no "Fahrenheit"/"Celsius") is genuinely ambiguous
+-- in prose — angle ("banked forty degrees"), rotation, alcohol proof, compass
+-- heading, latitude, oven gas marks. Unlike the pounds classifier above
+-- (default keep, suppress on strong currency evidence), this GATES: the
+-- default is suppress, and a nearby cue word is required to opt a match IN.
+-- Reports #14/17/18/19/26/30/31/32/33 (Frostbite, The Postmortal) are all
+-- genuine Fahrenheit temperatures with a temperature word nearby.
+-- Class attributes (not `local`s) — see the 200-local ceiling note in
+-- references/gotchas.md; FootFree._IMPERIAL/._RadioDot use the same trick.
+FootFree._TEMP_CUE_WORDS = {
+    cold=true, colder=true, coldest=true, coldness=true,
+    hot=true, hotter=true, hottest=true, hotness=true,
+    warm=true, warmer=true, warmest=true, warmth=true, warmed=true, warming=true,
+    cool=true, cooler=true, coolest=true, cooled=true, cooling=true, cools=true,
+    freeze=true, freezes=true, freezing=true, froze=true, frozen=true,
+    frost=true, frosty=true, frostbite=true, frostbitten=true,
+    chill=true, chilly=true, chilled=true, chilling=true, chills=true,
+    thaw=true, thawed=true, thawing=true, thaws=true,
+    temperature=true, temperatures=true,
+    weather=true, climate=true, forecast=true,
+    heat=true, heated=true, heating=true, heats=true,
+    humid=true, humidity=true, muggy=true,
+    sweltering=true, balmy=true, sultry=true, tropical=true,
+    frigid=true, icy=true, ice=true, snow=true, snowy=true, snowing=true,
+    thermometer=true, thermostat=true,
+    refrigerator=true, refrigerated=true, refrigeration=true, refrigerate=true,
+    fridge=true, freezer=true, icebox=true,
+    fever=true, feverish=true,
+    boiling=true, simmer=true, simmering=true,
+}
+FootFree._TEMP_CUE_PHRASES = {
+    "below zero", "sub zero", "below freezing", "wind chill", "heat index",
+}
+local function _degrees_temperature_cue(window)
+    for word in window:gmatch("%a+") do
+        if FootFree._TEMP_CUE_WORDS[word] then return true end
+    end
+    for _, ph in ipairs(FootFree._TEMP_CUE_PHRASES) do
+        if window:find(ph, 1, true) then return true end
+    end
+    return false
+end
+
 -- Window-truncation helpers. The scan stores 15 context words each side (the
 -- pound currency classifier needs the wide view), but the number/range/idiom
 -- logic and the legacy filters are tuned for 8 — these trim back to the 8 words
@@ -1517,7 +1595,10 @@ function FootFree._confirm(text, ok_text, ok_callback, cancel_text, cancel_callb
         tap_close_callback = cancel_callback,
         buttons = {{
             {
-                text = cancel_text or "Cancel",
+                -- TRANSLATORS: Right-hand button of every Footcream confirmation dialog; dismisses
+                -- it without doing anything. Used as the default when a caller doesn't pass its
+                -- own wording.
+                text = cancel_text or _("Cancel"),
                 callback = function()
                     UIManager:close(dialog)
                     if cancel_callback then cancel_callback() end
@@ -1540,11 +1621,12 @@ end
 -- and other diagnostics already write to (/mnt/macos/debug = <repo>/debug on the
 -- Mac), so dev mode is flipped from the Mac side and never exists on a user's
 -- device. Enable:  touch <repo>/debug/.dev     Disable:  rm <repo>/debug/.dev
-local _DEV_FLAG_FILE       = "/mnt/macos/debug/.dev"
+-- Class attribute, not a local: this file is at the 200-local ceiling.
+FootFree._DEV_FLAG_FILE = "/mnt/macos/debug/.dev"
 
 -- True when the developer marker file is present.
 local function _dev_mode_enabled()
-    local fh = io.open(_DEV_FLAG_FILE)
+    local fh = io.open(FootFree._DEV_FLAG_FILE)
     if fh then fh:close(); return true end
     return false
 end
@@ -1579,7 +1661,8 @@ end
 -- Self-calibrated after every scan (footcream_scan_rate); this is just the
 -- first-ever-scan fallback, tuned for a slow single-core e-reader. Over-/under-
 -- estimates self-correct on the next book.
-local _DEFAULT_SCAN_RATE = 5.0e-5
+-- Class attribute, not a local: this file is at the 200-local ceiling.
+FootFree._DEFAULT_SCAN_RATE = 5.0e-5
 
 local _ffi_ok, _ffi = pcall(require, "ffi")
 local function _nice_self()
@@ -1710,6 +1793,62 @@ local function _file_exists(path)
     local f = io.open(path)
     if f then f:close(); return true end
     return false
+end
+
+-- Shared by the subprocess and Android-synchronous update-install paths:
+-- download -> unzip -> swap the plugin dir in place. Returns "OK" or
+-- "ERR:<reason>". No UIManager use inside — the subprocess path can't.
+-- (Class attribute, not a local: this file is at the 200-local ceiling.)
+function FootFree._do_install_update(asset_url, tag)
+    local tmp_zip   = _SIDECAR_DIR .. "/update.zip"
+    local tmp_dir   = _SIDECAR_DIR .. "/update"
+    local plugin_dir = _PLUGIN_DIR
+    local backup    = plugin_dir .. ".bak"
+    os.execute('rm -rf "' .. tmp_dir .. '" "' .. tmp_zip .. '" "' .. backup .. '"')
+    local ok, err = _http_fetch(asset_url, tmp_zip)
+    -- TRANSLATORS: Error after 'Menu > Footcream > Check for updates' when downloading
+    -- the release package fails. %1 is the network error, untranslated.
+    if not ok then return "ERR:" .. T(_("Download failed: %1"), tostring(err)) end
+    os.execute('mkdir -p "' .. tmp_dir .. '"')
+    os.execute('unzip -o "' .. tmp_zip .. '" -d "' .. tmp_dir .. '" >/dev/null 2>&1')
+    local src = _find_plugin_root(tmp_dir)
+    -- TRANSLATORS: Error after 'Menu > Footcream > Check for updates': the downloaded
+    -- ZIP didn't contain a plugin, so nothing was installed.
+    if not src then return "ERR:" .. _("Update package didn't contain the plugin files.") end
+    os.execute('cp -rf "' .. plugin_dir .. '" "' .. backup .. '"')
+    os.execute('cp -rf "' .. src .. '/." "' .. plugin_dir .. '/"')
+    if not _file_exists(plugin_dir .. "/main.lua") then
+        os.execute('rm -rf "' .. plugin_dir .. '" && mv "' .. backup .. '" "' .. plugin_dir .. '"')
+        os.execute('rm -rf "' .. tmp_dir .. '" "' .. tmp_zip .. '"')
+        -- TRANSLATORS: Error after 'Menu > Footcream > Check for updates': copying the new
+        -- version in failed and the old one was put back. Nothing is broken.
+        return "ERR:" .. _("Install failed — restored the previous version.")
+    end
+    os.execute('rm -rf "' .. backup .. '" "' .. tmp_dir .. '" "' .. tmp_zip .. '"')
+    return "OK"
+end
+
+-- Shared: interpret _do_install_update's result, offering a restart on
+-- success or surfacing the error otherwise.
+function FootFree._report_install_result(result, tag)
+    local InfoMessage = require("ui/widget/infomessage")
+    if result == "OK" then
+        FootFree._confirm(
+            -- TRANSLATORS: Confirmation after a successful self-update. %1 is the version tag
+            -- (e.g. 'v1.6.0'). The new code only runs after a restart.
+            T(_("Updated to %1.\nRestart KOReader now to load it?"), tag),
+            -- TRANSLATORS: Left button on the 'Updated to ...' dialog; restarts KOReader
+            -- immediately so the new version loads.
+            _("Restart"), function() UIManager:restartKOReader() end,
+            -- TRANSLATORS: Right button on the 'Updated to ...' dialog; closes it and keeps
+            -- reading. The update loads at the next restart either way.
+            _("Later"))
+    else
+        UIManager:show(InfoMessage:new{
+            -- TRANSLATORS: Fallback error when a self-update fails without a specific reason
+            -- ('Menu > Footcream > Check for updates').
+            text = (type(result) == "string" and result:gsub("^ERR:", "")) or _("Update failed.") })
+    end
 end
 
 -- Path of the patch record for a given book (defined here so _SIDECAR_DIR is set).
@@ -1900,7 +2039,8 @@ end
 -- ── SVG scan-progress loader ──────────────────────────────────────────────────
 -- Custom artwork in assets/loader/<pct>%.svg (0..100 in 5% steps) replaces the
 -- hand-drawn donut. Each bucket's tile is rendered once and cached.
-local _LOADER_DIR = _PLUGIN_DIR .. "/assets/loader"
+-- Class attribute, not a local: this file is at the 200-local ceiling.
+FootFree._LOADER_DIR = _PLUGIN_DIR .. "/assets/loader"
 local _LOADER_PX  = 28            -- on-screen size before DPI scaling
 local _loader_tile_cache = {}
 
@@ -1920,7 +2060,7 @@ local function _loader_tile(pct)
     local size = Screen:scaleBySize(_LOADER_PX)
     local ok, tile = pcall(function()
         return RenderImage:renderSVGImageFile(
-            _LOADER_DIR .. "/" .. pct .. "%.svg", size, size)
+            FootFree._LOADER_DIR .. "/" .. pct .. "%.svg", size, size)
     end)
     if not ok or not tile then
         _loader_tile_cache[pct] = false
@@ -2393,15 +2533,42 @@ end
 -- Human-readable label for the book's English-language variant, e.g.
 -- "UK English" / "US English". Returns nil for unknown/non-regional "en".
 local _LANG_LABELS = {
-    ["en-us"] = "US English",
-    ["en-gb"] = "UK English",
-    ["en-uk"] = "UK English",
-    ["en-ca"] = "Canadian English",
-    ["en-au"] = "Australian English",
-    ["en-nz"] = "New Zealand English",
-    ["en-ie"] = "Irish English",
-    ["en-za"] = "South African English",
-    ["en-in"] = "Indian English",
+    -- TRANSLATORS: Name of the English variant detected from the book's metadata,
+    -- shown inside the hint-count menu line: '12 hints found in this US English book'.
+    -- Keep it short; it must read naturally inside that sentence.
+    ["en-us"] = _("US English"),
+    -- TRANSLATORS: Name of the English variant detected from the book's metadata,
+    -- shown inside the hint-count menu line: '12 hints found in this UK English book'.
+    -- Keep it short; it must read naturally inside that sentence.
+    ["en-gb"] = _("UK English"),
+    -- TRANSLATORS: Name of the English variant detected from the book's metadata,
+    -- shown inside the hint-count menu line: '12 hints found in this UK English book'.
+    -- Keep it short; it must read naturally inside that sentence.
+    ["en-uk"] = _("UK English"),
+    -- TRANSLATORS: Name of the English variant detected from the book's metadata,
+    -- shown inside the hint-count menu line: '12 hints found in this Canadian English
+    -- book'. Keep it short; it must read naturally inside that sentence.
+    ["en-ca"] = _("Canadian English"),
+    -- TRANSLATORS: Name of the English variant detected from the book's metadata,
+    -- shown inside the hint-count menu line: '12 hints found in this Australian
+    -- English book'. Keep it short; it must read naturally inside that sentence.
+    ["en-au"] = _("Australian English"),
+    -- TRANSLATORS: Name of the English variant detected from the book's metadata,
+    -- shown inside the hint-count menu line: '12 hints found in this New Zealand
+    -- English book'. Keep it short; it must read naturally inside that sentence.
+    ["en-nz"] = _("New Zealand English"),
+    -- TRANSLATORS: Name of the English variant detected from the book's metadata,
+    -- shown inside the hint-count menu line: '12 hints found in this Irish English
+    -- book'. Keep it short; it must read naturally inside that sentence.
+    ["en-ie"] = _("Irish English"),
+    -- TRANSLATORS: Name of the English variant detected from the book's metadata,
+    -- shown inside the hint-count menu line: '12 hints found in this South African
+    -- English book'. Keep it short; it must read naturally inside that sentence.
+    ["en-za"] = _("South African English"),
+    -- TRANSLATORS: Name of the English variant detected from the book's metadata,
+    -- shown inside the hint-count menu line: '12 hints found in this Indian English
+    -- book'. Keep it short; it must read naturally inside that sentence.
+    ["en-in"] = _("Indian English"),
 }
 
 local function _lang_label(doc)
@@ -2513,6 +2680,11 @@ local _UNIT_CONV = {
     ["°F"]                = { factor=5/9,      offset=-32*5/9, target="°C",   cat="temperature" },
     ["degrees Fahrenheit"]= { factor=5/9,      offset=-32*5/9, target="°C",   cat="temperature" },
     ["degrees F"]         = { factor=5/9,      offset=-32*5/9, target="°C",   cat="temperature" },
+    -- Bare "degrees" (no F/Fahrenheit qualifier): ambiguous unit, gated by
+    -- _degrees_temperature_cue at scan-finish (bare_degrees marks it so the
+    -- gate can tell it apart from the unambiguous "degrees F"/"Fahrenheit"
+    -- entries above, which never need the cue check).
+    ["degrees"]            = { factor=5/9,      offset=-32*5/9, target="°C",   cat="temperature", bare_degrees=true },
     ["gallons"]           = { factor=3.78541,  offset=0,       target="liters",    cat="volume"      },
     ["gallon"]            = { factor=3.78541,  offset=0,       target="liters",    cat="volume"      },
     ["gal"]               = { factor=3.78541,  offset=0,       target="liters",    cat="volume"      },
@@ -2640,7 +2812,7 @@ local _UNIT_SUFFIXES = {
     "go",
     "ke",
     -- Existing units...
-    "degrees Fahrenheit", "degrees F",
+    "degrees Fahrenheit", "degrees F", "degrees",
     "nautical miles", "nautical mile",
     "British thermal units", "British thermal unit",
     "pounds per square inch",
@@ -2995,10 +3167,23 @@ local function _prev_num_words(prev)
         if used and used >= (#words - first + 1) then break end
         first = first + 1
     end
+    -- A spelled "minus" immediately before the number phrase negates it
+    -- ("minus seventy degrees" = -70), the word form of the ASCII/Unicode
+    -- dash signs _parse_num already honors before bare digits.
     local n = _parse_num(table.concat(words, " ", first))
-    if n then return n, #words - first + 1 end
+    if n then
+        if first > 1 and words[first - 1]:lower() == "minus" then
+            return -n, #words - first + 2
+        end
+        return n, #words - first + 1
+    end
     n = _parse_num(words[#words])
-    if n then return n, 1 end
+    if n then
+        if #words > 1 and words[#words - 1]:lower() == "minus" then
+            return -n, 2
+        end
+        return n, 1
+    end
     return nil
 end
 
@@ -3176,6 +3361,11 @@ local _AREA_CONV = {
     yard = 0.83612736, yards = 0.83612736,
     foot = 0.09290304, feet  = 0.09290304,
     inch = 0.00064516, inches = 0.00064516,
+    -- League already converts as a length (_UNIT_CONV, 4.82803 km); square of
+    -- that same land-league factor (report #10: "twenty-three square leagues"
+    -- was a straight miss — "square" ate the cue but no area factor existed,
+    -- so the number-before-"square" word-walk had nothing to land on).
+    league = 23309873.68, leagues = 23309873.68,
 }
 
 -- Format a square-metre value with an auto-picked unit (km² / m² / cm²) and a
@@ -3971,9 +4161,18 @@ local function _fast_scan_matches(doc, cat_enabled)
             -- word "square" sits between the number and the unit, so the length
             -- path would mis-read it as miles/feet. Convert to metric area
             -- (km²/m²/cm², auto). Sets range_done so the length branches skip.
+            -- Hyphenated adjectival compounds ("a three-million-square-foot
+            -- cave", "a 250,000-square-foot room") glue "square" to the unit
+            -- with a hyphen, not a space, so the cue check needs the same
+            -- hyphen-to-space normalization _prev_num_words/_compose_spelled
+            -- already do internally — otherwise this falls through to the
+            -- plain length path with the LINEAR foot factor, badly wrong and
+            -- missing the ² (report #22-24: 250,000-square-foot → 76 000 m
+            -- instead of ~23 000 m²).
             local area_factor = _AREA_CONV[ulow]
-            if area_factor and _last_words(p, 8):match("square%s*$") then
-                local pbefore = _last_words(p, 8):gsub("%s*square%s*$", "")
+            local lw8 = _last_words(p, 8):gsub("%-", " ")
+            if area_factor and lw8:match("square%s*$") then
+                local pbefore = lw8:gsub("%s*square%s*$", "")
                 local an1, an2 = _detect_back_range(pbefore, "")
                 local single = (not an1) and _prev_num_words(pbefore) or nil
                 local lonum = an1 or single
@@ -4785,7 +4984,10 @@ function FootFree:onReaderReady()
         local plugin = self
         hl:addToHighlightDialog("13_footcream_flag", function(this)
             return {
-                text = "⚑ Flag to Footcream",
+                -- TRANSLATORS: Entry Footcream adds to KOReader's own text-selection popup (the
+                -- menu you get after highlighting text). Tapping it opens Footcream's
+                -- error-reporting dialog for the selected words. The flag is a symbol, keep it.
+                text = _("⚑ Flag to Footcream"),
                 -- Same gate as hold-to-flag: only offered once the user has
                 -- opted into sending errors to the developer.
                 show_in_highlight_dialog_func = function()
@@ -4959,14 +5161,22 @@ function FootFree:onReaderReady()
             end
             if self._auto_scan and _is_english(doc) then
                 UIManager:show(Notification:new{
-                    text = "Footcream improved — updating this book's conversions…",
+                    -- TRANSLATORS: Toast shown when a book was converted by an older Footcream and the
+                    -- new version is silently redoing the conversion (auto-scan on).
+                    text = _("Footcream improved — updating this book's conversions…"),
                 })
                 UIManager:scheduleIn(0.2, refresh)
             else
                 self._confirm(
-                    "Footcream's converter has improved — update this book's "
-                        .. "in-text conversions?",
-                    "Update now", refresh, "Not now")
+                    -- TRANSLATORS: Asked when a book was converted by an older Footcream and the
+                    -- conversion can now be improved. Redoing it rewrites the book's text.
+                    _("Footcream's converter has improved — update this book's in-text conversions?"),
+                    -- TRANSLATORS: Left button on the 'converter has improved' question; rescans the
+                    -- book and rewrites its conversions now.
+                    _("Update now"), refresh,
+                    -- TRANSLATORS: Right button on the 'converter has improved' question; leaves the
+                    -- book's existing conversions as they are.
+                    _("Not now"))
             end
             return
         end
@@ -5019,24 +5229,7 @@ function FootFree:onReaderReady()
             -- opening a new book, not to toggle Enable in the menu per book.
             -- Only on a fresh scan (first time a book is scanned): a book that
             -- was scanned before and left unconverted shouldn't keep re-asking.
-            if self._tap_mode >= 2 and self._enabled then
-                self._after_scan = function()
-                    -- Let the scan-complete repaint + notification settle
-                    -- before showing the ConfirmBox. Shown in the same tick,
-                    -- the queued full-view refresh paints the page OVER the
-                    -- dialog — a half-visible "ghost" whose buttons don't
-                    -- take taps (same failure the Enable toggle guards
-                    -- against with its own settle delay).
-                    UIManager:scheduleIn(0.5, function()
-                        local d = self.ui.document
-                        if d and self._tap_mode >= 2 and self._enabled
-                           and not _is_metric_mode(d.file)
-                           and self._all_matches and #self._all_matches > 0 then
-                            self:_applyMetricEdition(d)
-                        end
-                    end)
-                end
-            end
+            self:_armConvertAfterScan()
             self:_startScan(doc)
         end
     end
@@ -5314,7 +5507,10 @@ local function _show_styling_dialog(plugin)
     -- rendered live, plus an always-visible tooltip showing the conversion
     -- exactly as it would appear when tapped in the book.
     local sample = TextWidget:new{
-        text = "Five foot six",
+        -- TRANSLATORS: Sample phrase in the Styling preview, shown underlined the way real
+        -- measurements will be. Replace it with a short imperial measurement written out
+        -- in words in your language (it is an example, not a literal quote).
+        text = _("Five foot six"),
         face = Font:getFace("infofont", 24),
     }
     local sample_size = sample:getSize()
@@ -5337,7 +5533,9 @@ local function _show_styling_dialog(plugin)
     -- size, so the preview is true WYSIWYG. The real popup shows _metric_only's
     -- "converted value only" form (e.g. "1.68 m"), so match that here.
     local PS = FootFree._TOOLTIP_SIZES[plugin._tooltip_size] or FootFree._TOOLTIP_SIZES.large
-    local conversion_text = string.format("%s m", _fmt_height(5 * 0.3048 + 6 * 0.0254))
+    -- TRANSLATORS: Preview of the tap tooltip in the Styling dialog. %1 is a number;
+    -- 'm' is the metre symbol and is not translated.
+    local conversion_text = T(_("%1 m"), _fmt_height(5 * 0.3048 + 6 * 0.0254))
     local tooltip_text = TextWidget:new{
         text = conversion_text,
         face = Font:getFace("infofont", PS.font),
@@ -5435,8 +5633,11 @@ local function _show_styling_dialog(plugin)
     end
 
     local style_row = option_row({
-        { text = "Solid", value = "solid" },
-        { text = "Wavy",  value = "wavy"  },
+        -- TRANSLATORS: Styling dialog, 'Underline style' option: a plain straight
+        -- underline.
+        { text = _("Solid"), value = "solid" },
+        -- TRANSLATORS: Styling dialog, 'Underline style' option: a squiggly underline.
+        { text = _("Wavy"),  value = "wavy"  },
     }, plugin._underline_style, function(v)
         plugin._underline_style = v
         G_reader_settings:saveSetting("footcream_underline_style", v)
@@ -5453,17 +5654,24 @@ local function _show_styling_dialog(plugin)
     end)
 
     local width_row = option_row({
-        { text = "Thin",  value = 1 },
-        { text = "Thick", value = 2 },
+        -- TRANSLATORS: Styling dialog, 'Underline Intensity' option: the lighter/finer of
+        -- the two line weights.
+        { text = _("Thin"),  value = 1 },
+        -- TRANSLATORS: Styling dialog, 'Underline Intensity' option: the heavier line
+        -- weight.
+        { text = _("Thick"), value = 2 },
     }, plugin._underline_width, function(v)
         plugin._underline_width = v
         G_reader_settings:saveSetting("footcream_underline_width", v)
     end)
 
     local size_row = option_row({
-        { text = "Small",  value = "small"  },
-        { text = "Medium", value = "medium" },
-        { text = "Large",  value = "large"  },
+        -- TRANSLATORS: Styling dialog, 'Tooltip size' option: smallest tap-popup text.
+        { text = _("Small"),  value = "small"  },
+        -- TRANSLATORS: Styling dialog, 'Tooltip size' option: middle tap-popup text size.
+        { text = _("Medium"), value = "medium" },
+        -- TRANSLATORS: Styling dialog, 'Tooltip size' option: largest tap-popup text.
+        { text = _("Large"),  value = "large"  },
     }, plugin._tooltip_size, function(v)
         plugin._tooltip_size = v
         G_reader_settings:saveSetting("footcream_tooltip_size", v)
@@ -5488,7 +5696,9 @@ local function _show_styling_dialog(plugin)
 
     local CheckButton = require("ui/widget/checkbutton")
     local icon_checkbox = CheckButton:new{
-        text       = "Show Unit Icon",
+        -- TRANSLATORS: Checkbox in the Styling dialog. When ticked, the tap tooltip shows
+        -- a small icon for the kind of measurement (length, weight, ...).
+        text       = _("Show Unit Icon"),
         checked    = plugin._show_icon,
         face       = label_face,
         single_line = true,
@@ -5513,9 +5723,13 @@ local function _show_styling_dialog(plugin)
 
     -- Make the Close button 20% taller than its natural height (text stays
     -- vertically centred; "Close" can't truncate at full_w, so no font reflow).
-    local close_natural_h = Button:new{ text = "Close", width = full_w }:getSize().h
+    -- TRANSLATORS: Button that closes a Footcream dialog without changing anything.
+    -- Used on the Styling dialog, the mode picker and the long-press report popups.
+    local close_natural_h = Button:new{ text = _("Close"), width = full_w }:getSize().h
     local close_button = Button:new{
-        text   = "Close",
+        -- TRANSLATORS: Button that closes a Footcream dialog without changing anything.
+        -- Used on the Styling dialog, the mode picker and the long-press report popups.
+        text   = _("Close"),
         width  = full_w,
         height = math.floor(close_natural_h * 1.2 + 0.5),
         callback = close_overlay,
@@ -5530,7 +5744,9 @@ local function _show_styling_dialog(plugin)
 
     -- "PREVIEW" label in the top-left corner of the preview frame.
     local preview_label = TextWidget:new{
-        text   = "PREVIEW",
+        -- TRANSLATORS: Corner label on the framed sample area of the Styling dialog,
+        -- marking it as a live preview rather than part of the book.
+        text   = _("PREVIEW"),
         face   = Font:getFace("infofont", 11),
         -- 20% more contrast vs white than COLOR_DARK_GRAY (0x88): the
         -- white-difference 255-0x88=119 grows ×1.2 to ~143, so 255-143 ≈ 0x70.
@@ -5570,16 +5786,22 @@ local function _show_styling_dialog(plugin)
             align = "left",
             preview,
             span(),
-            label("Underline style"),
+            -- TRANSLATORS: Section heading in the Styling dialog, above the Solid/Wavy choice.
+            label(_("Underline style")),
             style_row,
             span(),
-            label("Underline Intensity"),
+            -- TRANSLATORS: Section heading in the Styling dialog, above the underline darkness
+            -- choice (how strongly the line stands out from the text).
+            label(_("Underline Intensity")),
             color_row,
             span(),
-            label("Underline thickness"),
+            -- TRANSLATORS: Section heading in the Styling dialog, above the Thin/Thick choice.
+            label(_("Underline thickness")),
             width_row,
             span(),
-            label("Tooltip size"),
+            -- TRANSLATORS: Section heading in the Styling dialog, above the Small/Medium/Large
+            -- choice for the tap tooltip.
+            label(_("Tooltip size")),
             size_row,
             span(),
             icon_checkbox,
@@ -5650,10 +5872,15 @@ function FootFree:_showModeDialog(touchmenu_instance)
     -- Worked example, direction-aware: under an imperial preference the
     -- book's original text is metric and the conversion is imperial.
     local imp  = FootFree._IMPERIAL.preferred() ~= "metric"
-    local pre  = "The hallway was "
+    -- TRANSLATORS: First half of the sample sentence in the mode picker; a measurement
+    -- and the second half (' wide.') follow it. Keep the trailing space so the
+    -- sentence reads 'The hallway was 1.8 m wide.'
+    local pre  = _("The hallway was ")
     local orig = imp and "1.8 m" or "six feet"
     local conv = imp and "5 ft 11 in" or "1.8 m"
-    local post = " wide."
+    -- TRANSLATORS: Second half of the mode-picker sample sentence, after the
+    -- measurement. Keep the leading space; see 'The hallway was '.
+    local post = _(" wide.")
 
     local sample_face  = Font:getFace("infofont", 17)
     local caption_face = Font:getFace("infofont", 13)
@@ -5692,17 +5919,31 @@ function FootFree:_showModeDialog(touchmenu_instance)
 
     local rows = {
         { mode = 1, sample = sample1,
-          caption = "Underline only — tap it to see " .. conv .. ".",
-          caption2 = "The book file is never changed." },
+          -- TRANSLATORS: Mode picker, caption under the mode 1 sample. %1 is a converted
+          -- measurement such as '1.8 m'. This mode only draws an underline.
+          caption = T(_("Underline only — tap it to see %1."), conv),
+          -- TRANSLATORS: Mode picker, second caption line for mode 1 - the reassurance that
+          -- this mode never edits the book file, unlike modes 2 and 3.
+          caption2 = _("The book file is never changed.") },
         { mode = 2,
           sample = TextWidget:new{ text = pre .. orig .. " (" .. conv .. ")" .. post,
                                    face = sample_face },
-          caption = "Both units, written into the book's text.",
-          caption2 = "Reversible." },
+          -- TRANSLATORS: Mode picker, caption under the mode 2 sample: the conversion is
+          -- written into the book next to the original measurement.
+          caption = _("Both units, written into the book's text."),
+          -- TRANSLATORS: Mode picker, second caption line under the two modes that write
+          -- into the book's text: the change can be undone later with 'Remove Footcream data
+          -- from this book'.
+          caption2 = _("Reversible.") },
         { mode = 3,
           sample = TextWidget:new{ text = pre .. conv .. post, face = sample_face },
-          caption = "Converted only, written into the book's text.",
-          caption2 = "Reversible." },
+          -- TRANSLATORS: Mode picker, caption under the mode 3 sample: the original
+          -- measurement is replaced by the conversion in the book's text.
+          caption = _("Converted only, written into the book's text."),
+          -- TRANSLATORS: Mode picker, second caption line under the two modes that write
+          -- into the book's text: the change can be undone later with 'Remove Footcream data
+          -- from this book'.
+          caption2 = _("Reversible.") },
     }
 
     -- User-initiated close (Close button, Back, tap outside): only the
@@ -5780,7 +6021,8 @@ function FootFree:_showModeDialog(touchmenu_instance)
     local grey = Blitbuffer.Color8(0x3A)
     local body = { align = "left" }
     table.insert(body, TextWidget:new{
-        text = "How should conversions appear?",
+        -- TRANSLATORS: Title of the mode picker, opened from the 'Mode: ...' menu entry.
+        text = _("How should conversions appear?"),
         face = Font:getFace("infofont", 18),
         bold = true,
     })
@@ -5829,9 +6071,13 @@ function FootFree:_showModeDialog(touchmenu_instance)
 
     -- Close spans the options' full width (measured after construction).
     local full_w = options:getSize().w
-    local close_natural_h = Button:new{ text = "Close", width = full_w }:getSize().h
+    -- TRANSLATORS: Button that closes a Footcream dialog without changing anything.
+    -- Used on the Styling dialog, the mode picker and the long-press report popups.
+    local close_natural_h = Button:new{ text = _("Close"), width = full_w }:getSize().h
     local close_button = Button:new{
-        text   = "Close",
+        -- TRANSLATORS: Button that closes a Footcream dialog without changing anything.
+        -- Used on the Styling dialog, the mode picker and the long-press report popups.
+        text   = _("Close"),
         width  = full_w,
         height = math.floor(close_natural_h * 1.2 + 0.5),
         callback = close_overlay,
@@ -5942,6 +6188,19 @@ function FootFree:_finishScan(doc, all_matches, t_per_pat, t_total, in_subproces
         put=true, puts=true, set=true, sets=true, place=true, placed=true,
         places=true, rest=true, rested=true,
     }
+    -- "<count>-toed/-legged/-clawed/… feet/foot" describes anatomy (how many
+    -- toes/legs/etc. per foot), not a distance. The shared _parse_num word
+    -- fallback treats a hyphen right after a number word as an ordinary
+    -- compound-number boundary ("three-toed" reads as 3, the same mechanism
+    -- that composes "twenty-three") — report #9: "sticky and soft
+    -- three-toed feet" (lizard mounts) read as 91 cm.
+    local _BODY_PART_SUFFIXES = {
+        toed=true, legged=true, clawed=true, pawed=true, footed=true,
+        fingered=true, handed=true, eyed=true, horned=true, tailed=true,
+        winged=true, antlered=true, spotted=true, striped=true, spiked=true,
+        scaled=true, furred=true, feathered=true, webbed=true, jointed=true,
+        headed=true, armed=true, fanged=true, tusked=true, hoofed=true,
+    }
     local filtered = {}
     for _, r in ipairs(all_matches) do
         local keep = true
@@ -5998,6 +6257,44 @@ function FootFree:_finishScan(doc, all_matches, t_per_pat, t_total, in_subproces
                or nxt_full:match("^%s*on account")
                or prev_full:find("prize", 1, true) or nxt_full:find("prize", 1, true)
                or _pound_hard_currency(window) then
+                keep = false
+            end
+        end
+        -- Bare "degrees" (no F/Fahrenheit qualifier): ambiguous unit (angle,
+        -- rotation, proof, heading, latitude…). Convert only when nearby
+        -- context plausibly reads as temperature — opposite polarity from
+        -- the pounds classifier above: here the default is suppress, and a
+        -- cue is required to opt IN.
+        if r._search.bare_degrees then
+            local window = prev_full .. " " .. nxt_full
+            if not _degrees_temperature_cue(window) then
+                keep = false
+            -- "N degrees below zero": the true value is negative even though
+            -- the spelled/digit number itself is positive. Getting the sign
+            -- right needs the underline to reach past "degrees" into next_text,
+            -- which this filter (post-span) can't safely do — so rather than
+            -- emit a wrong-signed conversion, suppress it as a documented
+            -- residual (a miss, not a wrong answer).
+            elseif nxt_full:match("^%s*below%s+zero%f[%A]") then
+                keep = false
+            -- "ten degrees CELSIUS" — the scale is stated, it's just stated
+            -- AFTER the alias, so the bare-"degrees" entry grabbed it first and
+            -- read an already-metric figure as Fahrenheit (10 °C came out as
+            -- -12 °C). The temperature cue gate can't catch this: the sentence
+            -- is genuinely about temperature, which is exactly why the cue
+            -- fires. Found 2026-08-07 in smoketest6 ("The water was ten degrees
+            -- Celsius, cold enough to steal your breath"). Bare "c" is included
+            -- for "40 degrees C"; the %f[%A] frontier keeps it off "cold".
+            -- PATTERNS MUST BE LOWERCASE: nxt_full is :lower()ed where it's
+            -- built (see prev_full/nxt_full above). The first version of this
+            -- guard used "[Cc]elsius"/"[Cc]entigrade"/"C" — the character
+            -- classes worked by accident and the uppercase-only "C" could
+            -- never fire, so "minus eighteen degrees C" sailed through. Caught
+            -- by verify_scan.py, NOT by testing the patterns in isolation
+            -- (which passed, against raw-case text that never reaches here).
+            elseif nxt_full:match("^%s*celsius%f[%A]")
+                or nxt_full:match("^%s*centigrade%f[%A]")
+                or nxt_full:match("^%s*c%f[%A]") then
                 keep = false
             end
         end
@@ -6101,6 +6398,18 @@ function FootFree:_finishScan(doc, all_matches, t_per_pat, t_total, in_subproces
             if prev:find("fingers of", 1, true) or prev:find("toes of", 1, true) then
                 drop_foot = true
             end
+            -- "<count>-toed/-legged/-clawed/… feet/foot" — anatomy, not a
+            -- distance (report #9). matched_text is exactly "<hyphenated
+            -- compound> feet"/"foot" here (span=1 word from the fallback
+            -- that read "three-toed" as 3), so the compound is the FIRST
+            -- (and only) token before the unit word.
+            do
+                local first_tok, unit_w = mt:match("^(%S+)%s+(%a+)$")
+                if first_tok and (unit_w == "feet" or unit_w == "foot") then
+                    local suf = first_tok:match("%-(%a+)$")
+                    if suf and _BODY_PART_SUFFIXES[suf] then drop_foot = true end
+                end
+            end
             if drop_foot then keep = false end
         end
         if mt:find("one") and mt:find("stone") and prev:find("with") then keep = false end
@@ -6108,15 +6417,17 @@ function FootFree:_finishScan(doc, all_matches, t_per_pat, t_total, in_subproces
             local p = (r.prev_text or ""):lower()
             -- Allow trailing hyphen: "six-foot-[five-inch]" has prev ending "foot-"
             if p:match("feet[%s%-]?$") or p:match("foot[%s%-]?$") or p:match("%sft[%s%-]?$") then keep = false end
-            -- Suppress the inches half of compound prime heights like 5'11" or 5′9″.
-            -- The _ND boundary char is the prime/apostrophe between the feet digit
-            -- and inches digit, so matched_text starts with ' " ′ or ″.
+            -- Suppress the inches half of compound prime heights like 5'11" or 5′9″
+            -- (or the curly-quoted 5’9”, most commercial EPUBs). The _ND boundary
+            -- char is the prime/apostrophe between the feet digit and inches
+            -- digit, so matched_text starts with one of these marks.
             -- This never happens for a legitimate standalone inches measurement.
             local mt1 = r.matched_text:sub(1, 1)
             if mt1 == "'" or mt1 == '"'
                or r.matched_text:sub(1, 3) == _PRIME
                or r.matched_text:sub(1, 3) == _DPRIME
-               or r.matched_text:sub(1, 3) == _PRIME_MARKS.rsquote then
+               or r.matched_text:sub(1, 3) == _PRIME_MARKS.rsquote
+               or r.matched_text:sub(1, 3) == _PRIME_MARKS.rdquote then
                 keep = false
             end
         end
@@ -6128,7 +6439,7 @@ function FootFree:_finishScan(doc, all_matches, t_per_pat, t_total, in_subproces
         -- Suppress mid-word false positives: if next_text starts with a letter
         -- immediately (no leading space/punctuation), the match ended inside a
         -- longer word. e.g. "mi" matching the first 2 chars of "minutes".
-        -- Exception: prime/quote matches end in a non-letter symbol (″ ′ " ')
+        -- Exception: prime/quote matches end in a non-letter symbol (″ ′ " ' ’ ”)
         -- so they can't be mid-word; "3″ in diameter" legitimately precedes a
         -- letter and must not be dropped here.
         local _mt_end1 = r.matched_text:sub(-1)
@@ -6136,6 +6447,34 @@ function FootFree:_finishScan(doc, all_matches, t_per_pat, t_total, in_subproces
             or r.matched_text:sub(-3) == _PRIME or r.matched_text:sub(-3) == _DPRIME
             or r.matched_text:sub(-3) == _PRIME_MARKS.rsquote
             or r.matched_text:sub(-3) == _PRIME_MARKS.rdquote
+        -- A bare feet-mark ending (single apostrophe/prime — NOT the double-
+        -- prime/quote inches ending, which a possessive/plural 's' never
+        -- follows) immediately followed by "s" is a year/decade possessive
+        -- or plural, not a feet marker — "2001's Ghosts of Mars" read as
+        -- 2001 ft (600 m). Without this, the _ends_prime exemption right
+        -- below waves it through as "can't be mid-word", which is only
+        -- true for the unambiguous double-prime/quote glyphs, not a bare
+        -- apostrophe (issue #2 / reports #11-13).
+        --
+        -- Read the ACTUAL next character from the document rather than
+        -- trusting next_text: crengine builds the context word by word, and
+        -- "2001’s" is a single word token, so the possessive "s" is swallowed
+        -- — next_text starts at " Ghosts of Mars", and an "^[sS]" test on it
+        -- can NEVER fire. (That was the original form of this guard; it
+        -- compiled, passed check.sh, and silently did nothing — VM-verified
+        -- 2026-08-07.) Same one-character xpointer read as the mid-word guard
+        -- just below. A genuine height reads a space here ("6’ wide").
+        local _ends_single_apos = _mt_end1 == "'" or r.matched_text:sub(-3) == _PRIME
+            or r.matched_text:sub(-3) == _PRIME_MARKS.rsquote
+        if _ends_single_apos then
+            local pfx, off = _xpointer_offset(r["end"])
+            if pfx ~= r["end"] and off then
+                local okc, c = pcall(function()
+                    return doc:getTextFromXPointers(r["end"], pfx .. tostring(off + 1))
+                end)
+                if okc and c and c:match("^[sS]") then keep = false end
+            end
+        end
         if not _ends_prime and (r.next_text or ""):match("^[a-zA-Z]") then
             -- The letter can also come from the NEXT BLOCK: when the match
             -- ends at its node's last character (sign/label paragraphs —
@@ -6205,7 +6544,10 @@ function FootFree:_finishScan(doc, all_matches, t_per_pat, t_total, in_subproces
         -- this is a belt-and-suspenders guard for the pat1-didn't-fire case.)
         if prev:match(_TIMES .. "%s*$") then
             local disp = _display(mt)
-            if disp:match("^[0-9]+" .. _DPRIME) or disp:match('^[0-9]+"') then keep = false end
+            if disp:match("^[0-9]+" .. _DPRIME) or disp:match('^[0-9]+"')
+               or disp:match("^[0-9]+" .. FootFree._CDQ) then
+                keep = false
+            end
         end
         -- Decimal false positive: _ND uses [^0-9,] as boundary, so the "."
         -- in "0.5 inches" also creates a spurious ".5 inches" match.
@@ -6399,7 +6741,7 @@ function FootFree:_finishScan(doc, all_matches, t_per_pat, t_total, in_subproces
         self._current_boxes = {}
         self._scanned       = true  -- a scan just completed (even if 0 matches) (6.1)
         if self.view then UIManager:setDirty(self.view.dialog, "ui") end
-        UIManager:show(Notification:new{ text = self:_scanNoticeText(n, doc) })
+        self:_announceScan(n, doc)
         self:_runAfterScan()
     end
 end
@@ -6412,16 +6754,27 @@ end
 -- converted keeps the neutral wording (transient — the auto-apply follows).
 function FootFree:_scanNoticeText(n, doc)
     if self._tap_mode >= 2 and doc and _is_metric_mode(doc.file) then
-        local _, stamped = _read_metric_version(doc.file)
+        -- NOT `local _, stamped` — `_` is gettext (required at the top of this
+        -- file), and discarding into it shadows the module for the rest of the
+        -- block, so the _.ngettext below indexes a number and the reader dies:
+        --   main.lua:6389: attempt to index local '_' (a number value)
+        -- The i18n pass introduced `_` as a module name into a file that used
+        -- the `local _` discard idiom in five places; this was the one where
+        -- the two overlapped. builder/check_gettext_shadow.py now fails the
+        -- build on any recurrence.
+        local _ver, stamped = _read_metric_version(doc.file)
         local total = (stamped and stamped > 0) and stamped or n
-        return string.format("Converted %d unit%s in book",
-                             total, total == 1 and "" or "s")
+        -- TRANSLATORS: Toast after a scan of a book whose text has already been converted.
+        -- %1 is the number of measurements.
+        return T(_.ngettext("Converted %1 unit in book", "Converted %1 units in book", total), total)
     elseif self._tap_mode >= 2 then
-        return string.format("Scan complete: %d unit%s found",
-                             n, n == 1 and "" or "s")
+        -- TRANSLATORS: Toast after a scan when the mode writes into the book's text but
+        -- the conversion hasn't been applied yet. %1 is the number found.
+        return T(_.ngettext("Scan complete: %1 unit found", "Scan complete: %1 units found", n), n)
     end
-    return string.format("Underlined %d unit%s in book",
-                         n, n == 1 and "" or "s")
+    -- TRANSLATORS: Toast after a scan in underline mode. %1 is the number of
+    -- measurements now underlined.
+    return T(_.ngettext("Underlined %1 unit in book", "Underlined %1 units in book", n), n)
 end
 
 -- ── Metric edition — apply / revert ──────────────────────────────────────────
@@ -6447,13 +6800,51 @@ end
 -- stranding the book unconverted in a convert mode. Book-originated prompts
 -- (new book under an established convert mode, Enable toggle, tap) pass
 -- nothing: declining those means "not this book", not "change my mode".
+-- Arm the "Convert?" prompt to fire once the scan in flight completes.
+--
+-- EVERY path that kicks off a scan while a convert mode is active needs this.
+-- It used to be copy-pasted at the two call sites that had it and simply
+-- missing from the third — the menu's "Rescan book" — so rescanning a book in
+-- mode 2/3 scanned happily and then did nothing at all. The log read
+-- "321 match(es) found … subprocess complete" and the book never changed,
+-- with no error and no prompt, which is indistinguishable from the plugin
+-- being broken. Found on the VM 2026-08-07.
+--
+-- The 0.5s delay is load-bearing: shown in the same tick, the scan's queued
+-- full-view refresh paints the page OVER the ConfirmBox, leaving a
+-- half-visible "ghost" dialog whose buttons don't take taps. The Enable
+-- toggle guards against the same failure with its own settle delay.
+--
+-- Conditions are re-checked inside the closure, not just here: a scan is
+-- async, and the mode, the per-book enable, or the document itself can all
+-- change while it runs.
+function FootFree:_armConvertAfterScan()
+    if self._tap_mode < 2 or not self._enabled then return end
+    self._after_scan = function()
+        UIManager:scheduleIn(0.5, function()
+            local d = self.ui.document
+            if d and self._tap_mode >= 2 and self._enabled
+               and not _is_metric_mode(d.file)
+               and self._all_matches and #self._all_matches > 0 then
+                self:_applyMetricEdition(d)
+            end
+        end)
+    end
+end
+
 function FootFree:_applyMetricEdition(doc, skip_confirm, cancel_restore_mode)
     -- Which way this conversion goes ("metric"/"imperial"), for the dialogs.
     local imp = FootFree._IMPERIAL.preferred() ~= "metric"
-    local dir_word = imp and "imperial" or "metric"
+    -- TRANSLATORS: Name of the unit system being converted TO, inserted as %1 into the
+    -- questions and progress messages below ('Convert this book's measurements to
+    -- metric?', 'Converting to metric…'). Lowercase, mid-sentence.
+    local dir_word = imp and _("imperial") or _("metric")
     if _is_metric_mode(doc.file) then
         UIManager:show(InfoMessage:new{
-            text = "This book is already converted.\nUse 'Remove Footcream data from this book' (Advanced) first.",
+            -- TRANSLATORS: Refusal shown when the book's text has already been converted. The
+            -- quoted item is a menu entry - translate it exactly as you translate that entry,
+            -- and keep 'Advanced' matching its menu name.
+            text = _("This book is already converted.\nUse 'Remove Footcream data from this book' (Advanced) first."),
             timeout = 4,
         })
         return
@@ -6463,9 +6854,15 @@ function FootFree:_applyMetricEdition(doc, skip_confirm, cancel_restore_mode)
         -- the two used to share the misleading "scan first" message.
         UIManager:show(InfoMessage:new{
             text = self._scanned
-                and string.format("No %s measurements found in this book — nothing to convert.",
-                                  imp and "metric" or "imperial")
-                or  "No hints yet — scan the book first.",
+                -- TRANSLATORS: Shown when a scan finished and the book genuinely contains no
+                -- measurements to convert. %1 is 'imperial' or 'metric'.
+                and T(_("No %1 measurements found in this book — nothing to convert."),
+                      -- TRANSLATORS: The unit system searched for, inserted as %1 into 'No %1
+                      -- measurements found in this book'. Lowercase, mid-sentence.
+                      imp and _("metric") or _("imperial"))
+                -- TRANSLATORS: Shown when the book has not been scanned yet, so there is nothing
+                -- to convert. 'hints' are the underlined measurements Footcream finds.
+                or  _("No hints yet — scan the book first."),
             timeout = 3,
         })
         return
@@ -6485,18 +6882,26 @@ function FootFree:_applyMetricEdition(doc, skip_confirm, cancel_restore_mode)
                 logger.info("Footcream: convert declined — mode restored to "
                             .. cancel_restore_mode)
                 UIManager:show(Notification:new{
-                    text = "Kept mode: " .. self:_modeLabel(cancel_restore_mode),
+                    -- TRANSLATORS: Toast confirming the mode was left as it was after the user
+                    -- declined to convert. %1 is a mode name such as 'Metric only (in text)'.
+                    text = T(_("Kept mode: %1"), self:_modeLabel(cancel_restore_mode)),
                 })
                 if self.view then UIManager:setDirty(self.view.dialog, "ui") end
             end
         end
         self._confirm(
             self._tap_mode == 2
-                and string.format("Add %s conversions alongside this book's measurements?",
-                                  dir_word)
-                or  string.format("Convert this book's measurements to %s?",
-                                  dir_word),
-            "Convert", function()
+                -- TRANSLATORS: Asked before mode 2 edits the book: conversions are added next to
+                -- the existing measurements. %1 is 'metric' or 'imperial'.
+                and T(_("Add %1 conversions alongside this book's measurements?"),
+                      dir_word)
+                -- TRANSLATORS: Asked before mode 3 edits the book: measurements are replaced by
+                -- their conversions. %1 is 'metric' or 'imperial'.
+                or  T(_("Convert this book's measurements to %1?"),
+                      dir_word),
+            -- TRANSLATORS: Button that starts rewriting the book's text; the other button is
+            -- the shared 'Cancel'.
+            _("Convert"), function()
                 -- Breadcrumb: distinguishes "tap never registered" (ghost
                 -- dialog) from "apply failed" when diagnosing a stuck convert.
                 logger.info("FootFree: convert confirmed")
@@ -6606,7 +7011,10 @@ function FootFree:_doApplyMetricEdition(doc)
     local Metric = _metric_module()
     if not Metric then
         UIManager:show(InfoMessage:new{
-            text = "Could not load the metric converter module.", timeout = 4,
+            -- TRANSLATORS: Error when the part of Footcream that edits the book's text can't
+            -- be loaded, so the book was left untouched. The install is incomplete; the
+            -- underline mode still works.
+            text = _("Could not load the metric converter module."), timeout = 4,
         })
         return
     end
@@ -6621,11 +7029,16 @@ function FootFree:_doApplyMetricEdition(doc)
     local apply_opts = self._tap_mode == 2 and { append = true } or nil
     local apply_mode = self._tap_mode
     local dir_word   = FootFree._IMPERIAL.preferred() ~= "metric"
-                       and "imperial" or "metric"
+                       -- TRANSLATORS: Name of the unit system being converted TO, inserted as %1 into the
+                       -- questions and progress messages below ('Convert this book's measurements to
+                       -- metric?', 'Converting to metric…'). Lowercase, mid-sentence.
+                       and _("imperial") or _("metric")
     Trapper:wrap(function()
         local completed, result = Trapper:dismissableRunInSubprocess(function()
             return Metric.apply(doc.file, patches, reps, apply_opts)
-        end, "Converting to " .. dir_word .. "…", true)
+        -- TRANSLATORS: Progress message while the book's text is being rewritten. %1 is
+        -- 'metric' or 'imperial'. Tapping it cancels.
+        end, T(_("Converting to %1…"), dir_word), true)
         if not completed then return end  -- dismissed by the user
         result = result or ""
         if result:match("^OK:") then
@@ -6638,9 +7051,13 @@ function FootFree:_doApplyMetricEdition(doc)
                 -- instead of silently reloading unchanged (which looks like the
                 -- convert "refused"). This is the diagnostic for the Kobo report.
                 UIManager:show(InfoMessage:new{
-                    text = string.format(
-                        "Couldn't convert this book in place.\n\n%d measurement%s were found, but none could be matched in the book's text — its markup/format may not be supported for in-text conversion.\n\nThe '%s' mode still works for this book.",
-                        #reps, #reps == 1 and "" or "s", self:_modeLabel(1)),
+                    -- TRANSLATORS: Error when the conversion found measurements but couldn't locate
+                    -- them in the book file itself, so nothing was changed. %1 is the number found, %2
+                    -- is a mode name ('Underline units, tap for metric').
+                    text = T(_.ngettext(
+                        "Couldn't convert this book in place.\n\n%1 measurement was found, but it could not be matched in the book's text — its markup/format may not be supported for in-text conversion.\n\nThe '%2' mode still works for this book.",
+                        "Couldn't convert this book in place.\n\n%1 measurements were found, but none could be matched in the book's text — its markup/format may not be supported for in-text conversion.\n\nThe '%2' mode still works for this book.",
+                        #reps), #reps, self:_modeLabel(1)),
                     timeout = 10,
                 })
                 return
@@ -6670,7 +7087,9 @@ function FootFree:_doApplyMetricEdition(doc)
             self.ui:reloadDocument(nil, true)
         else
             UIManager:show(InfoMessage:new{
-                text = "Could not convert this book.\n" .. tostring(result),
+                -- TRANSLATORS: Generic failure when rewriting the book's text didn't work; the
+                -- technical reason is appended on the next line, untranslated.
+                text = _("Could not convert this book.") .. "\n" .. tostring(result),
                 timeout = 5,
             })
         end
@@ -6684,7 +7103,10 @@ function FootFree:_revertMetricEdition(doc, on_done)
     local Metric = _metric_module()
     if not Metric then
         UIManager:show(InfoMessage:new{
-            text = "Could not load the metric converter module.", timeout = 4,
+            -- TRANSLATORS: Error when the part of Footcream that edits the book's text can't
+            -- be loaded, so the book was left untouched. The install is incomplete; the
+            -- underline mode still works.
+            text = _("Could not load the metric converter module."), timeout = 4,
         })
         return
     end
@@ -6696,7 +7118,9 @@ function FootFree:_revertMetricEdition(doc, on_done)
     Trapper:wrap(function()
         local completed, result = Trapper:dismissableRunInSubprocess(function()
             return Metric.revert(doc.file, patches)
-        end, "Restoring original text…", true)
+        -- TRANSLATORS: Progress message while the book's original measurements are being
+        -- put back. Tapping it cancels.
+        end, _("Restoring original text…"), true)
         if not completed then
             -- Dismissed by the user. If a refresh chain (revert → rescan →
             -- reconvert) queued this revert, abort the whole chain: a stale
@@ -6759,7 +7183,8 @@ function FootFree:_revertMetricEdition(doc, on_done)
             -- if a rescan follows, its own notice simply takes over.
             UIManager:scheduleIn(0.4, function()
                 UIManager:show(Notification:new{
-                    text = "Restored original units in book",
+                    -- TRANSLATORS: Toast confirming the book's original measurements were restored.
+                    text = _("Restored original units in book"),
                 })
             end)
             if on_done then on_done() end
@@ -6775,12 +7200,16 @@ function FootFree:_revertMetricEdition(doc, on_done)
             self._reverse_matches = nil
             if self.view then UIManager:setDirty(self.view.dialog, "ui") end
             UIManager:show(InfoMessage:new{
-                text = "This book's file changed since Footcream converted it, so the original text can't be restored. Footcream's conversion record has been cleared.",
+                -- TRANSLATORS: Shown when the book file was edited or replaced outside Footcream,
+                -- so the saved original text no longer matches and can't be put back.
+                text = _("This book's file changed since Footcream converted it, so the original text can't be restored. Footcream's conversion record has been cleared."),
                 timeout = 6,
             })
         else
             UIManager:show(InfoMessage:new{
-                text = "Could not revert.\n" .. tostring(result),
+                -- TRANSLATORS: Generic failure when restoring the book's original text didn't
+                -- work; the technical reason is appended on the next line, untranslated.
+                text = _("Could not revert.") .. "\n" .. tostring(result),
                 timeout = 4,
             })
         end
@@ -6863,18 +7292,7 @@ function FootFree:_setPreferred(v)
         self.ui:handleEvent(Event:new("CloseReaderMenu"))
         -- In a convert mode, offer the conversion once the rescan lands —
         -- same flow as opening a new book with auto-scan on.
-        if self._tap_mode >= 2 and self._enabled then
-            self._after_scan = function()
-                UIManager:scheduleIn(0.5, function()
-                    local d = self.ui.document
-                    if d and self._tap_mode >= 2 and self._enabled
-                       and not _is_metric_mode(d.file)
-                       and self._all_matches and #self._all_matches > 0 then
-                        self:_applyMetricEdition(d)
-                    end
-                end)
-            end
-        end
+        self:_armConvertAfterScan()
         UIManager:scheduleIn(0.3, function()
             local d = self.ui.document
             if d then self:_startScan(d) end
@@ -6939,6 +7357,12 @@ function FootFree:_loadReverseMatches(doc)
     -- (on the full hit objects); the parent maps each hit to its original.
     local Trapper = require("ui/trapper")
     Trapper:wrap(function()
+        -- nil message = Trapper's INVISIBLE trap widget: the work still runs
+        -- off the UI thread and a tap still cancels it, but nothing is drawn.
+        -- The corner ring carries the "busy" signal instead. If a tap does
+        -- cancel it, nothing breaks — the positions simply stay unresolved and
+        -- the next open retries (same as dismissing the old message did).
+        self:_startRingPulse()
         local completed, filtered = Trapper:dismissableRunInSubprocess(function()
             local ok, results = pcall(function()
                 return doc:findAllText(pat, true, 0, 1000, true)
@@ -6950,7 +7374,8 @@ function FootFree:_loadReverseMatches(doc)
                                    matched_text = r.matched_text }
             end
             return out
-        end, "Locating converted units…")
+        end, nil)
+        self:_stopRingPulse()
         if not completed then return end  -- dismissed
         filtered = filtered or {}
         local counters = {}
@@ -6988,7 +7413,9 @@ function FootFree:_startFastScan(doc)
     -- first child (never reaped, keeps burning CPU on a single-core reader) and
     -- racing it on the progress file + sidecar. Leave the running scan alone.
     if self._scan_pid then
-        UIManager:show(Notification:new{ text = "A scan is already in progress…" })
+        -- TRANSLATORS: Toast when a scan is asked for while one is already running. The
+        -- running scan is left alone.
+        UIManager:show(Notification:new{ text = _("A scan is already in progress…") })
         return
     end
     self._all_matches   = nil
@@ -6999,7 +7426,7 @@ function FootFree:_startFastScan(doc)
     -- ETA) instead of easing exponentially to 90% and stalling there. The rate
     -- is calibrated from past scans on this device; floor the ETA at 2s.
     local rate = tonumber(G_reader_settings:readSetting("footcream_scan_rate"))
-                 or _DEFAULT_SCAN_RATE
+                 or FootFree._DEFAULT_SCAN_RATE
     self._scan_size = _file_size(doc.file)
     self._scan_eta  = math.max(2, (self._scan_size or 0) * rate)
     -- Soft-hyphen books scan via one plain findAllText pass per unit alias
@@ -7075,6 +7502,27 @@ end
 -- progress indicator, and notify. Used by both the classic and fast pollers.
 -- Run (once) an action queued to fire after the next scan finishes — used by
 -- "Rescan book" on a converted book to re-apply the conversion with fresh data.
+-- Scan-complete toast, suppressed when a convert is queued right behind it.
+--
+-- Without this the reader gets two toasts for one action, moments apart, with
+-- two DIFFERENT numbers — "Scan complete: 321 units found" then "Converted 304
+-- units in book" (the rewriter skips matches the scanner keeps). The second is
+-- the one that describes what actually happened to the book, so the first just
+-- adds noise and invites "why did it lose 17?". Mode 1 always announces: there,
+-- this toast is the only feedback the reader gets. (User feedback 2026-08-07 —
+-- one rescan was producing five separate interruptions.)
+--
+-- Reads _after_scan BEFORE _runAfterScan consumes it; both call sites announce
+-- first, so the flag is still set here.
+function FootFree:_announceScan(n, doc)
+    if self._after_scan and self._tap_mode >= 2
+       and doc and not _is_metric_mode(doc.file) then
+        logger.info("FootFree: scan notice suppressed — convert queued behind it")
+        return
+    end
+    UIManager:show(Notification:new{ text = self:_scanNoticeText(n, doc) })
+end
+
 function FootFree:_runAfterScan()
     if self._after_scan then
         local cb = self._after_scan
@@ -7118,7 +7566,7 @@ function FootFree:_onScanComplete(err)
         self._current_boxes = {}
         self._scanned       = true  -- background scan finished (6.1)
         if self.view then UIManager:setDirty(self.view.dialog, "ui") end
-        UIManager:show(Notification:new{ text = self:_scanNoticeText(n, doc) })
+        self:_announceScan(n, doc)
     else
         logger.warn("FootFree: subprocess done but no sidecar found" ..
                     (err and (" — " .. err) or ""))
@@ -7242,20 +7690,70 @@ function FootFree:_pollFastScan()
         -- e-ink ghosting over a long scan) and never "full" (hard black flash —
         -- the thing the user was seeing). The page body is never touched, so the
         -- scan no longer flashes or ghosts; the user's own page turns refresh it.
-        if self.view and self._scan_poll_n % 3 == 0 then
-            local Screen = require("device").screen
-            local sz = Screen:scaleBySize(_LOADER_PX) + Screen:scaleBySize(8)
-            local region = Geom:new{
-                x = 0, y = 0,
-                w = math.floor(Screen:getWidth() / 3) + sz,
-                h = sz,
-            }
-            UIManager:setDirty(self.view.dialog, "ui", region)
-        end
+        if self.view and self._scan_poll_n % 3 == 0 then self:_refreshRing() end
         UIManager:scheduleIn(0.12, function() self:_pollFastScan() end)
     end
 end
 
+
+-- Repaint ONLY the corner loader's region. Never "fast" (leaves e-ink ghosting
+-- over a long run) and never "full" (hard black flash). The page body is never
+-- touched. Extracted from the scan poll so every phase that shows the ring
+-- refreshes it identically — the tuning here was hard-won and must not be
+-- re-derived per call site.
+function FootFree:_refreshRing()
+    if not self.view then return end
+    local Screen = require("device").screen
+    local sz = Screen:scaleBySize(_LOADER_PX) + Screen:scaleBySize(8)
+    UIManager:setDirty(self.view.dialog, "ui", Geom:new{
+        x = 0, y = 0,
+        w = math.floor(Screen:getWidth() / 3) + sz,
+        h = sz,
+    })
+end
+
+-- Indeterminate ring, for work whose progress can't be measured (the reverse-
+-- match resolve is one opaque findAllText call). The scan's ring is a real
+-- percentage; this one sweeps 15%→90% and repeats, so it reads as "busy"
+-- rather than as a stalled 0%.
+--
+-- Why a ring at all instead of the blocking "Locating converted units…"
+-- message it replaces: this is not a decision the reader has to make, it fires
+-- right after the convert prompt and the convert progress message, and a third
+-- modal in a row is what made a single action feel like it was bombarding
+-- them (user feedback 2026-08-07).
+function FootFree:_startRingPulse()
+    if self._ring_pulse then return end
+    -- A real scan owns _scan_progress and writes a true percentage into it;
+    -- never let a pulse fight it for the same field.
+    if self._scan_pid then return end
+    self._ring_pulse = true
+    self._scan_progress = 0.15
+    local function tick()
+        if not self._ring_pulse then return end
+        -- Self-terminate if the book closed under us: the reader UI is torn
+        -- down without unwinding this closure, and a tick that keeps
+        -- rescheduling itself would run for the rest of the session.
+        if not self.view or not self.ui.document then
+            self._ring_pulse = nil
+            self._scan_progress = nil
+            return
+        end
+        local p = (self._scan_progress or 0.15) + 0.06
+        self._scan_progress = p > 0.90 and 0.15 or p
+        self:_refreshRing()
+        UIManager:scheduleIn(0.25, tick)
+    end
+    tick()
+end
+
+function FootFree:_stopRingPulse()
+    if not self._ring_pulse then return end
+    self._ring_pulse = nil
+    self._scan_progress = nil
+    -- Clear the ring itself; the page body still isn't touched.
+    self:_refreshRing()
+end
 
 -- ── Settings re-application (instant toggle without rescan) ───────────────────
 
@@ -7279,7 +7777,9 @@ function FootFree:_showUnitList()
     local doc = self.ui.document
     if not doc then return end
     if not self._all_matches or #self._all_matches == 0 then
-        UIManager:show(InfoMessage:new{ text = "No units found in this book yet." })
+        -- TRANSLATORS: Shown when 'Units in book (list)' is opened before the book has
+        -- been scanned, or when the scan found nothing.
+        UIManager:show(InfoMessage:new{ text = _("No units found in this book yet.") })
         return
     end
     local Menu         = require("ui/widget/menu")
@@ -7345,7 +7845,10 @@ function FootFree:_showUnitList()
         -- compounds ("6, 4"), not just the leading number.
         local valstr = _detected_value_str(r.matched_text or unit)
         items[i] = {
-            text      = string.format("%d. %s (%s)  →  %s\n…%s…", i, unit, valstr, conv, ctx),
+            -- TRANSLATORS: One row of the 'Units in book' list. %1 is the row number, %2 the
+            -- measurement as written in the book, %3 the value Footcream read from it, %4 the
+            -- conversion, %5 the surrounding sentence. Keep the arrow.
+            text      = T(_("%1. %2 (%3)  →  %4\n…%5…"), i, unit, valstr, conv, ctx),
             mandatory = r._cat or "",
             _xp       = r.start,
             _unit     = unit,
@@ -7359,7 +7862,9 @@ function FootFree:_showUnitList()
     local plugin = self
     local menu
     menu = Menu:new{
-        title         = string.format("Units in book (%d)", #items),
+        -- TRANSLATORS: Title of the 'Units in book' list. %1 is how many measurements it
+        -- contains.
+        title         = T(_("Units in book (%1)"), #items),
         item_table    = items,
         is_borderless = true,
         is_popout     = false,
@@ -7398,10 +7903,19 @@ function FootFree:_showUnitList()
             title       = item.text,
             title_align = "left",
             buttons = {
-                {{ text = "⚑ Wrong conversion",   callback = function() flag("wrong conversion") end }},
-                {{ text = "⚑ Wrong text captured",  callback = function() flag("missed or wrong span") end }},
-                {{ text = "⚑ Not a unit",         callback = function() flag("false positive") end }},
-                {{ text = "Go to in book", callback = function()
+                -- TRANSLATORS: Button in the long-press report dialog: the measurement was
+                -- recognised but converted to the wrong value. Keep the flag symbol.
+                {{ text = _("⚑ Wrong conversion"),   callback = function() flag("wrong conversion") end }},
+                -- TRANSLATORS: Button in the long-press report dialog: Footcream underlined the
+                -- wrong words - too much, too little, or the wrong part of the sentence. Keep the
+                -- flag symbol.
+                {{ text = _("⚑ Wrong text captured"),  callback = function() flag("missed or wrong span") end }},
+                -- TRANSLATORS: Button in the long-press report dialog: this isn't a measurement at
+                -- all and should never have been underlined. Keep the flag symbol.
+                {{ text = _("⚑ Not a unit"),         callback = function() flag("false positive") end }},
+                -- TRANSLATORS: Button in the long-press dialog on a row of the 'Units in book'
+                -- list: jump to where this measurement appears in the book.
+                {{ text = _("Go to in book"), callback = function()
                     UIManager:close(dialog)
                     UIManager:close(menu)
                     if item._xp then
@@ -7409,7 +7923,9 @@ function FootFree:_showUnitList()
                         plugin.ui:handleEvent(Event:new("GotoXPointer", item._xp, item._xp))
                     end
                 end }},
-                {{ text = "Close", callback = function() UIManager:close(dialog) end }},
+                -- TRANSLATORS: Button that closes a Footcream dialog without changing anything.
+                -- Used on the Styling dialog, the mode picker and the long-press report popups.
+                {{ text = _("Close"), callback = function() UIManager:close(dialog) end }},
             },
         }
         UIManager:show(dialog)
@@ -7435,7 +7951,9 @@ function FootFree:_flagError(item, issue)
     end
     local f = io.open(_FLAG_FILE, "a")
     if not f then
-        UIManager:show(InfoMessage:new{ text = "Couldn't write the flag file." })
+        -- TRANSLATORS: Error when the flagged-errors file on the device can't be written
+        -- to, so the report was lost.
+        UIManager:show(InfoMessage:new{ text = _("Couldn't write the flag file.") })
         return
     end
     f:write(string.format(
@@ -7461,7 +7979,9 @@ function FootFree:_flagError(item, issue)
         if qf then qf:write(line .. "\n"); qf:close() end
         self:_flushReports()
     end
-    UIManager:show(Notification:new{ text = "Flagged: " .. issue })
+    -- TRANSLATORS: Toast confirming an error report was recorded. %1 is the kind of
+    -- problem picked, e.g. 'wrong conversion'.
+    UIManager:show(Notification:new{ text = T(_("Flagged: %1"), issue) })
 end
 
 -- Upload queued error reports (batch of ≤20 per POST, matching the server
@@ -7550,12 +8070,15 @@ function FootFree:_showFlaggedErrors()
     local data = f and f:read("*a") or nil
     if f then f:close() end
     if not data or data:gsub("%s", "") == "" then
-        UIManager:show(InfoMessage:new{ text = "No flagged errors yet." })
+        -- TRANSLATORS: Shown for 'Advanced > Debug > View flagged errors' when nothing has
+        -- been flagged on this device yet.
+        UIManager:show(InfoMessage:new{ text = _("No flagged errors yet.") })
         return
     end
     local TextViewer = require("ui/widget/textviewer")
     UIManager:show(TextViewer:new{
-        title = "Flagged errors",
+        -- TRANSLATORS: Title of the viewer listing the errors flagged on this device.
+        title = _("Flagged errors"),
         text  = data,
     })
 end
@@ -7563,12 +8086,20 @@ end
 -- Debug › "Clear flagged errors": delete the log after it's been pulled off.
 function FootFree:_clearFlaggedErrors()
     if not _file_exists(_FLAG_FILE) then
-        UIManager:show(InfoMessage:new{ text = "No flagged errors to clear." })
+        -- TRANSLATORS: Shown for 'Advanced > Debug > Clear flagged errors' when there is
+        -- nothing to delete.
+        UIManager:show(InfoMessage:new{ text = _("No flagged errors to clear.") })
         return
     end
-    self._confirm("Delete all flagged errors?", "Delete", function()
+    -- TRANSLATORS: Question for 'Advanced > Debug > Clear flagged errors'. This only
+    -- deletes the local file; reports already sent to the developer are not affected.
+    self._confirm(_("Delete all flagged errors?"),
+        -- TRANSLATORS: Confirm button on the 'Delete all flagged errors?' question; the
+        -- other button is the shared 'Cancel'.
+        _("Delete"), function()
         os.remove(_FLAG_FILE)
-        UIManager:show(Notification:new{ text = "Flagged errors cleared." })
+        -- TRANSLATORS: Toast after the local flagged-errors file was deleted.
+        UIManager:show(Notification:new{ text = _("Flagged errors cleared.") })
     end)
 end
 
@@ -7596,7 +8127,8 @@ end
 -- Optional diagnostics: when developer mode is on (the .dev marker file), dump the screen
 -- boxes for every match drawn on the current page so wrap/geometry issues can
 -- be inspected from the file rather than guessed at.
-local _BOX_DEBUG_FILE = "/mnt/macos/debug/footcream_boxes.txt"
+-- Class attribute, not a local: this file is at the 200-local ceiling.
+FootFree._BOX_DEBUG_FILE = "/mnt/macos/debug/footcream_boxes.txt"
 
 -- Cheap, fully data-derived signature of everything that affects WHERE the
 -- underline boxes land. The resolved-box cache (below) is valid only while this
@@ -7682,7 +8214,7 @@ function FootFree:_resolveHighlightBoxes(doc)
     end
 
     if dbg and #dbg > 0 then
-        local fh = io.open(_BOX_DEBUG_FILE, "w")
+        local fh = io.open(FootFree._BOX_DEBUG_FILE, "w")
         if fh then fh:write(table.concat(dbg, "\n") .. "\n"); fh:close() end
     end
     return boxes_out
@@ -7868,7 +8400,10 @@ function FootFree:_flagItemFromMatch(r)
             :gsub("%s+", " "):gsub("^%s+", ""):gsub("%s+$", ""):gsub("[%.,;:!?]+$", "")
     end
     return {
-        text    = string.format("%s (%s)  →  %s\n…%s…", unit, valstr, conv, ctx),
+        -- TRANSLATORS: Title of the popup after long-pressing an underlined measurement.
+        -- %1 is the measurement as written in the book, %2 the value Footcream read, %3
+        -- the conversion, %4 the surrounding sentence. Keep the arrow.
+        text    = T(_("%1 (%2)  →  %3\n…%4…"), unit, valstr, conv, ctx),
         _unit   = unit,
         _conv   = conv,
         _ctx    = ctx,
@@ -7893,7 +8428,10 @@ function FootFree:_flagItemFromReverse(r)
     end
     local ctx = self:_ctxAround(doc, r.start, r["end"], metric) or metric
     return {
-        text    = string.format("%s  →  %s\n…%s…", original, metric, ctx),
+        -- TRANSLATORS: Title of the popup after long-pressing a measurement in a book
+        -- whose text was already converted. %1 is the original measurement, %2 what it now
+        -- says, %3 the surrounding sentence. Keep the arrow.
+        text    = T(_("%1  →  %2\n…%3…"), original, metric, ctx),
         _unit   = original,
         _conv   = metric,
         _ctx    = ctx,
@@ -7911,7 +8449,10 @@ function FootFree:_flagItemFromSelection(sel)
     local text = require("util").cleanupSelectedText(sel.text or "")
     local ctx = self:_ctxAround(doc, sel.pos0, sel.pos1, text) or text
     return {
-        text    = string.format("%s\n…%s…", text, ctx),
+        -- TRANSLATORS: Title of the popup after long-pressing text you selected yourself
+        -- (reporting a measurement Footcream missed). %1 is the selected text, %2 the
+        -- surrounding sentence.
+        text    = T(_("%1\n…%2…"), text, ctx),
         _unit   = text,
         _conv   = "?",
         _ctx    = ctx,
@@ -7936,23 +8477,37 @@ function FootFree:_showFlagDialog(item, variant, dict_word)
     local buttons = {}
     if variant == "selection" then
         buttons[#buttons + 1] =
-            {{ text = "⚑ Missed unit",         callback = function() flag("missed unit") end }}
+            -- TRANSLATORS: Button in the long-press report popup, offered only for text you
+            -- selected: Footcream should have recognised this and didn't. Keep the flag
+            -- symbol.
+            {{ text = _("⚑ Missed unit"),         callback = function() flag("missed unit") end }}
     end
     buttons[#buttons + 1] =
-        {{ text = "⚑ Wrong conversion",    callback = function() flag("wrong conversion") end }}
+        -- TRANSLATORS: Button in the long-press report dialog: the measurement was
+        -- recognised but converted to the wrong value. Keep the flag symbol.
+        {{ text = _("⚑ Wrong conversion"),    callback = function() flag("wrong conversion") end }}
     buttons[#buttons + 1] =
-        {{ text = "⚑ Wrong text captured", callback = function() flag("missed or wrong span") end }}
+        -- TRANSLATORS: Button in the long-press report dialog: Footcream underlined the
+        -- wrong words - too much, too little, or the wrong part of the sentence. Keep the
+        -- flag symbol.
+        {{ text = _("⚑ Wrong text captured"), callback = function() flag("missed or wrong span") end }}
     buttons[#buttons + 1] =
-        {{ text = "⚑ Not a unit",          callback = function() flag("false positive") end }}
+        -- TRANSLATORS: Button in the long-press report dialog: this isn't a measurement at
+        -- all and should never have been underlined. Keep the flag symbol.
+        {{ text = _("⚑ Not a unit"),          callback = function() flag("false positive") end }}
     if dict_word then
         buttons[#buttons + 1] =
-            {{ text = "Dictionary: " .. dict_word, callback = function()
+            -- TRANSLATORS: Button in the long-press report popup that looks the word up in
+            -- KOReader's dictionary. %1 is the word itself.
+            {{ text = T(_("Dictionary: %1"), dict_word), callback = function()
                 UIManager:close(dialog)
                 self.ui.dictionary:onLookupWord(dict_word)
             end }}
     end
     buttons[#buttons + 1] =
-        {{ text = "Close", callback = function() UIManager:close(dialog) end }}
+        -- TRANSLATORS: Button that closes a Footcream dialog without changing anything.
+        -- Used on the Styling dialog, the mode picker and the long-press report popups.
+        {{ text = _("Close"), callback = function() UIManager:close(dialog) end }}
     dialog = ButtonDialog:new{
         title       = item.text,
         title_align = "left",
@@ -7968,35 +8523,47 @@ end
 function FootFree:_checkForUpdate()
     local NetworkMgr = require("ui/network/manager")
     NetworkMgr:runWhenOnline(function()
-        local Trapper = require("ui/trapper")
-        Trapper:wrap(function() self:_runUpdateCheck(Trapper) end)
+        -- Android's ART runtime can't safely fork() a live multi-threaded
+        -- process once Binder-backed work (DNS/TLS) runs in the child, and
+        -- KOReader's Trapper:dismissableRunInSubprocess always forks — it
+        -- crashes the app outright on Android (GitHub issue #4). Run the
+        -- check/install inline there instead of through Trapper.
+        if require("device"):isAndroid() then
+            self:_runUpdateCheckSync()
+        else
+            local Trapper = require("ui/trapper")
+            Trapper:wrap(function() self:_runUpdateCheck(Trapper) end)
+        end
     end)
 end
 
-function FootFree:_runUpdateCheck(Trapper)
+-- Shared by the subprocess and Android-synchronous paths: interprets the
+-- fetched release JSON and offers to install if a newer version exists.
+function FootFree:_handleUpdateCheckBody(body, sync)
     local InfoMessage = require("ui/widget/infomessage")
-    local api = "https://api.github.com/repos/" .. _GITHUB_REPO .. "/releases/latest"
-    -- Fetch in a subprocess so the UI stays responsive and the message is
-    -- dismissable (returns the JSON body, or "ERR:<reason>" on failure).
-    local completed, body = Trapper:dismissableRunInSubprocess(function()
-        local b, err = _http_fetch(api)
-        return b or ("ERR:" .. tostring(err))
-    end, "Checking for updates…", true)
-    if not completed then return end  -- dismissed by the user
     if not body or body:match("^ERR:") then
         UIManager:show(InfoMessage:new{
-            text = "Update check failed:\n" .. ((body or "no response"):gsub("^ERR:", "")) })
+            -- TRANSLATORS: Shown when the update check couldn't reach GitHub. The reason is
+            -- appended on the line below it.
+            text = _("Update check failed:") .. "\n"
+                -- TRANSLATORS: Stands in as the reason on the 'Update check failed:' message when
+                -- the server gave no answer at all.
+                .. ((body or _("no response")):gsub("^ERR:", "")) })
         return
     end
     local rel = _json_decode(body)
     if not rel or not rel.tag_name then
-        UIManager:show(InfoMessage:new{ text = "Could not read the latest release info." })
+        -- TRANSLATORS: Shown when GitHub answered the update check with something
+        -- Footcream couldn't understand.
+        UIManager:show(InfoMessage:new{ text = _("Could not read the latest release info.") })
         return
     end
     local installed = _installed_version()
     if not _ver_gt(rel.tag_name, installed) then
         UIManager:show(InfoMessage:new{
-            text = string.format("You're up to date (v%s).", installed) })
+            -- TRANSLATORS: Shown when the update check found no newer release. %1 is the
+            -- installed version number.
+            text = T(_("You're up to date (v%1)."), installed) })
         return
     end
     -- Prefer an attached .zip asset; fall back to the source zipball.
@@ -8009,46 +8576,71 @@ function FootFree:_runUpdateCheck(Trapper)
     end
     asset_url = asset_url or rel.zipball_url
     if not asset_url then
-        UIManager:show(InfoMessage:new{ text = "No downloadable release package found." })
+        -- TRANSLATORS: Shown when a newer release exists but has no installable package
+        -- attached to it.
+        UIManager:show(InfoMessage:new{ text = _("No downloadable release package found.") })
         return
     end
     self._confirm(
-        string.format("Update available: %s\n(installed: v%s)\n\nDownload and install now?",
-                      rel.tag_name, installed),
-        "Update", function()
-            local Trapper2 = require("ui/trapper")
-            Trapper2:wrap(function() self:_installUpdate(Trapper2, asset_url, rel.tag_name) end)
+        -- TRANSLATORS: Asked when a newer Footcream is available. %1 is the new version
+        -- tag, %2 the installed version number.
+        T(_("Update available: %1\n(installed: v%2)\n\nDownload and install now?"),
+          rel.tag_name, installed),
+        -- TRANSLATORS: Button that downloads and installs the new version; the other
+        -- button is the shared 'Cancel'.
+        _("Update"), function()
+            if sync then
+                self:_installUpdateSync(asset_url, rel.tag_name)
+            else
+                local Trapper2 = require("ui/trapper")
+                Trapper2:wrap(function() self:_installUpdate(Trapper2, asset_url, rel.tag_name) end)
+            end
         end)
 end
 
-function FootFree:_installUpdate(Trapper, asset_url, tag)
+function FootFree:_runUpdateCheck(Trapper)
+    local api = "https://api.github.com/repos/" .. _GITHUB_REPO .. "/releases/latest"
+    -- Fetch in a subprocess so the UI stays responsive and the message is
+    -- dismissable (returns the JSON body, or "ERR:<reason>" on failure).
+    local completed, body = Trapper:dismissableRunInSubprocess(function()
+        local b, err = _http_fetch(api)
+        return b or ("ERR:" .. tostring(err))
+    -- TRANSLATORS: Progress message while Footcream asks GitHub whether a newer
+    -- version exists.
+    end, _("Checking for updates…"), true)
+    if not completed then return end  -- dismissed by the user
+    self:_handleUpdateCheckBody(body, false)
+end
+
+-- Android has no fork()-safe way to background this, so it runs inline with
+-- a blocking progress message; it's a single small HTTPS request, so a short
+-- UI freeze is an acceptable trade for not crashing.
+function FootFree:_runUpdateCheckSync()
     local InfoMessage = require("ui/widget/infomessage")
-    local tmp_zip   = _SIDECAR_DIR .. "/update.zip"
-    local tmp_dir   = _SIDECAR_DIR .. "/update"
+    local api = "https://api.github.com/repos/" .. _GITHUB_REPO .. "/releases/latest"
+    -- TRANSLATORS: Progress message while Footcream asks GitHub whether a newer
+    -- version exists.
+    local im = InfoMessage:new{ text = _("Checking for updates…") }
+    UIManager:show(im)
+    UIManager:forceRePaint()
+    local b, err = _http_fetch(api)
+    UIManager:close(im)
+    self:_handleUpdateCheckBody(b or ("ERR:" .. tostring(err)), true)
+end
+
+function FootFree:_installUpdate(Trapper, asset_url, tag)
     local plugin_dir = _PLUGIN_DIR
     local backup    = plugin_dir .. ".bak"
+    local tmp_zip   = _SIDECAR_DIR .. "/update.zip"
+    local tmp_dir   = _SIDECAR_DIR .. "/update"
 
     -- Do the whole download → unzip → install in ONE subprocess so the UI never
-    -- freezes and the "Updating…" message stays dismissable. Returns "OK" or
-    -- "ERR:<reason>". (No UIManager use inside — not allowed in the subprocess.)
+    -- freezes and the "Updating…" message stays dismissable.
     local completed, result = Trapper:dismissableRunInSubprocess(function()
-        os.execute('rm -rf "' .. tmp_dir .. '" "' .. tmp_zip .. '" "' .. backup .. '"')
-        local ok, err = _http_fetch(asset_url, tmp_zip)
-        if not ok then return "ERR:Download failed: " .. tostring(err) end
-        os.execute('mkdir -p "' .. tmp_dir .. '"')
-        os.execute('unzip -o "' .. tmp_zip .. '" -d "' .. tmp_dir .. '" >/dev/null 2>&1')
-        local src = _find_plugin_root(tmp_dir)
-        if not src then return "ERR:Update package didn't contain the plugin files." end
-        os.execute('cp -rf "' .. plugin_dir .. '" "' .. backup .. '"')
-        os.execute('cp -rf "' .. src .. '/." "' .. plugin_dir .. '/"')
-        if not _file_exists(plugin_dir .. "/main.lua") then
-            os.execute('rm -rf "' .. plugin_dir .. '" && mv "' .. backup .. '" "' .. plugin_dir .. '"')
-            os.execute('rm -rf "' .. tmp_dir .. '" "' .. tmp_zip .. '"')
-            return "ERR:Install failed — restored the previous version."
-        end
-        os.execute('rm -rf "' .. backup .. '" "' .. tmp_dir .. '" "' .. tmp_zip .. '"')
-        return "OK"
-    end, "Updating to " .. tag .. "…", true)
+        return FootFree._do_install_update(asset_url, tag)
+    -- TRANSLATORS: Progress message while the new version downloads and installs. %1
+    -- is the version tag, e.g. 'v1.6.0'.
+    end, T(_("Updating to %1…"), tag), true)
 
     if not completed then
         -- Dismissed → the subprocess was SIGKILLed. If it died mid-copy, restore
@@ -8059,14 +8651,21 @@ function FootFree:_installUpdate(Trapper, asset_url, tag)
         os.execute('rm -rf "' .. backup .. '" "' .. tmp_dir .. '" "' .. tmp_zip .. '"')
         return
     end
-    if result == "OK" then
-        FootFree._confirm(
-            string.format("Updated to %s.\nRestart KOReader now to load it?", tag),
-            "Restart", function() UIManager:restartKOReader() end, "Later")
-    else
-        UIManager:show(InfoMessage:new{
-            text = (type(result) == "string" and result:gsub("^ERR:", "")) or "Update failed." })
-    end
+    FootFree._report_install_result(result, tag)
+end
+
+-- Android counterpart of _installUpdate: same fork-safety issue, plus the
+-- install itself does a network download. Runs inline with a blocking
+-- progress message — it can't be dismissed mid-flight, but it's short-lived.
+function FootFree:_installUpdateSync(asset_url, tag)
+    -- TRANSLATORS: Progress message while the new version downloads and installs. %1
+    -- is the version tag, e.g. 'v1.6.0'.
+    local im = require("ui/widget/infomessage"):new{ text = T(_("Updating to %1…"), tag) }
+    UIManager:show(im)
+    UIManager:forceRePaint()
+    local result = FootFree._do_install_update(asset_url, tag)
+    UIManager:close(im)
+    FootFree._report_install_result(result, tag)
 end
 
 -- ── Menu ──────────────────────────────────────────────────────────────────────
@@ -8076,52 +8675,82 @@ end
 -- (Modes 2/3 stay disabled there, but their greyed labels flip too — a
 -- greyed "Imperial only" reads as "not available yet", which is the truth.)
 function FootFree:_modeLabel(mode)
-    local unit = FootFree._IMPERIAL.preferred() ~= "metric" and "imperial" or "metric"
+    local is_metric = FootFree._IMPERIAL.preferred() == "metric"
     if mode == 3 then
-        return (unit == "metric" and "Metric" or "Imperial") .. " only (in text)"
+        -- TRANSLATORS: Name of mode 3, shown on the 'Mode:' menu entry and in the mode
+        -- picker: measurements are replaced by their conversions in the book's text. %1 is
+        -- 'Metric' or 'Imperial'.
+        return T(_("%1 only (in text)"), is_metric and _("Metric") or _("Imperial"))
     elseif mode == 2 then
-        return (unit == "metric" and "Metric" or "Imperial")
-            .. " alongside original (in text)"
+        -- TRANSLATORS: Name of mode 2: conversions are written into the book's text next
+        -- to the original measurements. %1 is 'Metric' or 'Imperial'.
+        return T(_("%1 alongside original (in text)"), is_metric and _("Metric") or _("Imperial"))
     end
-    return "Underline units, tap for " .. unit
+    -- TRANSLATORS: Name of mode 1: the book is never edited; measurements are
+    -- underlined and you tap one to see its conversion. %1 is 'metric' or 'imperial',
+    -- lowercase mid-sentence.
+    return T(_("Underline units, tap for %1"), is_metric and _("metric") or _("imperial"))
 end
 
 function FootFree:addToMainMenu(menu_items)
     -- Long-press explainers per category (both scan directions listed).
     local cat_help = {
-        length = "Inches, feet, yards, miles, fathoms, furlongs, leagues, cubits"
-            .. " — and in the imperial direction: millimeters, centimeters,"
-            .. " meters, kilometers.",
-        weight = "Ounces, pounds and stone — and in the imperial direction:"
-            .. " grams and kilos. Tons are deliberately not converted (the word"
-            .. " is too ambiguous).",
-        temperature = "°F and \"degrees Fahrenheit\" — and in the imperial"
-            .. " direction, °C and \"degrees Celsius\".",
-        volume = "Pints, quarts, gallons and fluid ounces — and in the imperial"
-            .. " direction, liters and milliliters. UK and US gallons differ;"
-            .. " Footcream picks the right one from the book.",
-        speed = "Miles per hour and knots — and in the imperial direction,"
-            .. " km/h and meters per second.",
-        area = "Acres and square miles/feet/yards — and in the imperial"
-            .. " direction, hectares and square kilometers/meters/centimeters.",
-        time = "Traditional Chinese time units: shichen (2 hours), geng (2.4"
-            .. " hours), dian (24 minutes), and ke (15 minutes).",
-        energy = "Horsepower, BTUs and food calories — and in the imperial"
-            .. " direction, kilowatts and kilojoules.",
-        pressure = "PSI, atmospheres and mmHg — and in the imperial direction,"
-            .. " kilopascals.",
+        -- TRANSLATORS: Long-press explainer for the 'Length & Distance' category. The unit
+        -- names are English measurement words - use your language's names for the same
+        -- units.
+        length = _("Inches, feet, yards, miles, fathoms, furlongs, leagues, cubits — and in the imperial direction: millimeters, centimeters, meters, kilometers."),
+        -- TRANSLATORS: Long-press explainer for the 'Weight' category. Tons convert only in a
+        -- weight context; the figurative and ship-tonnage senses are left alone.
+        weight = _("Ounces, pounds and stone — and in the imperial direction: grams and kilos. Tons convert only with a weight context (figurative and ship tonnage are left alone)."),
+        -- TRANSLATORS: Long-press explainer for the 'Temperature' category.
+        temperature = _("°F and \"degrees Fahrenheit\" — and in the imperial direction, °C and \"degrees Celsius\"."),
+        -- TRANSLATORS: Long-press explainer for the 'Volume' category. UK and US pints and
+        -- gallons are different sizes, hence the note about the book's origin.
+        volume = _("Pints, quarts, gallons and fluid ounces — and in the imperial direction, liters and milliliters. UK and US gallons differ; Footcream picks the right one from the book."),
+        -- TRANSLATORS: Long-press explainer for the 'Speed' category.
+        speed = _("Miles per hour and knots — and in the imperial direction, km/h and meters per second."),
+        -- TRANSLATORS: Long-press explainer for the 'Area' category.
+        area = _("Acres and square miles/feet/yards — and in the imperial direction, hectares and square kilometers/meters/centimeters."),
+        -- TRANSLATORS: Long-press explainer for the 'Time' category: pre-metric Chinese time
+        -- units as used in historical fiction. The parentheticals give their modern
+        -- equivalents.
+        time = _("Traditional Chinese time units: shichen (2 hours), geng (2.4 hours), dian (24 minutes), and ke (15 minutes)."),
+        -- TRANSLATORS: Long-press explainer for the 'Energy' category.
+        energy = _("Horsepower, BTUs and food calories — and in the imperial direction, kilowatts and kilojoules."),
+        -- TRANSLATORS: Long-press explainer for the 'Pressure' category.
+        pressure = _("PSI, atmospheres and mmHg — and in the imperial direction, kilopascals."),
     }
     local cat_items = {}
     for _, c in ipairs({
-        { key = "length",      label = "Length & Distance" },
-        { key = "weight",      label = "Weight"            },
-        { key = "temperature", label = "Temperature"       },
-        { key = "volume",      label = "Volume"            },
-        { key = "speed",       label = "Speed"             },
-        { key = "area",        label = "Area"              },
-        { key = "time",        label = "Time"              },
-        { key = "energy",      label = "Energy"            },
-        { key = "pressure",    label = "Pressure"          },
+        -- TRANSLATORS: Tickable measurement category under 'Menu > Footcream > Advanced >
+        -- Unit categories'. Untick it and distances are left alone everywhere in the book.
+        { key = "length",      label = _("Length & Distance") },
+        -- TRANSLATORS: Tickable measurement category under 'Menu > Footcream > Advanced >
+        -- Unit categories'. Untick it and weights are left alone everywhere in the book.
+        { key = "weight",      label = _("Weight")            },
+        -- TRANSLATORS: Tickable measurement category under 'Menu > Footcream > Advanced >
+        -- Unit categories'. Untick it and temperatures are left alone everywhere in the
+        -- book.
+        { key = "temperature", label = _("Temperature")       },
+        -- TRANSLATORS: Tickable measurement category under 'Menu > Footcream > Advanced >
+        -- Unit categories'. Untick it and volumes are left alone everywhere in the book.
+        { key = "volume",      label = _("Volume")            },
+        -- TRANSLATORS: Tickable measurement category under 'Menu > Footcream > Advanced >
+        -- Unit categories'. Untick it and speeds are left alone everywhere in the book.
+        { key = "speed",       label = _("Speed")             },
+        -- TRANSLATORS: Tickable measurement category under 'Menu > Footcream > Advanced >
+        -- Unit categories'. Untick it and areas are left alone everywhere in the book.
+        { key = "area",        label = _("Area")              },
+        -- TRANSLATORS: Tickable measurement category under 'Menu > Footcream > Advanced >
+        -- Unit categories'. Untick it and time units are left alone everywhere in the book.
+        { key = "time",        label = _("Time")              },
+        -- TRANSLATORS: Tickable measurement category under 'Menu > Footcream > Advanced >
+        -- Unit categories'. Untick it and energy units are left alone everywhere in the book.
+        { key = "energy",      label = _("Energy")            },
+        -- TRANSLATORS: Tickable measurement category under 'Menu > Footcream > Advanced >
+        -- Unit categories'. Untick it and pressure units are left alone everywhere in the
+        -- book.
+        { key = "pressure",    label = _("Pressure")          },
     }) do
         local key = c.key
         table.insert(cat_items, {
@@ -8149,9 +8778,13 @@ function FootFree:addToMainMenu(menu_items)
             -- 1. Hints count (read-only status line)
             table.insert(items, {
                 text_func = function()
-                    if not self.ui.document then return "No book open" end
+                    -- TRANSLATORS: First line of the 'Menu > Footcream' menu, which reports what the
+                    -- scan found. Shown when no book is open, so there is nothing to report.
+                    if not self.ui.document then return _("No book open") end
                     if not self._enabled then
-                        return "Footcream is off in this book"
+                        -- TRANSLATORS: Same menu line, when Footcream has been switched off for this
+                        -- particular book via the entry below it.
+                        return _("Footcream is off in this book")
                     end
                     local n = self._all_matches and #self._all_matches or 0
                     -- Converted (mode-3) book: _all_matches holds only the
@@ -8165,20 +8798,34 @@ function FootFree:addToMainMenu(menu_items)
                     if n > 0 then
                         local label = _lang_label(self.ui.document)
                         if label then
-                            return string.format("%d hints found in this %s book", n, label)
+                            -- TRANSLATORS: Same menu line, reporting the scan result for a book whose English
+                            -- variant is known. %1 is the count, %2 a label like 'UK English'.
+                            return T(_.ngettext("%1 hint found in this %2 book",
+                                                 "%1 hints found in this %2 book", n), n, label)
                         end
-                        return string.format("%d hints found", n)
+                        -- TRANSLATORS: Line at the top of 'Menu > Footcream' reporting what the scan
+                        -- found. %1 is the count, and it is 0 for a book that was scanned and contains no
+                        -- measurements - deliberately a zero count rather than 'nothing found', so it
+                        -- can't be misread as 'not scanned yet'. 'hints' are the measurements Footcream
+                        -- found, however they are being shown.
+                        return T(_.ngettext("%1 hint found", "%1 hints found", n), n)
                     elseif self._scanned then
                         -- Scanned, but no imperial units — distinct from "never
                         -- scanned" so the user isn't stuck re-scanning forever (6.1).
-                        return "0 hints found"
+                        -- TRANSLATORS: Line at the top of 'Menu > Footcream' reporting what the scan
+                        -- found. %1 is the count, and it is 0 for a book that was scanned and contains no
+                        -- measurements - deliberately a zero count rather than 'nothing found', so it
+                        -- can't be misread as 'not scanned yet'. 'hints' are the measurements Footcream
+                        -- found, however they are being shown.
+                        return T(_.ngettext("%1 hint found", "%1 hints found", 0), 0)
                     else
-                        return "Not yet scanned"
+                        -- TRANSLATORS: Same menu line, for a book that has never been scanned.
+                        return _("Not yet scanned")
                     end
                 end,
-                help_text = "How many measurements Footcream found in this book. "
-                    .. "The count always shows everything that was found, "
-                    .. "whichever mode you are in.",
+                -- TRANSLATORS: Long-press explainer for the hint-count line at the top of 'Menu >
+                -- Footcream'.
+                help_text = _("How many measurements Footcream found in this book. The count always shows everything that was found, whichever mode you are in."),
                 enabled_func = function() return false end,
             })
 
@@ -8189,13 +8836,11 @@ function FootFree:addToMainMenu(menu_items)
             -- mode keeps steering every other book. A true global off is
             -- KOReader's plugin management.
             table.insert(items, {
-                text = "Enable Footcream in this book",
-                help_text = "Turn Footcream off for this book only: no "
-                    .. "underlines, no conversions, no prompts — and a "
-                    .. "converted book gets its original text back. Other "
-                    .. "books are unaffected, and the choice is remembered "
-                    .. "for this book. To disable Footcream everywhere, use "
-                    .. "KOReader's plugin management.",
+                -- TRANSLATORS: Tickable entry in 'Menu > Footcream'. Untick it to switch Footcream
+                -- off for this book only; every other book keeps following the global setting.
+                text = _("Enable Footcream in this book"),
+                -- TRANSLATORS: Long-press explainer for 'Enable Footcream in this book'.
+                help_text = _("Turn Footcream off for this book only: no underlines, no conversions, no prompts — and a converted book gets its original text back. Other books are unaffected, and the choice is remembered for this book. To disable Footcream everywhere, use KOReader's plugin management."),
                 enabled_func = function()
                     return self.ui.document ~= nil and not self._doc_unsupported
                 end,
@@ -8240,21 +8885,29 @@ function FootFree:addToMainMenu(menu_items)
             table.insert(items, {
                 text_func = function()
                     local pref = FootFree._IMPERIAL.preferred()
-                    local name = pref == "us" and "Imperial (US)"
-                        or pref == "uk" and "Imperial (UK)" or "Metric"
-                    return "Convert units to: " .. name
+                    -- TRANSLATORS: US flavour of the imperial system - pounds, US pints and gallons.
+                    -- Both a choice under 'Convert units to' and the value shown on that entry.
+                    local name = pref == "us" and _("Imperial (US)")
+                        -- TRANSLATORS: UK flavour of the imperial system - stones, imperial pints and
+                        -- gallons. Both a choice under 'Convert units to' and the value shown on that
+                        -- entry.
+                        or pref == "uk" and _("Imperial (UK)") or _("Metric")
+                    -- TRANSLATORS: Entry in 'Menu > Footcream' showing which unit system the reader
+                    -- wants to read in. %1 is 'Metric', 'Imperial (US)' or 'Imperial (UK)'. Opens the
+                    -- list of the three.
+                    return T(_("Convert units to: %1"), name)
                 end,
-                help_text = "The unit system you want to read in. Metric converts "
-                    .. "imperial measurements (feet, miles, °F) to metric. The "
-                    .. "Imperial options do the reverse: they find metric "
-                    .. "measurements (meters, kilometers, kilos, °C) and show "
-                    .. "imperial values. Works in every mode; a converted book "
-                    .. "is restored and reconverted when you switch.",
+                -- TRANSLATORS: Long-press explainer for 'Convert units to'.
+                help_text = _("The unit system you want to read in. Metric converts imperial measurements (feet, miles, °F) to metric. The Imperial options do the reverse: they find metric measurements (meters, kilometers, kilos, °C) and show imperial values. Works in every mode; a converted book is restored and reconverted when you switch."),
                 sub_item_table = {
                     {
-                        text = "Metric",
-                        help_text = "Convert imperial measurements (feet, miles, "
-                            .. "pounds, °F, gallons…) to metric.",
+                        -- TRANSLATORS: Name of the metric system, capitalised. Used as the choice under
+                        -- 'Convert units to' (the default: the book's imperial measurements become metric
+                        -- ones) and inserted into the mode names, e.g. 'Metric only (in text)'. Keep it
+                        -- identical in both places.
+                        text = _("Metric"),
+                        -- TRANSLATORS: Long-press explainer for the 'Metric' choice.
+                        help_text = _("Convert imperial measurements (feet, miles, pounds, °F, gallons…) to metric."),
                         checked_func = function()
                             return FootFree._IMPERIAL.preferred() == "metric"
                         end,
@@ -8262,12 +8915,13 @@ function FootFree:addToMainMenu(menu_items)
                         callback = function() self:_setPreferred("metric") end,
                     },
                     {
-                        text = "Imperial (US)",
-                        help_text = "Convert metric measurements to US units: "
-                            .. "meters become feet and inches (\"1.8 m\" → "
-                            .. "\"5 ft 11 in\"), kilometers become miles, kilos "
-                            .. "become pounds, °C becomes °F, liters become "
-                            .. "quarts and gallons.",
+                        -- TRANSLATORS: US flavour of the imperial system - pounds, US pints and gallons.
+                        -- Both a choice under 'Convert units to' and the value shown on that entry.
+                        text = _("Imperial (US)"),
+                        -- TRANSLATORS: Long-press explainer for the 'Imperial (US)' choice. The quoted
+                        -- measurements are examples of the output; 'm', 'ft' and 'in' are unit symbols and
+                        -- are not translated.
+                        help_text = _("Convert metric measurements to US units: meters become feet and inches (\"1.8 m\" → \"5 ft 11 in\"), kilometers become miles, kilos become pounds, °C becomes °F, liters become quarts and gallons."),
                         checked_func = function()
                             return FootFree._IMPERIAL.preferred() == "us"
                         end,
@@ -8275,10 +8929,14 @@ function FootFree:addToMainMenu(menu_items)
                         callback = function() self:_setPreferred("us") end,
                     },
                     {
-                        text = "Imperial (UK)",
-                        help_text = "Like Imperial (US), but with UK measures: "
-                            .. "body weights in stones (\"75 kg\" → \"11 st 11 lb\") "
-                            .. "and volumes in imperial pints and gallons.",
+                        -- TRANSLATORS: UK flavour of the imperial system - stones, imperial pints and
+                        -- gallons. Both a choice under 'Convert units to' and the value shown on that
+                        -- entry.
+                        text = _("Imperial (UK)"),
+                        -- TRANSLATORS: Long-press explainer for the 'Imperial (UK)' choice. The quoted
+                        -- measurements are examples of the output; 'kg', 'st' and 'lb' are unit symbols
+                        -- and are not translated.
+                        help_text = _("Like Imperial (US), but with UK measures: body weights in stones (\"75 kg\" → \"11 st 11 lb\") and volumes in imperial pints and gallons."),
                         checked_func = function()
                             return FootFree._IMPERIAL.preferred() == "uk"
                         end,
@@ -8299,16 +8957,13 @@ function FootFree:addToMainMenu(menu_items)
             -- change closes the menu (see pick() in _showModeDialog).
             table.insert(items, {
                 text_func = function()
-                    return "Mode: " .. self:_modeLabel(self._tap_mode)
+                    -- TRANSLATORS: Entry in 'Menu > Footcream' showing how conversions are currently
+                    -- displayed. %1 is one of the three mode names ('Underline units, tap for metric',
+                    -- 'Metric alongside original (in text)', ...).
+                    return T(_("Mode: %1"), self:_modeLabel(self._tap_mode))
                 end,
-                help_text = "How conversions are shown while you read. Opens a "
-                    .. "picker showing a sample sentence in each of the three "
-                    .. "modes; the change is applied to the book when you leave "
-                    .. "the menu. The two \"written into the text\" modes "
-                    .. "rewrite the book file itself — fully reversible at any "
-                    .. "time. In the \"converted only\" mode, the Advanced "
-                    .. "option \"Show original unit in tooltip\" lets you tap a "
-                    .. "converted value to see the original text.",
+                -- TRANSLATORS: Long-press explainer for the 'Mode' entry.
+                help_text = _("How conversions are shown while you read. Opens a picker showing a sample sentence in each of the three modes; the change is applied to the book when you leave the menu. The two \"written into the text\" modes rewrite the book file itself — fully reversible at any time. In the \"converted only\" mode, the Advanced option \"Show original unit in tooltip\" lets you tap a converted value to see the original text."),
                 keep_menu_open = true,
                 -- TouchMenu passes itself to callbacks; the picker uses it
                 -- to updateItems() after a mode change so the "Mode: <label>"
@@ -8324,11 +8979,11 @@ function FootFree:addToMainMenu(menu_items)
 
             -- 5. Auto-scan
             table.insert(items, {
-                text = "Auto-scan when opening a new book",
-                help_text = "Scan every new book automatically when you open it. "
-                    .. "Only English books are scanned — other languages are left "
-                    .. "alone. Turn this off to scan books one by one with "
-                    .. "\"Scan book\".",
+                -- TRANSLATORS: Tickable entry in 'Menu > Footcream': scan each book by itself the
+                -- first time it is opened, instead of waiting for 'Scan book'.
+                text = _("Auto-scan when opening a new book"),
+                -- TRANSLATORS: Long-press explainer for 'Auto-scan when opening a new book'.
+                help_text = _("Scan every new book automatically when you open it. Only English books are scanned — other languages are left alone. Turn this off to scan books one by one with \"Scan book\"."),
                 checked_func = function() return self._auto_scan end,
                 callback = function()
                     self._auto_scan = not self._auto_scan
@@ -8341,14 +8996,17 @@ function FootFree:addToMainMenu(menu_items)
                 text_func = function()
                     if self.ui.document then
                         local fh = io.open(_sidecar_path(self.ui.document.file))
-                        if fh then fh:close(); return "Rescan book" end
+                        -- TRANSLATORS: Entry in 'Menu > Footcream' that runs the scan again from scratch.
+                        -- Shown instead of 'Scan book' once this book has already been scanned.
+                        if fh then fh:close(); return _("Rescan book") end
                     end
-                    return "Scan book"
+                    -- TRANSLATORS: Entry in 'Menu > Footcream' that searches this book for
+                    -- measurements. Nothing is underlined or converted until this has run at least
+                    -- once.
+                    return _("Scan book")
                 end,
-                help_text = "Scan this book now, or scan it again from scratch. "
-                    .. "The scan runs in the background, so you can keep reading "
-                    .. "while it works. Results are saved, so reopening the book "
-                    .. "later is instant.",
+                -- TRANSLATORS: Long-press explainer for the 'Scan book' / 'Rescan book' entry.
+                help_text = _("Scan this book now, or scan it again from scratch. The scan runs in the background, so you can keep reading while it works. Results are saved, so reopening the book later is instant."),
                 enabled_func = function()
                     -- Greyed while Footcream is off in this book.
                     return self.ui.document ~= nil and not self._doc_unsupported
@@ -8362,6 +9020,10 @@ function FootFree:addToMainMenu(menu_items)
                         -- set by "Remove Footcream data from this book".
                         self._removed_this_session[doc.file] = nil
                         os.remove(_sidecar_path(doc.file))
+                        -- Without this, rescanning in mode 2/3 scanned and then
+                        -- did nothing — the one scan entry point that never
+                        -- armed the convert prompt.
+                        self:_armConvertAfterScan()
                         self:_startScan(doc)
                     end
                     local function maybe_scan()
@@ -8369,11 +9031,16 @@ function FootFree:addToMainMenu(menu_items)
                             do_scan()
                         else
                             local lang = _get_book_lang(doc)
-                            local note = lang ~= "" and (" (detected: " .. lang .. ")") or ""
-                            self._confirm(
-                                "This book does not appear to be in English" ..
-                                    note .. ".\n\nScan it anyway?",
-                                "Scan", do_scan)
+                            local msg = lang ~= ""
+                                -- TRANSLATORS: Asked before scanning a book that doesn't look English, since
+                                -- Footcream only recognises English measurement words. %1 is the language code
+                                -- from the book's metadata.
+                                and T(_("This book does not appear to be in English (detected: %1).\n\nScan it anyway?"), lang)
+                                -- TRANSLATORS: Same question, for a book whose metadata names no language at all.
+                                or  _("This book does not appear to be in English.\n\nScan it anyway?")
+                            -- TRANSLATORS: Button that scans the book anyway; the other button is the shared
+                            -- 'Cancel'.
+                            self._confirm(msg, _("Scan"), do_scan)
                         end
                     end
                     -- Rescanning a converted (mode-3) book in place corrupts the
@@ -8391,9 +9058,13 @@ function FootFree:addToMainMenu(menu_items)
                         -- with their own settle delays).
                         UIManager:scheduleIn(0.3, function()
                             self._confirm(
-                                "This book is converted — rescan it and "
-                                    .. "re-apply the conversion?",
-                                "Rescan & reconvert", function()
+                                -- TRANSLATORS: Asked when 'Rescan book' is used on a book whose text was already
+                                -- converted: the old conversion is undone, the book scanned afresh, and the
+                                -- conversion written again.
+                                _("This book is converted — rescan it and re-apply the conversion?"),
+                                -- TRANSLATORS: Button that starts the rescan-and-reconvert; the other button is
+                                -- the shared 'Cancel'.
+                                _("Rescan & reconvert"), function()
                                     -- Revert runs async now; once it finishes and
                                     -- reloads, scan the restored text (a short delay
                                     -- lets the reload settle first).
@@ -8412,11 +9083,11 @@ function FootFree:addToMainMenu(menu_items)
             })
 
             table.insert(items, {
-                text = "Styling",
-                help_text = "Customise how underlines look (solid or wavy, "
-                    .. "intensity, thickness) and the tooltip (size, unit icon), "
-                    .. "with a live preview. Drag the dialog around if it covers "
-                    .. "the text you want to see.",
+                -- TRANSLATORS: Entry in 'Menu > Footcream' that opens the appearance dialog
+                -- (underline look and tooltip size).
+                text = _("Styling"),
+                -- TRANSLATORS: Long-press explainer for 'Styling'.
+                help_text = _("Customise how underlines look (solid or wavy, intensity, thickness) and the tooltip (size, unit icon), with a live preview. Drag the dialog around if it covers the text you want to see."),
                 callback = function()
                     self.ui:handleEvent(Event:new("CloseReaderMenu"))
                     UIManager:scheduleIn(0.1, function()
@@ -8427,11 +9098,12 @@ function FootFree:addToMainMenu(menu_items)
 
             table.insert(items, {
                 text_func = function()
-                    return "Check for updates (v" .. _installed_version() .. ")"
+                    -- TRANSLATORS: Entry in 'Menu > Footcream' that looks for a newer Footcream on
+                    -- GitHub. %1 is the version installed right now.
+                    return T(_("Check for updates (v%1)"), _installed_version())
                 end,
-                help_text = "Check GitHub for a newer Footcream release and "
-                    .. "install it in place. Needs Wi-Fi; you'll be asked to "
-                    .. "restart KOReader when it's done.",
+                -- TRANSLATORS: Long-press explainer for 'Check for updates'.
+                help_text = _("Check GitHub for a newer Footcream release and install it in place. Needs Wi-Fi; you'll be asked to restart KOReader when it's done."),
                 keep_menu_open = true,
                 callback = function()
                     self:_checkForUpdate()
@@ -8440,24 +9112,27 @@ function FootFree:addToMainMenu(menu_items)
 
             -- Advanced — kept last
             table.insert(items, {
-                text = "Advanced",
-                help_text = "Extra options: unit categories, rounding, "
-                    .. "original-unit tooltips, error reporting to the "
-                    .. "developer, per-book cleanup, and debug tools.",
+                -- TRANSLATORS: Submenu at the bottom of 'Menu > Footcream' holding the less-used
+                -- settings.
+                text = _("Advanced"),
+                -- TRANSLATORS: Long-press explainer for the 'Advanced' submenu.
+                help_text = _("Extra options: unit categories, rounding, original-unit tooltips, error reporting to the developer, per-book cleanup, and debug tools."),
                 sub_item_table = {
                     {
-                        text = "Unit categories",
-                        help_text = "Choose which kinds of measurements are "
-                            .. "converted. Anything you untick is ignored "
-                            .. "everywhere — no underlines, popups or in-text "
-                            .. "conversions for that category.",
+                        -- TRANSLATORS: Entry under 'Advanced' opening the list of measurement kinds
+                        -- (length, weight, temperature...) that can each be switched off.
+                        text = _("Unit categories"),
+                        -- TRANSLATORS: Long-press explainer for 'Unit categories'.
+                        help_text = _("Choose which kinds of measurements are converted. Anything you untick is ignored everywhere — no underlines, popups or in-text conversions for that category."),
                         sub_item_table = cat_items,
                     },
                     {
-                        text = "Smart rounding for conversions",
-                        help_text = "Round conversions to friendly, readable "
-                            .. "values — \"90 m\" instead of \"91.44 m\". Turn "
-                            .. "off if you prefer exact numbers.",
+                        -- TRANSLATORS: Tickable entry under 'Advanced': round conversions to values a
+                        -- person would say out loud rather than exact arithmetic.
+                        text = _("Smart rounding for conversions"),
+                        -- TRANSLATORS: Long-press explainer for 'Smart rounding for conversions'. The
+                        -- quoted values are examples; 'm' is the metre symbol, not translated.
+                        help_text = _("Round conversions to friendly, readable values — \"90 m\" instead of \"91.44 m\". Turn off if you prefer exact numbers."),
                         checked_func = function() return self._smart_rounding end,
                         callback = function()
                             self._smart_rounding = not self._smart_rounding
@@ -8471,6 +9146,13 @@ function FootFree:addToMainMenu(menu_items)
                             if doc and doc.file and not _is_metric_mode(doc.file)
                                and _file_exists(_sidecar_path(doc.file)) then
                                 os.remove(_sidecar_path(doc.file))
+                                -- Same invariant as the other entry points: a
+                                -- scan started while a convert mode is active
+                                -- offers the conversion when it lands. (This
+                                -- branch only runs on an UNCONVERTED book, so
+                                -- in mode 2/3 it would otherwise rescan and
+                                -- leave the book untouched.)
+                                self:_armConvertAfterScan()
                                 self:_startScan(doc)
                             end
                         end,
@@ -8480,15 +9162,18 @@ function FootFree:addToMainMenu(menu_items)
                             -- Names the mode it belongs to, which follows the
                             -- preferred units ("Metric only" / "Imperial only").
                             local unit = FootFree._IMPERIAL.preferred() ~= "metric"
-                                         and "Imperial" or "Metric"
-                            return "Show original unit in tooltip (" .. unit
-                                .. " only mode)"
+                                         -- TRANSLATORS: Name of the imperial system, capitalised. Inserted into the mode
+                                         -- names ('Imperial only (in text)') and into the menu entry below it, so it must
+                                         -- read the same in both.
+                                         and _("Imperial") or _("Metric")
+                            -- TRANSLATORS: Tickable entry under 'Advanced', for the mode that replaces
+                            -- measurements in the book's text: underline the converted values too, so tapping
+                            -- one shows what the book originally said. %1 is 'Metric' or 'Imperial' and must
+                            -- match that mode's name.
+                            return T(_("Show original unit in tooltip (%1 only mode)"), unit)
                         end,
-                        help_text = "In the \"only (in text)\" mode, underline the "
-                            .. "converted values so you can tap any of them and "
-                            .. "see the original text. Handy if you want to "
-                            .. "double-check a conversion against what the "
-                            .. "author wrote.",
+                        -- TRANSLATORS: Long-press explainer for 'Show original unit in tooltip'.
+                        help_text = _("In the \"only (in text)\" mode, underline the converted values so you can tap any of them and see the original text. Handy if you want to double-check a conversion against what the author wrote."),
                         checked_func = function() return self._show_original end,
                         callback = function()
                             self._show_original = not self._show_original
@@ -8503,7 +9188,10 @@ function FootFree:addToMainMenu(menu_items)
                                     -- but the book is still converted, so the
                                     -- toggle would silently do nothing (5.4).
                                     UIManager:show(InfoMessage:new{
-                                        text = "Original-unit data for this book is missing.\nTo restore it, use 'Remove Footcream data from this book', then convert again via the Mode menu.",
+                                        -- TRANSLATORS: Shown when this toggle can't work because the record of the book's
+                                        -- original measurements is gone. The quoted items are menu entries - translate
+                                        -- them exactly as you translate those entries.
+                                        text = _("Original-unit data for this book is missing.\nTo restore it, use 'Remove Footcream data from this book', then convert again via the Mode menu."),
                                         timeout = 6,
                                     })
                                 end
@@ -8515,14 +9203,12 @@ function FootFree:addToMainMenu(menu_items)
                         end,
                     },
                     {
-                        text = "Long-press units to send errors to the developer",
-                        help_text = "Flag bad conversions while you read: "
-                            .. "long-press a unit (or select text Footcream "
-                            .. "missed) and the error is sent anonymously to the "
-                            .. "developer. Each flag contains the book title, the "
-                            .. "measurement, its conversion and the surrounding "
-                            .. "sentence — nothing else. Works offline: flags are "
-                            .. "queued and sent when you're connected.",
+                        -- TRANSLATORS: Tickable entry under 'Advanced': allow reporting bad conversions by
+                        -- long-pressing them while reading.
+                        text = _("Long-press units to send errors to the developer"),
+                        -- TRANSLATORS: Long-press explainer for 'Long-press units to send errors to the
+                        -- developer'.
+                        help_text = _("Flag bad conversions while you read: long-press a unit (or select text Footcream missed) and the error is sent anonymously to the developer. Each flag contains the book title, the measurement, its conversion and the surrounding sentence — nothing else. Works offline: flags are queued and sent when you're connected."),
                         checked_func = function() return self._share_reports end,
                         callback = function()
                             self._share_reports = not self._share_reports
@@ -8544,17 +9230,19 @@ function FootFree:addToMainMenu(menu_items)
                                 -- queue already holds from earlier sessions.
                                 self:_flushReports()
                                 UIManager:show(Notification:new{
-                                    text = "Flagged errors will be shared anonymously",
+                                    -- TRANSLATORS: Toast when error reporting is switched on, confirming that reports
+                                    -- carry no personal information.
+                                    text = _("Flagged errors will be shared anonymously"),
                                 })
                             end
                         end,
                     },
                     {
-                        text = "Remove Footcream data from this book",
-                        help_text = "Undo everything for this book: restore the "
-                            .. "original text, remove all underlines and delete "
-                            .. "the saved scan. The book file goes back to "
-                            .. "exactly how it was before Footcream touched it.",
+                        -- TRANSLATORS: Entry under 'Advanced' that undoes everything Footcream did to this
+                        -- book: original text back, underlines gone, scan results deleted.
+                        text = _("Remove Footcream data from this book"),
+                        -- TRANSLATORS: Long-press explainer for 'Remove Footcream data from this book'.
+                        help_text = _("Undo everything for this book: restore the original text, remove all underlines and delete the saved scan. The book file goes back to exactly how it was before Footcream touched it."),
                         enabled_func = function()
                             if not self.ui.document then return false end
                             if _is_metric_mode(self.ui.document.file) then return true end
@@ -8585,23 +9273,25 @@ function FootFree:addToMainMenu(menu_items)
                                 self:_revertMetricEdition(doc)
                             else
                                 UIManager:show(Notification:new{
-                                    text = "Footcream data removed from book",
+                                    -- TRANSLATORS: Toast confirming Footcream's data for this book was deleted.
+                                    text = _("Footcream data removed from book"),
                                 })
                             end
                         end,
                     },
                     {
-                        text = "Debug",
-                        help_text = "See exactly what the scan found in this "
-                            .. "book, and manage errors you've flagged on this "
-                            .. "device.",
+                        -- TRANSLATORS: Submenu under 'Advanced' with the tools for inspecting what the
+                        -- scan found and managing reported errors.
+                        text = _("Debug"),
+                        -- TRANSLATORS: Long-press explainer for the 'Debug' submenu.
+                        help_text = _("See exactly what the scan found in this book, and manage errors you've flagged on this device."),
                         sub_item_table = {
                             {
-                                text = "Units in book (list)",
-                                help_text = "Every measurement found in this "
-                                    .. "book, with its detected value and "
-                                    .. "conversion. Long-press an entry to flag "
-                                    .. "it as wrong.",
+                                -- TRANSLATORS: Entry under 'Debug' listing every measurement the scan found in
+                                -- this book, with its conversion.
+                                text = _("Units in book (list)"),
+                                -- TRANSLATORS: Long-press explainer for 'Units in book (list)'.
+                                help_text = _("Every measurement found in this book, with its detected value and conversion. Long-press an entry to flag it as wrong."),
                                 enabled_func = function()
                                     return self.ui.document ~= nil
                                         and self._all_matches ~= nil
@@ -8612,22 +9302,21 @@ function FootFree:addToMainMenu(menu_items)
                                 end,
                             },
                             {
-                                text = "View flagged errors",
-                                help_text = "Show the errors you've flagged on "
-                                    .. "this device. They're kept in a plain-text "
-                                    .. "file (koreader/footcream/"
-                                    .. "flagged_errors.txt) that you can also "
-                                    .. "attach to a GitHub issue.",
+                                -- TRANSLATORS: Entry under 'Debug' showing the errors flagged on this device.
+                                text = _("View flagged errors"),
+                                -- TRANSLATORS: Long-press explainer for 'View flagged errors'. The path in
+                                -- parentheses is a file location - leave it as it is.
+                                help_text = _("Show the errors you've flagged on this device. They're kept in a plain-text file (koreader/footcream/flagged_errors.txt) that you can also attach to a GitHub issue."),
                                 separator = true,
                                 callback = function()
                                     self:_showFlaggedErrors()
                                 end,
                             },
                             {
-                                text = "Clear flagged errors",
-                                help_text = "Delete the local flagged-errors "
-                                    .. "file. Reports that were already sent to "
-                                    .. "the developer are not affected.",
+                                -- TRANSLATORS: Entry under 'Debug' that deletes the local list of flagged errors.
+                                text = _("Clear flagged errors"),
+                                -- TRANSLATORS: Long-press explainer for 'Clear flagged errors'.
+                                help_text = _("Delete the local flagged-errors file. Reports that were already sent to the developer are not affected."),
                                 callback = function()
                                     self:_clearFlaggedErrors()
                                 end,
