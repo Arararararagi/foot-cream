@@ -3,7 +3,7 @@ msgstr ""
 "Project-Id-Version: foot-cream\n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2026-08-10 14:40+0200\n"
-"PO-Revision-Date: 2026-08-10 15:43\n"
+"PO-Revision-Date: 2026-08-11 11:57\n"
 "Last-Translator: \n"
 "Language-Team: Ukrainian\n"
 "Language: uk_UA\n"
@@ -22,145 +22,145 @@ msgstr ""
 #. units.
 #: main.lua:8442
 msgid "Inches, feet, yards, miles, fathoms, furlongs, leagues, cubits — and in the imperial direction: millimeters, centimeters, meters, kilometers."
-msgstr ""
+msgstr "Дюйми, фути, ярди, милі, сажні, фарлонги, ліги та лікті — а в імперському напрямку: міліметри, сантиметри, метри, кілометри."
 
 #. TRANSLATORS: Long-press explainer for the 'Weight' category. Tons are left alone
 #. on purpose because the word means several different quantities.
 #: main.lua:8445
 msgid "Ounces, pounds and stone — and in the imperial direction: grams and kilos. Tons are deliberately not converted (the word is too ambiguous)."
-msgstr ""
+msgstr "Унції, фунти та стоуни — а в імперському напрямку: грами й кілограми. Тонни навмисно не переводяться (слово занадто багатозначне)."
 
 #. TRANSLATORS: Long-press explainer for the 'Temperature' category.
 #: main.lua:8447
 msgid "°F and \"degrees Fahrenheit\" — and in the imperial direction, °C and \"degrees Celsius\"."
-msgstr ""
+msgstr "°F і «градуси Фаренгейта» — а в імперському напрямку °C і «градуси Цельсія»."
 
 #. TRANSLATORS: Long-press explainer for the 'Volume' category. UK and US pints and
 #. gallons are different sizes, hence the note about the book's origin.
 #: main.lua:8450
 msgid "Pints, quarts, gallons and fluid ounces — and in the imperial direction, liters and milliliters. UK and US gallons differ; Footcream picks the right one from the book."
-msgstr ""
+msgstr "Пінти, кварти, галони та рідинні унції — а в імперському напрямку літри й мілілітри. Британський і американський галони різні; Footcream вибирає потрібний за книгою."
 
 #. TRANSLATORS: Long-press explainer for the 'Speed' category.
 #: main.lua:8452
 msgid "Miles per hour and knots — and in the imperial direction, km/h and meters per second."
-msgstr ""
+msgstr "Милі за годину та вузли — а в імперському напрямку km/h і метри за секунду."
 
 #. TRANSLATORS: Long-press explainer for the 'Area' category.
 #: main.lua:8454
 msgid "Acres and square miles/feet/yards — and in the imperial direction, hectares and square kilometers/meters/centimeters."
-msgstr ""
+msgstr "Акри та квадратні милі, фути і ярди — а в імперському напрямку гектари та квадратні кілометри, метри й сантиметри."
 
 #. TRANSLATORS: Long-press explainer for the hint-count line at the top of 'Menu >
 #. Footcream'.
 #: main.lua:8551
 msgid "How many measurements Footcream found in this book. The count always shows everything that was found, whichever mode you are in."
-msgstr ""
+msgstr "Скільки мір Footcream знайшов у цій книзі. Число завжди показує все знайдене, у якому б режимі ви не були."
 
 #. TRANSLATORS: Long-press explainer for 'Enable Footcream in this book'.
 #: main.lua:8566
 msgid "Turn Footcream off for this book only: no underlines, no conversions, no prompts — and a converted book gets its original text back. Other books are unaffected, and the choice is remembered for this book. To disable Footcream everywhere, use KOReader's plugin management."
-msgstr ""
+msgstr "Вимкнути Footcream лише для цієї книги: без підкреслень, без переведень, без запитань — а перетворена книга отримає назад свій початковий текст. Інші книги не постраждають, і вибір запам’ятовується для цієї книги. Щоб вимкнути Footcream скрізь, скористайтеся керуванням додатками в KOReader."
 
 #. TRANSLATORS: Long-press explainer for 'Convert units to'.
 #: main.lua:8624
 msgid "The unit system you want to read in. Metric converts imperial measurements (feet, miles, °F) to metric. The Imperial options do the reverse: they find metric measurements (meters, kilometers, kilos, °C) and show imperial values. Works in every mode; a converted book is restored and reconverted when you switch."
-msgstr ""
+msgstr "Система одиниць, у якій ви хочете читати. «Метричні» переводять імперські міри (фути, милі, °F) у метричні. Імперські варіанти роблять навпаки: знаходять метричні міри (метри, кілометри, кілограми, °C) і показують імперські значення. Працює в усіх режимах; перетворена книга відновлюється й перетворюється знову під час перемикання."
 
 #. TRANSLATORS: Long-press explainer for the 'Metric' choice.
 #: main.lua:8633
 msgid "Convert imperial measurements (feet, miles, pounds, °F, gallons…) to metric."
-msgstr ""
+msgstr "Переводити імперські міри (фути, милі, фунти, °F, галони…) у метричні."
 
 #. TRANSLATORS: Long-press explainer for the 'Imperial (US)' choice. The quoted
 #. measurements are examples of the output; 'm', 'ft' and 'in' are unit symbols and
 #. are not translated.
 #: main.lua:8647
 msgid "Convert metric measurements to US units: meters become feet and inches (\"1.8 m\" → \"5 ft 11 in\"), kilometers become miles, kilos become pounds, °C becomes °F, liters become quarts and gallons."
-msgstr ""
+msgstr "Переводити метричні міри в американські одиниці: метри стають футами й дюймами («1.8 m» → «5 ft 11 in»), кілометри — милями, кілограми — фунтами, °C стає °F, літри — квартами й галонами."
 
 #. TRANSLATORS: Long-press explainer for the 'Imperial (UK)' choice. The quoted
 #. measurements are examples of the output; 'kg', 'st' and 'lb' are unit symbols
 #. and are not translated.
 #: main.lua:8662
 msgid "Like Imperial (US), but with UK measures: body weights in stones (\"75 kg\" → \"11 st 11 lb\") and volumes in imperial pints and gallons."
-msgstr ""
+msgstr "Як «Імперські (США)», але з британськими мірами: вага тіла у стоунах («75 kg» → «11 st 11 lb») та об’єми в британських пінтах і галонах."
 
 #. TRANSLATORS: Long-press explainer for the 'Mode' entry.
 #: main.lua:8689
 msgid "How conversions are shown while you read. Opens a picker showing a sample sentence in each of the three modes; the change is applied to the book when you leave the menu. The two \"written into the text\" modes rewrite the book file itself — fully reversible at any time. In the \"converted only\" mode, the Advanced option \"Show original unit in tooltip\" lets you tap a converted value to see the original text."
-msgstr ""
+msgstr "Як переведення показуються під час читання. Відкриває вибір із прикладом речення в кожному з трьох режимів; зміна застосовується до книги, коли ви виходите з меню. Два режими, що вписують у текст, змінюють сам файл книги — це завжди можна скасувати. У режимі «лише переведені» додаткова опція «Показувати початкову одиницю в підказці» дозволяє торкнутися перетвореного значення й побачити початковий текст."
 
 #. TRANSLATORS: Long-press explainer for 'Auto-scan when opening a new book'.
 #: main.lua:8709
 msgid "Scan every new book automatically when you open it. Only English books are scanned — other languages are left alone. Turn this off to scan books one by one with \"Scan book\"."
-msgstr ""
+msgstr "Автоматично сканувати кожну нову книгу під час відкриття. Скануються лише англійські книги — інші мови залишаються недоторканими. Вимкніть, щоб сканувати книги по одній за допомогою «Просканувати книгу»."
 
 #. TRANSLATORS: Long-press explainer for the 'Scan book' / 'Rescan book' entry.
 #: main.lua:8732
 msgid "Scan this book now, or scan it again from scratch. The scan runs in the background, so you can keep reading while it works. Results are saved, so reopening the book later is instant."
-msgstr ""
+msgstr "Просканувати цю книгу зараз або просканувати її знову з нуля. Сканування виконується у фоні, тож ви можете читати далі. Результати зберігаються, тому наступне відкриття книги миттєве."
 
 #. TRANSLATORS: Long-press explainer for 'Styling'.
 #: main.lua:8813
 msgid "Customise how underlines look (solid or wavy, intensity, thickness) and the tooltip (size, unit icon), with a live preview. Drag the dialog around if it covers the text you want to see."
-msgstr ""
+msgstr "Налаштуйте вигляд підкреслень (суцільні чи хвилясті, насиченість, товщина) та підказки (розмір, піктограма одиниці) з живим переглядом. Перетягніть вікно, якщо воно закриває текст, який ви хочете бачити."
 
 #. TRANSLATORS: Long-press explainer for 'Check for updates'.
 #: main.lua:8829
 msgid "Check GitHub for a newer Footcream release and install it in place. Needs Wi-Fi; you'll be asked to restart KOReader when it's done."
-msgstr ""
+msgstr "Перевірити на GitHub наявність новішого випуску Footcream і встановити його на місці. Потрібен Wi-Fi; після завершення вам запропонують перезапустити KOReader."
 
 #. TRANSLATORS: Long-press explainer for the 'Advanced' submenu.
 #: main.lua:8842
 msgid "Extra options: unit categories, rounding, original-unit tooltips, error reporting to the developer, per-book cleanup, and debug tools."
-msgstr ""
+msgstr "Додаткові опції: категорії одиниць, округлення, підказки з початковою одиницею, повідомлення про помилки розробнику, очищення окремих книг і діагностичні інструменти."
 
 #. TRANSLATORS: Long-press explainer for 'Unit categories'.
 #: main.lua:8849
 msgid "Choose which kinds of measurements are converted. Anything you untick is ignored everywhere — no underlines, popups or in-text conversions for that category."
-msgstr ""
+msgstr "Виберіть, які види мір переводяться. Усе, що ви знімете, ігнорується скрізь — для цієї категорії не буде ні підкреслень, ні підказок, ні переведень у тексті."
 
 #. TRANSLATORS: Long-press explainer for 'Smart rounding for conversions'. The
 #. quoted values are examples; 'm' is the metre symbol, not translated.
 #: main.lua:8858
 msgid "Round conversions to friendly, readable values — \"90 m\" instead of \"91.44 m\". Turn off if you prefer exact numbers."
-msgstr ""
+msgstr "Округлювати переведення до зручних, легких для читання значень — «90 m» замість «91.44 m». Вимкніть, якщо надаєте перевагу точним числам."
 
 #. TRANSLATORS: Long-press explainer for 'Show original unit in tooltip'.
 #: main.lua:8899
 msgid "In the \"only (in text)\" mode, underline the converted values so you can tap any of them and see the original text. Handy if you want to double-check a conversion against what the author wrote."
-msgstr ""
+msgstr "У режимі «лише (у тексті)» підкреслювати перетворені значення, щоб ви могли торкнутися будь-якого з них і побачити початковий текст. Зручно, якщо хочете звірити переведення з тим, що написав автор."
 
 #. TRANSLATORS: Long-press explainer for 'Long-press units to send errors to the
 #. developer'.
 #: main.lua:8934
 msgid "Flag bad conversions while you read: long-press a unit (or select text Footcream missed) and the error is sent anonymously to the developer. Each flag contains the book title, the measurement, its conversion and the surrounding sentence — nothing else. Works offline: flags are queued and sent when you're connected."
-msgstr ""
+msgstr "Повідомляйте про хибні переведення під час читання: довго натисніть на одиницю (або виділіть текст, який Footcream пропустив), і помилка анонімно надсилається розробнику. Кожне повідомлення містить назву книги, міру, її переведення та навколишнє речення — і більше нічого. Працює офлайн: повідомлення стають у чергу й надсилаються, коли ви під’єднані."
 
 #. TRANSLATORS: Long-press explainer for 'Remove Footcream data from this book'.
 #: main.lua:8968
 msgid "Undo everything for this book: restore the original text, remove all underlines and delete the saved scan. The book file goes back to exactly how it was before Footcream touched it."
-msgstr ""
+msgstr "Скасувати для цієї книги все: відновити початковий текст, прибрати всі підкреслення та видалити збережене сканування. Файл книги повертається точно до того стану, у якому був до того, як Footcream його торкнувся."
 
 #. TRANSLATORS: Long-press explainer for the 'Debug' submenu.
 #: main.lua:9010
 msgid "See exactly what the scan found in this book, and manage errors you've flagged on this device."
-msgstr ""
+msgstr "Подивіться, що саме сканування знайшло в цій книзі, і керуйте помилками, які ви повідомили на цьому пристрої."
 
 #. TRANSLATORS: Long-press explainer for 'Units in book (list)'.
 #: main.lua:9017
 msgid "Every measurement found in this book, with its detected value and conversion. Long-press an entry to flag it as wrong."
-msgstr ""
+msgstr "Кожна міра, знайдена в цій книзі, з визначеним значенням і переведенням. Довге натискання на запис повідомляє про нього як про помилку."
 
 #. TRANSLATORS: Long-press explainer for 'View flagged errors'. The path in
 #. parentheses is a file location - leave it as it is.
 #: main.lua:9032
 msgid "Show the errors you've flagged on this device. They're kept in a plain-text file (koreader/footcream/flagged_errors.txt) that you can also attach to a GitHub issue."
-msgstr ""
+msgstr "Показати помилки, які ви повідомили на цьому пристрої. Вони зберігаються у звичайному текстовому файлі (koreader/footcream/flagged_errors.txt), який ви також можете додати до звернення на GitHub."
 
 #. TRANSLATORS: Long-press explainer for 'Clear flagged errors'.
 #: main.lua:9042
 msgid "Delete the local flagged-errors file. Reports that were already sent to the developer are not affected."
-msgstr ""
+msgstr "Видалити локальний файл повідомлених помилок. Звіти, які вже надіслані розробнику, це не зачіпає."
 
