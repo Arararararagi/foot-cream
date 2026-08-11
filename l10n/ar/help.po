@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: foot-cream\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-10 14:40+0200\n"
+"POT-Creation-Date: 2026-08-11 14:48+0200\n"
 "PO-Revision-Date: 2026-08-11 11:56\n"
 "Last-Translator: \n"
 "Language-Team: Arabic\n"
@@ -10,7 +10,8 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Plural-Forms: nplurals=6; plural=(n==0 ? 0 : n==1 ? 1 : n==2 ? 2 : n%100>=3 && n%100<=10 ? 3 : n%100>=11 && n%100<=99 ? 4 : 5);\n"
+"Plural-Forms: nplurals=6; plural=(n==0 ? 0 : n==1 ? 1 : n==2 ? 2 : n%100>=3 "
+"&& n%100<=10 ? 3 : n%100>=11 && n%100<=99 ? 4 : 5);\n"
 "X-Crowdin-Project: foot-cream\n"
 "X-Crowdin-Project-ID: 919191\n"
 "X-Crowdin-Language: ar\n"
@@ -20,147 +21,283 @@ msgstr ""
 #. TRANSLATORS: Long-press explainer for the 'Length & Distance' category. The unit
 #. names are English measurement words - use your language's names for the same
 #. units.
-#: main.lua:8442
-msgid "Inches, feet, yards, miles, fathoms, furlongs, leagues, cubits — and in the imperial direction: millimeters, centimeters, meters, kilometers."
-msgstr "البوصات والأقدام والياردات والأميال والقامات والفرلونغ والفراسخ والأذرع — وفي الاتجاه الإمبراطوري: الملّيمترات والسنتيمترات والأمتار والكيلومترات."
+#: main.lua:8387
+msgid ""
+"Inches, feet, yards, miles, fathoms, furlongs, leagues, cubits — and in the "
+"imperial direction: millimeters, centimeters, meters, kilometers."
+msgstr ""
+"البوصات والأقدام والياردات والأميال والقامات والفرلونغ والفراسخ والأذرع — "
+"وفي الاتجاه الإمبراطوري: الملّيمترات والسنتيمترات والأمتار والكيلومترات."
 
 #. TRANSLATORS: Long-press explainer for the 'Weight' category. Tons are left alone
 #. on purpose because the word means several different quantities.
-#: main.lua:8445
-msgid "Ounces, pounds and stone — and in the imperial direction: grams and kilos. Tons are deliberately not converted (the word is too ambiguous)."
-msgstr "الأونصات والأرطال والستون — وفي الاتجاه الإمبراطوري: الغرامات والكيلوغرامات. لا تُحوَّل الأطنان عمدًا (فالكلمة شديدة الالتباس)."
+#: main.lua:8390
+msgid ""
+"Ounces, pounds and stone — and in the imperial direction: grams and kilos. "
+"Tons are deliberately not converted (the word is too ambiguous)."
+msgstr ""
+"الأونصات والأرطال والستون — وفي الاتجاه الإمبراطوري: الغرامات والكيلوغرامات. "
+"لا تُحوَّل الأطنان عمدًا (فالكلمة شديدة الالتباس)."
 
 #. TRANSLATORS: Long-press explainer for the 'Temperature' category.
-#: main.lua:8447
-msgid "°F and \"degrees Fahrenheit\" — and in the imperial direction, °C and \"degrees Celsius\"."
+#: main.lua:8392
+msgid ""
+"°F and \"degrees Fahrenheit\" — and in the imperial direction, °C and "
+"\"degrees Celsius\"."
 msgstr "°F و«درجات فهرنهايت» — وفي الاتجاه الإمبراطوري، °C و«درجات مئوية»."
 
 #. TRANSLATORS: Long-press explainer for the 'Volume' category. UK and US pints and
 #. gallons are different sizes, hence the note about the book's origin.
-#: main.lua:8450
-msgid "Pints, quarts, gallons and fluid ounces — and in the imperial direction, liters and milliliters. UK and US gallons differ; Footcream picks the right one from the book."
-msgstr "الباينت والكوارت والغالون والأونصات السائلة — وفي الاتجاه الإمبراطوري، اللترات والملّيلترات. يختلف الغالون البريطاني عن الأمريكي؛ ويختار Footcream الصحيح بحسب الكتاب."
+#: main.lua:8395
+msgid ""
+"Pints, quarts, gallons and fluid ounces — and in the imperial direction, "
+"liters and milliliters. UK and US gallons differ; Footcream picks the right "
+"one from the book."
+msgstr ""
+"الباينت والكوارت والغالون والأونصات السائلة — وفي الاتجاه الإمبراطوري، "
+"اللترات والملّيلترات. يختلف الغالون البريطاني عن الأمريكي؛ ويختار Footcream "
+"الصحيح بحسب الكتاب."
 
 #. TRANSLATORS: Long-press explainer for the 'Speed' category.
-#: main.lua:8452
-msgid "Miles per hour and knots — and in the imperial direction, km/h and meters per second."
-msgstr "الأميال في الساعة والعُقد — وفي الاتجاه الإمبراطوري، km/h والأمتار في الثانية."
+#: main.lua:8397
+msgid ""
+"Miles per hour and knots — and in the imperial direction, km/h and meters "
+"per second."
+msgstr ""
+"الأميال في الساعة والعُقد — وفي الاتجاه الإمبراطوري، km/h والأمتار في الثانية."
 
 #. TRANSLATORS: Long-press explainer for the 'Area' category.
-#: main.lua:8454
-msgid "Acres and square miles/feet/yards — and in the imperial direction, hectares and square kilometers/meters/centimeters."
-msgstr "الأفدنة والأميال والأقدام والياردات المربعة — وفي الاتجاه الإمبراطوري، الهكتارات والكيلومترات والأمتار والسنتيمترات المربعة."
+#: main.lua:8399
+msgid ""
+"Acres and square miles/feet/yards — and in the imperial direction, hectares "
+"and square kilometers/meters/centimeters."
+msgstr ""
+"الأفدنة والأميال والأقدام والياردات المربعة — وفي الاتجاه الإمبراطوري، "
+"الهكتارات والكيلومترات والأمتار والسنتيمترات المربعة."
 
 #. TRANSLATORS: Long-press explainer for the hint-count line at the top of 'Menu >
 #. Footcream'.
-#: main.lua:8551
-msgid "How many measurements Footcream found in this book. The count always shows everything that was found, whichever mode you are in."
-msgstr "عدد القياسات التي وجدها Footcream في هذا الكتاب. يعرض الرقم دائمًا كل ما عُثر عليه، أيًّا كان الوضع الذي تستخدمه."
+#: main.lua:8496
+msgid ""
+"How many measurements Footcream found in this book. The count always shows "
+"everything that was found, whichever mode you are in."
+msgstr ""
+"عدد القياسات التي وجدها Footcream في هذا الكتاب. يعرض الرقم دائمًا كل ما عُثر "
+"عليه، أيًّا كان الوضع الذي تستخدمه."
 
 #. TRANSLATORS: Long-press explainer for 'Enable Footcream in this book'.
-#: main.lua:8566
-msgid "Turn Footcream off for this book only: no underlines, no conversions, no prompts — and a converted book gets its original text back. Other books are unaffected, and the choice is remembered for this book. To disable Footcream everywhere, use KOReader's plugin management."
-msgstr "أوقف Footcream لهذا الكتاب فقط: بلا تسطير، وبلا تحويلات، وبلا أسئلة — ويستعيد الكتاب المحوَّل نصه الأصلي. لن تتأثر الكتب الأخرى، ويُحفظ الاختيار لهذا الكتاب. لإيقاف Footcream في كل مكان، استخدم إدارة الإضافات في KOReader."
+#: main.lua:8511
+msgid ""
+"Turn Footcream off for this book only: no underlines, no conversions, no "
+"prompts — and a converted book gets its original text back. Other books are "
+"unaffected, and the choice is remembered for this book. To disable Footcream "
+"everywhere, use KOReader's plugin management."
+msgstr ""
+"أوقف Footcream لهذا الكتاب فقط: بلا تسطير، وبلا تحويلات، وبلا أسئلة — "
+"ويستعيد الكتاب المحوَّل نصه الأصلي. لن تتأثر الكتب الأخرى، ويُحفظ الاختيار لهذا "
+"الكتاب. لإيقاف Footcream في كل مكان، استخدم إدارة الإضافات في KOReader."
 
 #. TRANSLATORS: Long-press explainer for 'Convert units to'.
-#: main.lua:8624
-msgid "The unit system you want to read in. Metric converts imperial measurements (feet, miles, °F) to metric. The Imperial options do the reverse: they find metric measurements (meters, kilometers, kilos, °C) and show imperial values. Works in every mode; a converted book is restored and reconverted when you switch."
-msgstr "نظام الوحدات الذي تريد القراءة به. يحوِّل «المترية» القياسات الإمبراطورية (الأقدام والأميال و°F) إلى مترية. أما الخيارات الإمبراطورية فتفعل العكس: تجد القياسات المترية (الأمتار والكيلومترات والكيلوغرامات و°C) وتعرض قيمًا إمبراطورية. يعمل في كل الأوضاع؛ وعند التبديل يُستعاد الكتاب المحوَّل ثم يُحوَّل من جديد."
+#: main.lua:8569
+msgid ""
+"The unit system you want to read in. Metric converts imperial measurements "
+"(feet, miles, °F) to metric. The Imperial options do the reverse: they find "
+"metric measurements (meters, kilometers, kilos, °C) and show imperial "
+"values. Works in every mode; a converted book is restored and reconverted "
+"when you switch."
+msgstr ""
+"نظام الوحدات الذي تريد القراءة به. يحوِّل «المترية» القياسات الإمبراطورية "
+"(الأقدام والأميال و°F) إلى مترية. أما الخيارات الإمبراطورية فتفعل العكس: تجد "
+"القياسات المترية (الأمتار والكيلومترات والكيلوغرامات و°C) وتعرض قيمًا "
+"إمبراطورية. يعمل في كل الأوضاع؛ وعند التبديل يُستعاد الكتاب المحوَّل ثم يُحوَّل من "
+"جديد."
 
 #. TRANSLATORS: Long-press explainer for the 'Metric' choice.
-#: main.lua:8633
-msgid "Convert imperial measurements (feet, miles, pounds, °F, gallons…) to metric."
-msgstr "تحويل القياسات الإمبراطورية (الأقدام والأميال والأرطال و°F والغالونات…) إلى مترية."
+#: main.lua:8578
+msgid ""
+"Convert imperial measurements (feet, miles, pounds, °F, gallons…) to metric."
+msgstr ""
+"تحويل القياسات الإمبراطورية (الأقدام والأميال والأرطال و°F والغالونات…) إلى "
+"مترية."
 
 #. TRANSLATORS: Long-press explainer for the 'Imperial (US)' choice. The quoted
 #. measurements are examples of the output; 'm', 'ft' and 'in' are unit symbols and
 #. are not translated.
-#: main.lua:8647
-msgid "Convert metric measurements to US units: meters become feet and inches (\"1.8 m\" → \"5 ft 11 in\"), kilometers become miles, kilos become pounds, °C becomes °F, liters become quarts and gallons."
-msgstr "تحويل القياسات المترية إلى وحدات أمريكية: تصبح الأمتار أقدامًا وبوصات («1.8 m» → «5 ft 11 in»)، والكيلومترات أميالًا، والكيلوغرامات أرطالًا، وتصبح °C درجات °F، واللترات كوارتات وغالونات."
+#: main.lua:8592
+msgid ""
+"Convert metric measurements to US units: meters become feet and inches "
+"(\"1.8 m\" → \"5 ft 11 in\"), kilometers become miles, kilos become pounds, "
+"°C becomes °F, liters become quarts and gallons."
+msgstr ""
+"تحويل القياسات المترية إلى وحدات أمريكية: تصبح الأمتار أقدامًا وبوصات («1.8 "
+"m» → «5 ft 11 in»)، والكيلومترات أميالًا، والكيلوغرامات أرطالًا، وتصبح °C "
+"درجات °F، واللترات كوارتات وغالونات."
 
 #. TRANSLATORS: Long-press explainer for the 'Imperial (UK)' choice. The quoted
 #. measurements are examples of the output; 'kg', 'st' and 'lb' are unit symbols
 #. and are not translated.
-#: main.lua:8662
-msgid "Like Imperial (US), but with UK measures: body weights in stones (\"75 kg\" → \"11 st 11 lb\") and volumes in imperial pints and gallons."
-msgstr "مثل «إمبراطورية (الولايات المتحدة)»، لكن بالمقاييس البريطانية: أوزان الجسم بالستون («75 kg» → «11 st 11 lb») والأحجام بالباينت والغالون البريطانيين."
+#: main.lua:8607
+msgid ""
+"Like Imperial (US), but with UK measures: body weights in stones (\"75 kg\" "
+"→ \"11 st 11 lb\") and volumes in imperial pints and gallons."
+msgstr ""
+"مثل «إمبراطورية (الولايات المتحدة)»، لكن بالمقاييس البريطانية: أوزان الجسم "
+"بالستون («75 kg» → «11 st 11 lb») والأحجام بالباينت والغالون البريطانيين."
 
 #. TRANSLATORS: Long-press explainer for the 'Mode' entry.
-#: main.lua:8689
-msgid "How conversions are shown while you read. Opens a picker showing a sample sentence in each of the three modes; the change is applied to the book when you leave the menu. The two \"written into the text\" modes rewrite the book file itself — fully reversible at any time. In the \"converted only\" mode, the Advanced option \"Show original unit in tooltip\" lets you tap a converted value to see the original text."
-msgstr "كيف تظهر التحويلات أثناء القراءة. يفتح منتقيًا يعرض جملة نموذجية في كل وضع من الأوضاع الثلاثة؛ ويُطبَّق التغيير على الكتاب عند مغادرة القائمة. الوضعان اللذان «يكتبان داخل النص» يعيدان كتابة ملف الكتاب نفسه — ويمكن التراجع عنهما بالكامل في أي وقت. وفي وضع «القيمة المحوَّلة فقط»، يتيح لك خيار «إظهار الوحدة الأصلية في التلميح» المتقدم أن تضغط على قيمة محوَّلة لترى النص الأصلي."
+#: main.lua:8634
+msgid ""
+"How conversions are shown while you read. Opens a picker showing a sample "
+"sentence in each of the three modes; the change is applied to the book when "
+"you leave the menu. The two \"written into the text\" modes rewrite the book "
+"file itself — fully reversible at any time. In the \"converted only\" mode, "
+"the Advanced option \"Show original unit in tooltip\" lets you tap a "
+"converted value to see the original text."
+msgstr ""
+"كيف تظهر التحويلات أثناء القراءة. يفتح منتقيًا يعرض جملة نموذجية في كل وضع من "
+"الأوضاع الثلاثة؛ ويُطبَّق التغيير على الكتاب عند مغادرة القائمة. الوضعان اللذان "
+"«يكتبان داخل النص» يعيدان كتابة ملف الكتاب نفسه — ويمكن التراجع عنهما "
+"بالكامل في أي وقت. وفي وضع «القيمة المحوَّلة فقط»، يتيح لك خيار «إظهار الوحدة "
+"الأصلية في التلميح» المتقدم أن تضغط على قيمة محوَّلة لترى النص الأصلي."
 
 #. TRANSLATORS: Long-press explainer for 'Auto-scan when opening a new book'.
-#: main.lua:8709
-msgid "Scan every new book automatically when you open it. Only English books are scanned — other languages are left alone. Turn this off to scan books one by one with \"Scan book\"."
-msgstr "فحص كل كتاب جديد تلقائيًا عند فتحه. تُفحص الكتب الإنجليزية فقط — ولا تُمسّ اللغات الأخرى. أوقف هذا الخيار لفحص الكتب واحدًا تلو الآخر عبر «فحص الكتاب»."
+#: main.lua:8654
+msgid ""
+"Scan every new book automatically when you open it. Only English books are "
+"scanned — other languages are left alone. Turn this off to scan books one by "
+"one with \"Scan book\"."
+msgstr ""
+"فحص كل كتاب جديد تلقائيًا عند فتحه. تُفحص الكتب الإنجليزية فقط — ولا تُمسّ "
+"اللغات الأخرى. أوقف هذا الخيار لفحص الكتب واحدًا تلو الآخر عبر «فحص الكتاب»."
 
 #. TRANSLATORS: Long-press explainer for the 'Scan book' / 'Rescan book' entry.
-#: main.lua:8732
-msgid "Scan this book now, or scan it again from scratch. The scan runs in the background, so you can keep reading while it works. Results are saved, so reopening the book later is instant."
-msgstr "افحص هذا الكتاب الآن، أو افحصه من جديد من البداية. يجري الفحص في الخلفية، فيمكنك مواصلة القراءة أثناء عمله. وتُحفظ النتائج، لذا يكون فتح الكتاب لاحقًا فوريًا."
+#: main.lua:8677
+msgid ""
+"Scan this book now, or scan it again from scratch. The scan runs in the "
+"background, so you can keep reading while it works. Results are saved, so "
+"reopening the book later is instant."
+msgstr ""
+"افحص هذا الكتاب الآن، أو افحصه من جديد من البداية. يجري الفحص في الخلفية، "
+"فيمكنك مواصلة القراءة أثناء عمله. وتُحفظ النتائج، لذا يكون فتح الكتاب لاحقًا "
+"فوريًا."
 
 #. TRANSLATORS: Long-press explainer for 'Styling'.
-#: main.lua:8813
-msgid "Customise how underlines look (solid or wavy, intensity, thickness) and the tooltip (size, unit icon), with a live preview. Drag the dialog around if it covers the text you want to see."
-msgstr "خصِّص شكل التسطير (متصل أو متموج، الشدة، السماكة) والتلميح (الحجم، رمز الوحدة)، مع معاينة حية. اسحب النافذة إن كانت تغطي النص الذي تريد رؤيته."
+#: main.lua:8758
+msgid ""
+"Customise how underlines look (solid or wavy, intensity, thickness) and the "
+"tooltip (size, unit icon), with a live preview. Drag the dialog around if it "
+"covers the text you want to see."
+msgstr ""
+"خصِّص شكل التسطير (متصل أو متموج، الشدة، السماكة) والتلميح (الحجم، رمز "
+"الوحدة)، مع معاينة حية. اسحب النافذة إن كانت تغطي النص الذي تريد رؤيته."
 
 #. TRANSLATORS: Long-press explainer for 'Check for updates'.
-#: main.lua:8829
-msgid "Check GitHub for a newer Footcream release and install it in place. Needs Wi-Fi; you'll be asked to restart KOReader when it's done."
-msgstr "التحقق من وجود إصدار أحدث من Footcream على GitHub وتثبيته مكانه. يحتاج إلى Wi-Fi؛ وسيُطلب منك إعادة تشغيل KOReader عند الانتهاء."
+#: main.lua:8774
+msgid ""
+"Check GitHub for a newer Footcream release and install it in place. Needs Wi-"
+"Fi; you'll be asked to restart KOReader when it's done."
+msgstr ""
+"التحقق من وجود إصدار أحدث من Footcream على GitHub وتثبيته مكانه. يحتاج إلى "
+"Wi-Fi؛ وسيُطلب منك إعادة تشغيل KOReader عند الانتهاء."
 
 #. TRANSLATORS: Long-press explainer for the 'Advanced' submenu.
-#: main.lua:8842
-msgid "Extra options: unit categories, rounding, original-unit tooltips, error reporting to the developer, per-book cleanup, and debug tools."
-msgstr "خيارات إضافية: فئات الوحدات، والتقريب، وتلميحات الوحدة الأصلية، والإبلاغ عن الأخطاء إلى المطوِّر، والتنظيف لكل كتاب على حدة، وأدوات التشخيص."
+#: main.lua:8787
+msgid ""
+"Extra options: unit categories, rounding, original-unit tooltips, error "
+"reporting to the developer, per-book cleanup, and debug tools."
+msgstr ""
+"خيارات إضافية: فئات الوحدات، والتقريب، وتلميحات الوحدة الأصلية، والإبلاغ عن "
+"الأخطاء إلى المطوِّر، والتنظيف لكل كتاب على حدة، وأدوات التشخيص."
 
 #. TRANSLATORS: Long-press explainer for 'Unit categories'.
-#: main.lua:8849
-msgid "Choose which kinds of measurements are converted. Anything you untick is ignored everywhere — no underlines, popups or in-text conversions for that category."
-msgstr "اختر أنواع القياسات التي تُحوَّل. كل ما تلغي تحديده يُتجاهل في كل مكان — بلا تسطير ولا تلميحات ولا تحويلات داخل النص لتلك الفئة."
+#: main.lua:8794
+msgid ""
+"Choose which kinds of measurements are converted. Anything you untick is "
+"ignored everywhere — no underlines, popups or in-text conversions for that "
+"category."
+msgstr ""
+"اختر أنواع القياسات التي تُحوَّل. كل ما تلغي تحديده يُتجاهل في كل مكان — بلا "
+"تسطير ولا تلميحات ولا تحويلات داخل النص لتلك الفئة."
 
 #. TRANSLATORS: Long-press explainer for 'Smart rounding for conversions'. The
 #. quoted values are examples; 'm' is the metre symbol, not translated.
-#: main.lua:8858
-msgid "Round conversions to friendly, readable values — \"90 m\" instead of \"91.44 m\". Turn off if you prefer exact numbers."
-msgstr "تقريب التحويلات إلى قيم مريحة وسهلة القراءة — «90 m» بدلًا من «91.44 m». أوقفه إن كنت تفضل الأرقام الدقيقة."
+#: main.lua:8803
+msgid ""
+"Round conversions to friendly, readable values — \"90 m\" instead of \"91.44 "
+"m\". Turn off if you prefer exact numbers."
+msgstr ""
+"تقريب التحويلات إلى قيم مريحة وسهلة القراءة — «90 m» بدلًا من «91.44 m». "
+"أوقفه إن كنت تفضل الأرقام الدقيقة."
 
 #. TRANSLATORS: Long-press explainer for 'Show original unit in tooltip'.
-#: main.lua:8899
-msgid "In the \"only (in text)\" mode, underline the converted values so you can tap any of them and see the original text. Handy if you want to double-check a conversion against what the author wrote."
-msgstr "في وضع «فقط (في النص)»، تُسطَّر القيم المحوَّلة لتتمكن من الضغط على أي منها ورؤية النص الأصلي. مفيد إن أردت مقارنة تحويل بما كتبه المؤلف."
+#: main.lua:8844
+msgid ""
+"In the \"only (in text)\" mode, underline the converted values so you can "
+"tap any of them and see the original text. Handy if you want to double-check "
+"a conversion against what the author wrote."
+msgstr ""
+"في وضع «فقط (في النص)»، تُسطَّر القيم المحوَّلة لتتمكن من الضغط على أي منها ورؤية "
+"النص الأصلي. مفيد إن أردت مقارنة تحويل بما كتبه المؤلف."
 
 #. TRANSLATORS: Long-press explainer for 'Long-press units to send errors to the
 #. developer'.
-#: main.lua:8934
-msgid "Flag bad conversions while you read: long-press a unit (or select text Footcream missed) and the error is sent anonymously to the developer. Each flag contains the book title, the measurement, its conversion and the surrounding sentence — nothing else. Works offline: flags are queued and sent when you're connected."
-msgstr "أبلغ عن التحويلات الخاطئة أثناء القراءة: اضغط مطولًا على وحدة (أو حدد نصًا فات Footcream) فيُرسل الخطأ إلى المطوِّر بشكل مجهول. يحتوي كل بلاغ على عنوان الكتاب والقياس وتحويله والجملة المحيطة به — لا شيء غير ذلك. ويعمل دون اتصال: تُصفّ البلاغات وتُرسل عند الاتصال."
+#: main.lua:8879
+msgid ""
+"Flag bad conversions while you read: long-press a unit (or select text "
+"Footcream missed) and the error is sent anonymously to the developer. Each "
+"flag contains the book title, the measurement, its conversion and the "
+"surrounding sentence — nothing else. Works offline: flags are queued and "
+"sent when you're connected."
+msgstr ""
+"أبلغ عن التحويلات الخاطئة أثناء القراءة: اضغط مطولًا على وحدة (أو حدد نصًا فات "
+"Footcream) فيُرسل الخطأ إلى المطوِّر بشكل مجهول. يحتوي كل بلاغ على عنوان الكتاب "
+"والقياس وتحويله والجملة المحيطة به — لا شيء غير ذلك. ويعمل دون اتصال: تُصفّ "
+"البلاغات وتُرسل عند الاتصال."
 
 #. TRANSLATORS: Long-press explainer for 'Remove Footcream data from this book'.
-#: main.lua:8968
-msgid "Undo everything for this book: restore the original text, remove all underlines and delete the saved scan. The book file goes back to exactly how it was before Footcream touched it."
-msgstr "تراجع عن كل شيء في هذا الكتاب: استعادة النص الأصلي، وإزالة كل التسطير، وحذف الفحص المحفوظ. يعود ملف الكتاب تمامًا إلى ما كان عليه قبل أن يمسّه Footcream."
+#: main.lua:8913
+msgid ""
+"Undo everything for this book: restore the original text, remove all "
+"underlines and delete the saved scan. The book file goes back to exactly how "
+"it was before Footcream touched it."
+msgstr ""
+"تراجع عن كل شيء في هذا الكتاب: استعادة النص الأصلي، وإزالة كل التسطير، وحذف "
+"الفحص المحفوظ. يعود ملف الكتاب تمامًا إلى ما كان عليه قبل أن يمسّه Footcream."
 
 #. TRANSLATORS: Long-press explainer for the 'Debug' submenu.
-#: main.lua:9010
-msgid "See exactly what the scan found in this book, and manage errors you've flagged on this device."
-msgstr "اطّلع بدقة على ما وجده الفحص في هذا الكتاب، وأدر الأخطاء التي أبلغت عنها على هذا الجهاز."
+#: main.lua:8955
+msgid ""
+"See exactly what the scan found in this book, and manage errors you've "
+"flagged on this device."
+msgstr ""
+"اطّلع بدقة على ما وجده الفحص في هذا الكتاب، وأدر الأخطاء التي أبلغت عنها على "
+"هذا الجهاز."
 
 #. TRANSLATORS: Long-press explainer for 'Units in book (list)'.
-#: main.lua:9017
-msgid "Every measurement found in this book, with its detected value and conversion. Long-press an entry to flag it as wrong."
-msgstr "كل قياس عُثر عليه في هذا الكتاب، مع القيمة المكتشَفة وتحويلها. اضغط مطولًا على أي مُدخل للإبلاغ عنه كخطأ."
+#: main.lua:8962
+msgid ""
+"Every measurement found in this book, with its detected value and "
+"conversion. Long-press an entry to flag it as wrong."
+msgstr ""
+"كل قياس عُثر عليه في هذا الكتاب، مع القيمة المكتشَفة وتحويلها. اضغط مطولًا على "
+"أي مُدخل للإبلاغ عنه كخطأ."
 
 #. TRANSLATORS: Long-press explainer for 'View flagged errors'. The path in
 #. parentheses is a file location - leave it as it is.
-#: main.lua:9032
-msgid "Show the errors you've flagged on this device. They're kept in a plain-text file (koreader/footcream/flagged_errors.txt) that you can also attach to a GitHub issue."
-msgstr "عرض الأخطاء التي أبلغت عنها على هذا الجهاز. تُحفظ في ملف نصي بسيط (koreader/footcream/flagged_errors.txt) يمكنك أيضًا إرفاقه بمسألة على GitHub."
+#: main.lua:8977
+msgid ""
+"Show the errors you've flagged on this device. They're kept in a plain-text "
+"file (koreader/footcream/flagged_errors.txt) that you can also attach to a "
+"GitHub issue."
+msgstr ""
+"عرض الأخطاء التي أبلغت عنها على هذا الجهاز. تُحفظ في ملف نصي بسيط (koreader/"
+"footcream/flagged_errors.txt) يمكنك أيضًا إرفاقه بمسألة على GitHub."
 
 #. TRANSLATORS: Long-press explainer for 'Clear flagged errors'.
-#: main.lua:9042
-msgid "Delete the local flagged-errors file. Reports that were already sent to the developer are not affected."
-msgstr "حذف ملف الأخطاء المُبلَّغ عنها المحلي. لا يؤثر ذلك على البلاغات التي أُرسلت بالفعل إلى المطوِّر."
-
+#: main.lua:8987
+msgid ""
+"Delete the local flagged-errors file. Reports that were already sent to the "
+"developer are not affected."
+msgstr ""
+"حذف ملف الأخطاء المُبلَّغ عنها المحلي. لا يؤثر ذلك على البلاغات التي أُرسلت "
+"بالفعل إلى المطوِّر."

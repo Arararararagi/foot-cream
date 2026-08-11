@@ -35,16 +35,19 @@ have to grind through the explainers before your work is worth shipping.
 
 ## What is *not* translated (on purpose)
 
-Measurement output — "1,8 m", "5 ft 11 in", "23 °C" — is generated in code,
+Measurement output — "1.8 m", "5 ft 11 in", "23 °C" — is generated in code,
 not translated. Two reasons:
 
-- **Numbers are locale data, not judgement.** Whether your language writes
-  `1.8` or `1,8` has one correct answer, so the plugin derives it from your
-  UI language rather than asking a translator. If Footcream shows the wrong
-  decimal mark for your language, that's a **bug — please report it**, not
-  something to fix in a translation.
 - **Unit symbols are standardised.** `m`, `km`, `kg`, `°C` are the same in
   every language, and translating them would mostly introduce errors.
+- **The decimal mark is a period for everyone**, including languages that
+  write `1,8` in ordinary prose. This is deliberate and is *not* a bug —
+  please don't report it as one. Footcream did briefly derive the mark from
+  the UI language, and it was removed before shipping: in the two modes that
+  rewrite the book's text, it put "1,8 m" into a paragraph the author had
+  written as "1.8", so a single paragraph disagreed with itself. If per-locale
+  number formatting comes back it will be an explicit setting the reader
+  chooses, not something inferred from the interface language.
 
 This matters because in the "written into the text" modes those numbers are
 written into the reader's own book file, so they're held to a higher bar
@@ -126,9 +129,11 @@ translations flow Crowdin → repo, and neither direction is contested.
 - Variables look like `%1`, `%2`, etc. — keep them exactly as `%N` (no space
   after the `%`) but feel free to reorder them if your language's word order
   needs it. Crowdin will flag a translation that drops or invents one.
-- Plural strings may need more or fewer forms than English's two — Polish
-  needs three, for instance. Crowdin's editor shows exactly how many your
-  language takes and gives you a box for each.
+- Plural strings may need more or fewer forms than English's two. Crowdin
+  uses CLDR categories, which are NOT gettext's — Polish takes four there,
+  not the three a gettext table would give you, and Arabic takes six.
+  Crowdin's editor shows exactly how many your language takes and gives you
+  a box for each; trust it over any gettext reference.
 
 ## Review — how a language ships
 

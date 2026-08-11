@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: foot-cream\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-10 14:40+0200\n"
+"POT-Creation-Date: 2026-08-11 14:48+0200\n"
 "PO-Revision-Date: 2026-08-10 17:43\n"
 "Last-Translator: \n"
 "Language-Team: Romanian\n"
@@ -10,7 +10,8 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Plural-Forms: nplurals=3; plural=(n==1 ? 0 : (n==0 || (n%100>0 && n%100<20)) ? 1 : 2);\n"
+"Plural-Forms: nplurals=3; plural=(n==1 ? 0 : (n==0 || (n%100>0 && "
+"n%100<20)) ? 1 : 2);\n"
 "X-Crowdin-Project: foot-cream\n"
 "X-Crowdin-Project-ID: 919191\n"
 "X-Crowdin-Language: ro\n"
@@ -20,147 +21,295 @@ msgstr ""
 #. TRANSLATORS: Long-press explainer for the 'Length & Distance' category. The unit
 #. names are English measurement words - use your language's names for the same
 #. units.
-#: main.lua:8442
-msgid "Inches, feet, yards, miles, fathoms, furlongs, leagues, cubits — and in the imperial direction: millimeters, centimeters, meters, kilometers."
-msgstr "Inci, picioare, iarzi, mile, brațe, furlongi, leghe și coți — și în sens imperial: milimetri, centimetri, metri și kilometri."
+#: main.lua:8387
+msgid ""
+"Inches, feet, yards, miles, fathoms, furlongs, leagues, cubits — and in the "
+"imperial direction: millimeters, centimeters, meters, kilometers."
+msgstr ""
+"Inci, picioare, iarzi, mile, brațe, furlongi, leghe și coți — și în sens "
+"imperial: milimetri, centimetri, metri și kilometri."
 
 #. TRANSLATORS: Long-press explainer for the 'Weight' category. Tons are left alone
 #. on purpose because the word means several different quantities.
-#: main.lua:8445
-msgid "Ounces, pounds and stone — and in the imperial direction: grams and kilos. Tons are deliberately not converted (the word is too ambiguous)."
-msgstr "Uncii, livre și stone — și în sens imperial: grame și kilograme. Tonele nu sunt convertite intenționat (cuvântul este prea ambiguu)."
+#: main.lua:8390
+msgid ""
+"Ounces, pounds and stone — and in the imperial direction: grams and kilos. "
+"Tons are deliberately not converted (the word is too ambiguous)."
+msgstr ""
+"Uncii, livre și stone — și în sens imperial: grame și kilograme. Tonele nu "
+"sunt convertite intenționat (cuvântul este prea ambiguu)."
 
 #. TRANSLATORS: Long-press explainer for the 'Temperature' category.
-#: main.lua:8447
-msgid "°F and \"degrees Fahrenheit\" — and in the imperial direction, °C and \"degrees Celsius\"."
+#: main.lua:8392
+msgid ""
+"°F and \"degrees Fahrenheit\" — and in the imperial direction, °C and "
+"\"degrees Celsius\"."
 msgstr "°F și „grade Fahrenheit” — și în sens imperial, °C și „grade Celsius”."
 
 #. TRANSLATORS: Long-press explainer for the 'Volume' category. UK and US pints and
 #. gallons are different sizes, hence the note about the book's origin.
-#: main.lua:8450
-msgid "Pints, quarts, gallons and fluid ounces — and in the imperial direction, liters and milliliters. UK and US gallons differ; Footcream picks the right one from the book."
-msgstr "Pinte, quarte, galoane și uncii lichide — și în sens imperial, litri și mililitri. Galonul britanic și cel american diferă; Footcream îl alege pe cel corect în funcție de carte."
+#: main.lua:8395
+msgid ""
+"Pints, quarts, gallons and fluid ounces — and in the imperial direction, "
+"liters and milliliters. UK and US gallons differ; Footcream picks the right "
+"one from the book."
+msgstr ""
+"Pinte, quarte, galoane și uncii lichide — și în sens imperial, litri și "
+"mililitri. Galonul britanic și cel american diferă; Footcream îl alege pe "
+"cel corect în funcție de carte."
 
 #. TRANSLATORS: Long-press explainer for the 'Speed' category.
-#: main.lua:8452
-msgid "Miles per hour and knots — and in the imperial direction, km/h and meters per second."
+#: main.lua:8397
+msgid ""
+"Miles per hour and knots — and in the imperial direction, km/h and meters "
+"per second."
 msgstr "Mile pe oră și noduri — și în sens imperial, km/h și metri pe secundă."
 
 #. TRANSLATORS: Long-press explainer for the 'Area' category.
-#: main.lua:8454
-msgid "Acres and square miles/feet/yards — and in the imperial direction, hectares and square kilometers/meters/centimeters."
-msgstr "Acri și mile, picioare și iarzi pătrați — și în sens imperial, hectare și kilometri, metri și centimetri pătrați."
+#: main.lua:8399
+msgid ""
+"Acres and square miles/feet/yards — and in the imperial direction, hectares "
+"and square kilometers/meters/centimeters."
+msgstr ""
+"Acri și mile, picioare și iarzi pătrați — și în sens imperial, hectare și "
+"kilometri, metri și centimetri pătrați."
 
 #. TRANSLATORS: Long-press explainer for the hint-count line at the top of 'Menu >
 #. Footcream'.
-#: main.lua:8551
-msgid "How many measurements Footcream found in this book. The count always shows everything that was found, whichever mode you are in."
-msgstr "Câte măsurători a găsit Footcream în această carte. Numărul arată întotdeauna tot ce a fost găsit, indiferent de modul folosit."
+#: main.lua:8496
+msgid ""
+"How many measurements Footcream found in this book. The count always shows "
+"everything that was found, whichever mode you are in."
+msgstr ""
+"Câte măsurători a găsit Footcream în această carte. Numărul arată "
+"întotdeauna tot ce a fost găsit, indiferent de modul folosit."
 
 #. TRANSLATORS: Long-press explainer for 'Enable Footcream in this book'.
-#: main.lua:8566
-msgid "Turn Footcream off for this book only: no underlines, no conversions, no prompts — and a converted book gets its original text back. Other books are unaffected, and the choice is remembered for this book. To disable Footcream everywhere, use KOReader's plugin management."
-msgstr "Dezactivează Footcream doar pentru această carte: fără sublinieri, fără conversii, fără întrebări — iar o carte convertită își recapătă textul original. Celelalte cărți nu sunt afectate, iar alegerea este reținută pentru această carte. Pentru a dezactiva Footcream peste tot, folosește gestionarea extensiilor din KOReader."
+#: main.lua:8511
+msgid ""
+"Turn Footcream off for this book only: no underlines, no conversions, no "
+"prompts — and a converted book gets its original text back. Other books are "
+"unaffected, and the choice is remembered for this book. To disable Footcream "
+"everywhere, use KOReader's plugin management."
+msgstr ""
+"Dezactivează Footcream doar pentru această carte: fără sublinieri, fără "
+"conversii, fără întrebări — iar o carte convertită își recapătă textul "
+"original. Celelalte cărți nu sunt afectate, iar alegerea este reținută "
+"pentru această carte. Pentru a dezactiva Footcream peste tot, folosește "
+"gestionarea extensiilor din KOReader."
 
 #. TRANSLATORS: Long-press explainer for 'Convert units to'.
-#: main.lua:8624
-msgid "The unit system you want to read in. Metric converts imperial measurements (feet, miles, °F) to metric. The Imperial options do the reverse: they find metric measurements (meters, kilometers, kilos, °C) and show imperial values. Works in every mode; a converted book is restored and reconverted when you switch."
-msgstr "Sistemul de unități în care vrei să citești. Metric convertește măsurătorile imperiale (picioare, mile, °F) în metrice. Opțiunile imperiale fac invers: găsesc măsurători metrice (metri, kilometri, kilograme, °C) și arată valori imperiale. Funcționează în toate modurile; o carte convertită este restaurată și convertită din nou când schimbi opțiunea."
+#: main.lua:8569
+msgid ""
+"The unit system you want to read in. Metric converts imperial measurements "
+"(feet, miles, °F) to metric. The Imperial options do the reverse: they find "
+"metric measurements (meters, kilometers, kilos, °C) and show imperial "
+"values. Works in every mode; a converted book is restored and reconverted "
+"when you switch."
+msgstr ""
+"Sistemul de unități în care vrei să citești. Metric convertește măsurătorile "
+"imperiale (picioare, mile, °F) în metrice. Opțiunile imperiale fac invers: "
+"găsesc măsurători metrice (metri, kilometri, kilograme, °C) și arată valori "
+"imperiale. Funcționează în toate modurile; o carte convertită este "
+"restaurată și convertită din nou când schimbi opțiunea."
 
 #. TRANSLATORS: Long-press explainer for the 'Metric' choice.
-#: main.lua:8633
-msgid "Convert imperial measurements (feet, miles, pounds, °F, gallons…) to metric."
-msgstr "Convertește măsurătorile imperiale (picioare, mile, livre, °F, galoane…) în metrice."
+#: main.lua:8578
+msgid ""
+"Convert imperial measurements (feet, miles, pounds, °F, gallons…) to metric."
+msgstr ""
+"Convertește măsurătorile imperiale (picioare, mile, livre, °F, galoane…) în "
+"metrice."
 
 #. TRANSLATORS: Long-press explainer for the 'Imperial (US)' choice. The quoted
 #. measurements are examples of the output; 'm', 'ft' and 'in' are unit symbols and
 #. are not translated.
-#: main.lua:8647
-msgid "Convert metric measurements to US units: meters become feet and inches (\"1.8 m\" → \"5 ft 11 in\"), kilometers become miles, kilos become pounds, °C becomes °F, liters become quarts and gallons."
-msgstr "Convertește măsurătorile metrice în unități americane: metrii devin picioare și inci („1.8 m” → „5 ft 11 in”), kilometrii devin mile, kilogramele devin livre, °C devine °F, litrii devin quarte și galoane."
+#: main.lua:8592
+msgid ""
+"Convert metric measurements to US units: meters become feet and inches "
+"(\"1.8 m\" → \"5 ft 11 in\"), kilometers become miles, kilos become pounds, "
+"°C becomes °F, liters become quarts and gallons."
+msgstr ""
+"Convertește măsurătorile metrice în unități americane: metrii devin picioare "
+"și inci („1.8 m” → „5 ft 11 in”), kilometrii devin mile, kilogramele devin "
+"livre, °C devine °F, litrii devin quarte și galoane."
 
 #. TRANSLATORS: Long-press explainer for the 'Imperial (UK)' choice. The quoted
 #. measurements are examples of the output; 'kg', 'st' and 'lb' are unit symbols
 #. and are not translated.
-#: main.lua:8662
-msgid "Like Imperial (US), but with UK measures: body weights in stones (\"75 kg\" → \"11 st 11 lb\") and volumes in imperial pints and gallons."
-msgstr "La fel ca Imperial (SUA), dar cu măsuri britanice: greutățile corporale în stone („75 kg” → „11 st 11 lb”) și volumele în pinte și galoane imperiale."
+#: main.lua:8607
+msgid ""
+"Like Imperial (US), but with UK measures: body weights in stones (\"75 kg\" "
+"→ \"11 st 11 lb\") and volumes in imperial pints and gallons."
+msgstr ""
+"La fel ca Imperial (SUA), dar cu măsuri britanice: greutățile corporale în "
+"stone („75 kg” → „11 st 11 lb”) și volumele în pinte și galoane imperiale."
 
 #. TRANSLATORS: Long-press explainer for the 'Mode' entry.
-#: main.lua:8689
-msgid "How conversions are shown while you read. Opens a picker showing a sample sentence in each of the three modes; the change is applied to the book when you leave the menu. The two \"written into the text\" modes rewrite the book file itself — fully reversible at any time. In the \"converted only\" mode, the Advanced option \"Show original unit in tooltip\" lets you tap a converted value to see the original text."
-msgstr "Cum sunt afișate conversiile în timp ce citești. Deschide un selector cu o propoziție exemplu în fiecare dintre cele trei moduri; modificarea se aplică cărții când ieși din meniu. Cele două moduri care scriu în text modifică însuși fișierul cărții — complet reversibil oricând. În modul „doar conversia”, opțiunea avansată „Arată unitatea originală în casetă” îți permite să atingi o valoare convertită pentru a vedea textul original."
+#: main.lua:8634
+msgid ""
+"How conversions are shown while you read. Opens a picker showing a sample "
+"sentence in each of the three modes; the change is applied to the book when "
+"you leave the menu. The two \"written into the text\" modes rewrite the book "
+"file itself — fully reversible at any time. In the \"converted only\" mode, "
+"the Advanced option \"Show original unit in tooltip\" lets you tap a "
+"converted value to see the original text."
+msgstr ""
+"Cum sunt afișate conversiile în timp ce citești. Deschide un selector cu o "
+"propoziție exemplu în fiecare dintre cele trei moduri; modificarea se aplică "
+"cărții când ieși din meniu. Cele două moduri care scriu în text modifică "
+"însuși fișierul cărții — complet reversibil oricând. În modul „doar "
+"conversia”, opțiunea avansată „Arată unitatea originală în casetă” îți "
+"permite să atingi o valoare convertită pentru a vedea textul original."
 
 #. TRANSLATORS: Long-press explainer for 'Auto-scan when opening a new book'.
-#: main.lua:8709
-msgid "Scan every new book automatically when you open it. Only English books are scanned — other languages are left alone. Turn this off to scan books one by one with \"Scan book\"."
-msgstr "Scanează automat fiecare carte nouă la deschidere. Se scanează doar cărțile în engleză — celelalte limbi sunt lăsate neatinse. Dezactivează pentru a scana cărțile una câte una cu „Scanează cartea”."
+#: main.lua:8654
+msgid ""
+"Scan every new book automatically when you open it. Only English books are "
+"scanned — other languages are left alone. Turn this off to scan books one by "
+"one with \"Scan book\"."
+msgstr ""
+"Scanează automat fiecare carte nouă la deschidere. Se scanează doar cărțile "
+"în engleză — celelalte limbi sunt lăsate neatinse. Dezactivează pentru a "
+"scana cărțile una câte una cu „Scanează cartea”."
 
 #. TRANSLATORS: Long-press explainer for the 'Scan book' / 'Rescan book' entry.
-#: main.lua:8732
-msgid "Scan this book now, or scan it again from scratch. The scan runs in the background, so you can keep reading while it works. Results are saved, so reopening the book later is instant."
-msgstr "Scanează această carte acum sau reia scanarea de la zero. Scanarea rulează în fundal, așa că poți continua să citești. Rezultatele sunt salvate, deci redeschiderea cărții mai târziu este instantanee."
+#: main.lua:8677
+msgid ""
+"Scan this book now, or scan it again from scratch. The scan runs in the "
+"background, so you can keep reading while it works. Results are saved, so "
+"reopening the book later is instant."
+msgstr ""
+"Scanează această carte acum sau reia scanarea de la zero. Scanarea rulează "
+"în fundal, așa că poți continua să citești. Rezultatele sunt salvate, deci "
+"redeschiderea cărții mai târziu este instantanee."
 
 #. TRANSLATORS: Long-press explainer for 'Styling'.
-#: main.lua:8813
-msgid "Customise how underlines look (solid or wavy, intensity, thickness) and the tooltip (size, unit icon), with a live preview. Drag the dialog around if it covers the text you want to see."
-msgstr "Personalizează aspectul sublinierilor (continue sau ondulate, intensitate, grosime) și al casetei de informații (dimensiune, pictograma unității), cu previzualizare în timp real. Trage fereastra dacă acoperă textul pe care vrei să-l vezi."
+#: main.lua:8758
+msgid ""
+"Customise how underlines look (solid or wavy, intensity, thickness) and the "
+"tooltip (size, unit icon), with a live preview. Drag the dialog around if it "
+"covers the text you want to see."
+msgstr ""
+"Personalizează aspectul sublinierilor (continue sau ondulate, intensitate, "
+"grosime) și al casetei de informații (dimensiune, pictograma unității), cu "
+"previzualizare în timp real. Trage fereastra dacă acoperă textul pe care "
+"vrei să-l vezi."
 
 #. TRANSLATORS: Long-press explainer for 'Check for updates'.
-#: main.lua:8829
-msgid "Check GitHub for a newer Footcream release and install it in place. Needs Wi-Fi; you'll be asked to restart KOReader when it's done."
-msgstr "Caută pe GitHub o versiune mai nouă de Footcream și instaleaz-o direct. Necesită Wi-Fi; la final ți se va cere să repornești KOReader."
+#: main.lua:8774
+msgid ""
+"Check GitHub for a newer Footcream release and install it in place. Needs Wi-"
+"Fi; you'll be asked to restart KOReader when it's done."
+msgstr ""
+"Caută pe GitHub o versiune mai nouă de Footcream și instaleaz-o direct. "
+"Necesită Wi-Fi; la final ți se va cere să repornești KOReader."
 
 #. TRANSLATORS: Long-press explainer for the 'Advanced' submenu.
-#: main.lua:8842
-msgid "Extra options: unit categories, rounding, original-unit tooltips, error reporting to the developer, per-book cleanup, and debug tools."
-msgstr "Opțiuni suplimentare: categorii de unități, rotunjire, casete cu unitatea originală, raportarea erorilor către dezvoltator, curățare per carte și instrumente de diagnosticare."
+#: main.lua:8787
+msgid ""
+"Extra options: unit categories, rounding, original-unit tooltips, error "
+"reporting to the developer, per-book cleanup, and debug tools."
+msgstr ""
+"Opțiuni suplimentare: categorii de unități, rotunjire, casete cu unitatea "
+"originală, raportarea erorilor către dezvoltator, curățare per carte și "
+"instrumente de diagnosticare."
 
 #. TRANSLATORS: Long-press explainer for 'Unit categories'.
-#: main.lua:8849
-msgid "Choose which kinds of measurements are converted. Anything you untick is ignored everywhere — no underlines, popups or in-text conversions for that category."
-msgstr "Alege ce tipuri de măsurători sunt convertite. Tot ce debifezi este ignorat peste tot — fără sublinieri, casete sau conversii în text pentru acea categorie."
+#: main.lua:8794
+msgid ""
+"Choose which kinds of measurements are converted. Anything you untick is "
+"ignored everywhere — no underlines, popups or in-text conversions for that "
+"category."
+msgstr ""
+"Alege ce tipuri de măsurători sunt convertite. Tot ce debifezi este ignorat "
+"peste tot — fără sublinieri, casete sau conversii în text pentru acea "
+"categorie."
 
 #. TRANSLATORS: Long-press explainer for 'Smart rounding for conversions'. The
 #. quoted values are examples; 'm' is the metre symbol, not translated.
-#: main.lua:8858
-msgid "Round conversions to friendly, readable values — \"90 m\" instead of \"91.44 m\". Turn off if you prefer exact numbers."
-msgstr "Rotunjește conversiile la valori ușor de citit — „90 m” în loc de „91.44 m”. Dezactivează dacă preferi numere exacte."
+#: main.lua:8803
+msgid ""
+"Round conversions to friendly, readable values — \"90 m\" instead of \"91.44 "
+"m\". Turn off if you prefer exact numbers."
+msgstr ""
+"Rotunjește conversiile la valori ușor de citit — „90 m” în loc de „91.44 m”. "
+"Dezactivează dacă preferi numere exacte."
 
 #. TRANSLATORS: Long-press explainer for 'Show original unit in tooltip'.
-#: main.lua:8899
-msgid "In the \"only (in text)\" mode, underline the converted values so you can tap any of them and see the original text. Handy if you want to double-check a conversion against what the author wrote."
-msgstr "În modul „doar (în text)”, subliniază valorile convertite ca să poți atinge oricare dintre ele și să vezi textul original. Util dacă vrei să verifici o conversie față de ce a scris autorul."
+#: main.lua:8844
+msgid ""
+"In the \"only (in text)\" mode, underline the converted values so you can "
+"tap any of them and see the original text. Handy if you want to double-check "
+"a conversion against what the author wrote."
+msgstr ""
+"În modul „doar (în text)”, subliniază valorile convertite ca să poți atinge "
+"oricare dintre ele și să vezi textul original. Util dacă vrei să verifici o "
+"conversie față de ce a scris autorul."
 
 #. TRANSLATORS: Long-press explainer for 'Long-press units to send errors to the
 #. developer'.
-#: main.lua:8934
-msgid "Flag bad conversions while you read: long-press a unit (or select text Footcream missed) and the error is sent anonymously to the developer. Each flag contains the book title, the measurement, its conversion and the surrounding sentence — nothing else. Works offline: flags are queued and sent when you're connected."
-msgstr "Raportează conversiile greșite în timp ce citești: apasă lung pe o unitate (sau selectează text pe care Footcream l-a ratat) și eroarea este trimisă anonim dezvoltatorului. Fiecare raportare conține titlul cărții, măsurătoarea, conversia ei și propoziția din jur — nimic altceva. Funcționează offline: raportările sunt puse la coadă și trimise când ai conexiune."
+#: main.lua:8879
+msgid ""
+"Flag bad conversions while you read: long-press a unit (or select text "
+"Footcream missed) and the error is sent anonymously to the developer. Each "
+"flag contains the book title, the measurement, its conversion and the "
+"surrounding sentence — nothing else. Works offline: flags are queued and "
+"sent when you're connected."
+msgstr ""
+"Raportează conversiile greșite în timp ce citești: apasă lung pe o unitate "
+"(sau selectează text pe care Footcream l-a ratat) și eroarea este trimisă "
+"anonim dezvoltatorului. Fiecare raportare conține titlul cărții, "
+"măsurătoarea, conversia ei și propoziția din jur — nimic altceva. "
+"Funcționează offline: raportările sunt puse la coadă și trimise când ai "
+"conexiune."
 
 #. TRANSLATORS: Long-press explainer for 'Remove Footcream data from this book'.
-#: main.lua:8968
-msgid "Undo everything for this book: restore the original text, remove all underlines and delete the saved scan. The book file goes back to exactly how it was before Footcream touched it."
-msgstr "Anulează totul pentru această carte: restaurează textul original, elimină toate sublinierile și șterge scanarea salvată. Fișierul cărții revine exact cum era înainte ca Footcream să se atingă de el."
+#: main.lua:8913
+msgid ""
+"Undo everything for this book: restore the original text, remove all "
+"underlines and delete the saved scan. The book file goes back to exactly how "
+"it was before Footcream touched it."
+msgstr ""
+"Anulează totul pentru această carte: restaurează textul original, elimină "
+"toate sublinierile și șterge scanarea salvată. Fișierul cărții revine exact "
+"cum era înainte ca Footcream să se atingă de el."
 
 #. TRANSLATORS: Long-press explainer for the 'Debug' submenu.
-#: main.lua:9010
-msgid "See exactly what the scan found in this book, and manage errors you've flagged on this device."
-msgstr "Vezi exact ce a găsit scanarea în această carte și gestionează erorile pe care le-ai raportat pe acest dispozitiv."
+#: main.lua:8955
+msgid ""
+"See exactly what the scan found in this book, and manage errors you've "
+"flagged on this device."
+msgstr ""
+"Vezi exact ce a găsit scanarea în această carte și gestionează erorile pe "
+"care le-ai raportat pe acest dispozitiv."
 
 #. TRANSLATORS: Long-press explainer for 'Units in book (list)'.
-#: main.lua:9017
-msgid "Every measurement found in this book, with its detected value and conversion. Long-press an entry to flag it as wrong."
-msgstr "Toate măsurătorile găsite în această carte, cu valoarea detectată și conversia ei. Apasă lung pe o intrare pentru a o raporta ca greșită."
+#: main.lua:8962
+msgid ""
+"Every measurement found in this book, with its detected value and "
+"conversion. Long-press an entry to flag it as wrong."
+msgstr ""
+"Toate măsurătorile găsite în această carte, cu valoarea detectată și "
+"conversia ei. Apasă lung pe o intrare pentru a o raporta ca greșită."
 
 #. TRANSLATORS: Long-press explainer for 'View flagged errors'. The path in
 #. parentheses is a file location - leave it as it is.
-#: main.lua:9032
-msgid "Show the errors you've flagged on this device. They're kept in a plain-text file (koreader/footcream/flagged_errors.txt) that you can also attach to a GitHub issue."
-msgstr "Arată erorile pe care le-ai raportat pe acest dispozitiv. Sunt păstrate într-un fișier text (koreader/footcream/flagged_errors.txt) pe care îl poți atașa și la o problemă pe GitHub."
+#: main.lua:8977
+msgid ""
+"Show the errors you've flagged on this device. They're kept in a plain-text "
+"file (koreader/footcream/flagged_errors.txt) that you can also attach to a "
+"GitHub issue."
+msgstr ""
+"Arată erorile pe care le-ai raportat pe acest dispozitiv. Sunt păstrate într-"
+"un fișier text (koreader/footcream/flagged_errors.txt) pe care îl poți atașa "
+"și la o problemă pe GitHub."
 
 #. TRANSLATORS: Long-press explainer for 'Clear flagged errors'.
-#: main.lua:9042
-msgid "Delete the local flagged-errors file. Reports that were already sent to the developer are not affected."
-msgstr "Șterge fișierul local cu erori raportate. Raportările deja trimise dezvoltatorului nu sunt afectate."
-
+#: main.lua:8987
+msgid ""
+"Delete the local flagged-errors file. Reports that were already sent to the "
+"developer are not affected."
+msgstr ""
+"Șterge fișierul local cu erori raportate. Raportările deja trimise "
+"dezvoltatorului nu sunt afectate."
