@@ -1,4 +1,28 @@
-# Translating Footcream
+# Helping with Footcream
+
+Two ways to help, both small. Neither needs any programming.
+
+1. **[Tell me when a conversion is wrong](#tell-me-when-a-conversion-is-wrong)** — a long-press while you read.
+2. **[Fix the translations](#fix-the-translations)** — the rest of this page.
+
+---
+
+## Tell me when a conversion is wrong
+
+This is the most useful thing you can do. While reading, long-press a
+measurement Footcream got wrong and pick what's wrong with it. If Footcream
+*missed* a measurement, select the text and choose **⚑ Flag to Footcream**.
+
+Turn on **Advanced → "Long-press units to send errors to the developer"** and
+those reports are sent anonymously. Each one contains the book title, the
+measurement, its conversion, and the sentence around it — nothing else. It
+works offline; reports are queued and sent when you reconnect.
+
+Full details are in the [README](README.md#flagging-bad-conversions).
+
+---
+
+## Fix the translations
 
 Footcream is translated here:
 
@@ -8,7 +32,7 @@ Sign in, choose your language, and start typing. Nothing to install, no
 programming, no files to send anywhere. Your work is collected automatically
 and goes out with the next version.
 
-## The translations you see were made by a computer. Please fix them
+### The translations you see were made by a computer. Please fix them
 
 All 30 languages already have a first draft written by AI. Some of it is fine.
 Some of it is stiff, and some of it is simply wrong.
@@ -21,7 +45,7 @@ real help.** You don't have to finish anything.
 
 If your language is missing, open an issue and it will be added.
 
-## Start with the short texts
+### Start with the short texts
 
 There are two sets:
 
@@ -33,7 +57,21 @@ longer than their number suggests. Doing only **labels** already makes
 Footcream fully usable in your language. Anything you skip stays in English,
 which is fine.
 
-## Four things to be careful with
+### Two things that make a translation feel native
+
+- **Every text comes with a note** saying where it appears and what it does —
+  which menu it's under, which dialog a button belongs to, or the sentence a
+  fragment gets slotted into. Crowdin shows it above the editing box. Read it
+  when a text is short or ambiguous. If a note is missing or unhelpful,
+  that's worth reporting.
+- **Match KOReader's own wording.** Footcream is a plugin, so it sits inside
+  KOReader's menus. Footcream has its own separate translation project, which
+  means common words ("Cancel", "Settings", "Close") won't be suggested to you
+  from KOReader's existing work. Look at how KOReader says a word in your
+  language and use the same one, so the plugin doesn't read as foreign inside
+  it.
+
+### Four things to be careful with
 
 Everything else is your judgement. These four are not:
 
@@ -59,9 +97,12 @@ run together.
 **4. Never translate the units.**
 `m`, `km`, `kg`, `°C`, `km/h`, and examples like `5 ft 11 in` stay exactly as
 they are in every language. So does the `.` in `1.8` — Footcream writes numbers
-the same way everywhere, on purpose.
+the same way everywhere, on purpose, and that is **not** a bug to report. It
+briefly followed the interface language instead, and that put `1,8 m` into
+paragraphs where the author had written `1.8`, so a single paragraph disagreed
+with itself.
 
-## What happens to your work
+### What happens to your work
 
 **Nobody has to approve it.** Footcream is a small plugin. Waiting for a second
 speaker to check every language would mostly mean nothing ever gets released.
@@ -77,3 +118,13 @@ looks intentional.
 
 If you spot a bad translation in a language that's already released, just fix
 it. You don't need to ask.
+
+---
+
+Translations are contributed under Footcream's licence,
+**AGPL-3.0-or-later** — the same one KOReader uses. That is what allows a
+translation to ship inside the plugin.
+
+Maintaining the translation pipeline itself (how `.po` files are built, synced
+and mapped to directories) is documented separately in
+[l10n/README.md](l10n/README.md). You don't need any of it to translate.

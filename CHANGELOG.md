@@ -12,7 +12,7 @@ Footcream follows KOReader's own language setting — there is nothing to config
 
 **Only the interface changes. Your conversions do not.** The scanner, the maths and the output are untouched by any of this: the same measurements are found, the same values come out, and a measurement reads identically in every language — `1.8 m`, `5 ft 11 in`, `°C`, decimal point and all. In the two modes that rewrite the book's text, **not one translated word is written into your book.** Switching KOReader to Japanese changes the menus and nothing else.
 
-**These are machine-assisted drafts awaiting native speakers.** If you read one of these languages, corrections are very welcome and take a few minutes — see [TRANSLATING.md](TRANSLATING.md).
+**These are machine-assisted drafts awaiting native speakers.** If you read one of these languages, corrections are very welcome and take a few minutes — see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ### Fixed
 

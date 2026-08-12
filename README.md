@@ -186,8 +186,8 @@ wrong. That happens here, with nothing to install and no programming:
 
 **https://crowdin.com/project/foot-cream**
 
-Even ten corrected lines genuinely help. See [TRANSLATING.md](TRANSLATING.md)
-for where to start.
+Even ten corrected lines genuinely help. See
+[CONTRIBUTING.md](CONTRIBUTING.md) for where to start.
 
 ***
 
