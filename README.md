@@ -206,4 +206,4 @@ modified version, ship its source under the same terms.
 
 Community translations contributed through Crowdin are under the same licence,
 so they can be shipped as part of the plugin — see
-[l10n/README.md](l10n/README.md).
+[CONTRIBUTING.md](CONTRIBUTING.md).
