@@ -6,9 +6,9 @@ __pycache__/
 # they can never drift from their source — build artifacts, not tracked.
 #
 # The .pot templates ARE tracked, even though build_l10n.sh regenerates them:
-# Weblate reads the template out of the repo to let translators start a NEW
-# language from the web UI. Ignoring them (as this file used to) means the
-# components can't be created at all — with no .po files yet, the file mask
+# Crowdin reads the template out of the repo to seed a NEW language that has
+# no .po yet. Ignoring them (as this file used to) means the components can't
+# be created at all — with no .po files yet, the file mask
 # matches nothing and there's no template to seed from. build_l10n.sh leaves
 # the .pot untouched when only its POT-Creation-Date would change, so this
 # doesn't make every check.sh run dirty the tree.
