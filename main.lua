@@ -2650,6 +2650,36 @@ local _UNIT_CONV = {
     -- historical and fantasy prose ("three hundred cubits").
     ["cubits"]            = { factor=0.4572,   offset=0,       target="m",    cat="length"      },
     ["cubit"]             = { factor=0.4572,   offset=0,       target="m",    cat="length"      },
+    -- Historical/archaic English units from epic-fantasy & classic fiction
+    -- (upstream issue #3): cloth, distance and horse-height measures. The short
+    -- spellings (span/rod/pole/ell/hand/pace) are ordinary English words, so
+    -- they sit in FootFree._GATED_UNITS and need a book cluster + a literal
+    -- digit before they convert; perch/chain (5 letters, fish / common noun)
+    -- are gated the same way via _GATED_LONG. Values are the common English
+    -- standards, approximate where the unit varied by time/region.
+    -- 1 span = 9 in (quarter yard).
+    ["spans"]             = { factor=0.2286,   offset=0,       target="m",    cat="length"      },
+    ["span"]              = { factor=0.2286,   offset=0,       target="m",    cat="length"      },
+    -- 1 rod = 1 pole = 1 perch = 5.5 yd = 16.5 ft.
+    ["rods"]              = { factor=5.0292,   offset=0,       target="m",    cat="length"      },
+    ["rod"]               = { factor=5.0292,   offset=0,       target="m",    cat="length"      },
+    ["poles"]             = { factor=5.0292,   offset=0,       target="m",    cat="length"      },
+    ["pole"]              = { factor=5.0292,   offset=0,       target="m",    cat="length"      },
+    ["perches"]           = { factor=5.0292,   offset=0,       target="m",    cat="length"      },
+    ["perch"]             = { factor=5.0292,   offset=0,       target="m",    cat="length"      },
+    -- 1 chain = 22 yd = 66 ft (surveying; "twenty chains of road").
+    ["chains"]            = { factor=20.1168,  offset=0,       target="m",    cat="length"      },
+    ["chain"]             = { factor=20.1168,  offset=0,       target="m",    cat="length"      },
+    -- 1 (English) ell = 45 in. Scottish/Flemish ells were shorter.
+    ["ells"]              = { factor=1.143,    offset=0,       target="m",    cat="length"      },
+    ["ell"]               = { factor=1.143,    offset=0,       target="m",    cat="length"      },
+    -- 1 hand = 4 in (horse height: "fifteen hands tall").
+    ["hands"]             = { factor=0.1016,   offset=0,       target="m",    cat="length"      },
+    ["hand"]              = { factor=0.1016,   offset=0,       target="m",    cat="length"      },
+    -- 1 pace ≈ 30 in (the ordinary walking pace). Some sources use the Roman
+    -- pace (5 ft); the common English pace is the safer default for prose.
+    ["paces"]             = { factor=0.762,    offset=0,       target="m",    cat="length"      },
+    ["pace"]              = { factor=0.762,    offset=0,       target="m",    cat="length"      },
     ["pounds"]            = { factor=0.453592, offset=0,       target="kg",   cat="weight"      },
     ["pound"]             = { factor=0.453592, offset=0,       target="kg",   cat="weight"      },
     ["lbs"]               = { factor=0.453592, offset=0,       target="kg",   cat="weight"      },
@@ -2761,24 +2791,38 @@ local _UNIT_CONV = {
     ["ke"]                 = { factor=15,      offset=0, target="min",    cat="time"        },
 }
 
--- Transliteration units (Chinese/Japanese/Korean pre-metric). The SHORT
--- spellings (≤4 letters) are ordinary English words ("in one go", "get a tan",
--- "the sun"), so a stray hit in a normal book is almost certainly a false
--- positive — _finishScan gates them: CLUSTER (≥2 DISTINCT transliteration
--- units anywhere in the book, long or short) + DIGIT-ONLY (a literally-written
--- number, so "one go"/"a tan" can never convert). The longer spellings
--- ("shichen", "zhang", "koku", "tsubo") are unambiguous in English and convert
--- freely.
+-- Ambiguous short units, gated in _finishScan against false positives. Two
+-- groups share the same CLUSTER + DIGIT-ONLY rules:
+--   * transliteration units (Chinese/Japanese/Korean pre-metric) — the short
+--     spellings are ordinary English words ("in one go", "get a tan", "the
+--     sun"), so a stray hit in a normal book is almost certainly a false
+--     positive.
+--   * historical/fantasy English units (span, rod, pole, ell, hand, pace) —
+--     the same everyday-word problem ("life span", "fishing rod", "two hands
+--     of cards").
+-- CLUSTER: a gated unit only converts when the book shows ≥2 DISTINCT gated
+-- units anywhere in it (a genuine wuxia/Japanese/Korean/historical-fantasy
+-- book mixes several; an ordinary English book never does). DIGIT-ONLY: the
+-- number must be literally written ("10 li", "5 span"), so spelled-number
+-- idioms ("one go", "a tan", "two hands") structurally never convert.
+-- Longer, unambiguous spellings ("shichen", "zhang", "koku", "tsubo", "cubit")
+-- convert freely — the momentum here is FP-suppression, not recall.
 -- Then held on the CLASS (not a chunk local): the chunk sits near LuaJIT's
 -- 200-locals ceiling — same convention as FootFree._TON below.
-FootFree._ASIAN_UNITS = {
+FootFree._GATED_UNITS = {
     li = true, zhang = true, chi = true, cun = true, ri = true, cho = true,
     ken = true, shaku = true, sun = true, jang = true, cheok = true, chon = true,
     jin = true, liang = true, qian = true, kan = true,
     mu = true, tsubo = true, pyeong = true, tan = true,
     sho = true, go = true, koku = true,
     shichen = true, geng = true, dian = true, ke = true,
+    -- Historical/fantasy English units (short homographs):
+    span = true, rod = true, pole = true, ell = true, hand = true, pace = true,
 }
+-- 5-letter historical units that are also ordinary English words (perch =
+-- fish, chain = everyday noun). Longer than the ≤4 "short" rule, so flagged
+-- here to receive the same cluster+digit gate.
+FootFree._GATED_LONG = { perch = true, chain = true }
 
 -- Longest-first so "miles per hour" matches before "miles", etc.
 local _UNIT_SUFFIXES = {
@@ -2824,6 +2868,9 @@ local _UNIT_SUFFIXES = {
     "leagues", "league",
     "gallons", "gallon", "quarts", "quart",
     "cubits", "cubit",
+    "chains", "chain", "perches", "perch", "spans", "span",
+    "hands", "hand", "poles", "pole", "rods", "rod",
+    "paces", "pace", "ells", "ell",
     "knots", "knot", "pounds", "pound",
     "ounces", "ounce", "pints", "pint",
     "carats", "carat", "tons", "ton",
@@ -6654,32 +6701,45 @@ function FootFree:_finishScan(doc, all_matches, t_per_pat, t_total, in_subproces
         if keep then table.insert(filtered, r) end
     end
 
-    -- Transliteration-unit gate (false-positive defense for the Asian set). The
-    -- SHORT spellings (≤4 letters) are ordinary English words ("in one go",
-    -- "get a tan", "the sun", "beyond one's ken"), so a stray hit in a normal
-    -- book is almost certainly a false positive. Two rules back them:
-    --   (1) CLUSTER: count every DISTINCT transliteration unit in the book
-    --       (long or short); drop the SHORT ones unless ≥2 distinct exist.
-    --       A genuine wuxia/Japanese/Korean translation mixes several; an
+    -- Ambiguous-unit gate (false-positive defense for the transliteration and
+    -- historical/fantasy unit sets — FootFree._GATED_UNITS/_GATED_LONG). The
+    -- SHORT spellings (≤4 letters, plus the flagged 5-letter _GATED_LONG ones)
+    -- are ordinary English words ("in one go", "get a tan", "life span",
+    -- "fishing rod", "two perch"), so a stray hit in a normal book is almost
+    -- certainly a false positive. Two rules back them:
+    --   (1) CLUSTER: count every DISTINCT gated unit in the book (long or
+    --       short); drop the gated ones unless ≥2 distinct exist. A genuine
+    --       wuxia/Japanese/Korean/historical-fantasy book mixes several; an
     --       ordinary English book never does.
-    --   (2) DIGIT-ONLY: in a cluster book a short unit's number must be
-    --       literally written ("10 li"), so spelled-number idioms ("one go",
-    --       "a tan") structurally never convert.
-    -- Longer spellings ("shichen", "zhang", "koku", "tsubo") are unambiguous
-    -- in English and convert freely — the momentum here is FP-suppression, not
-    -- recall.
+    --   (2) DIGIT-ONLY: in a cluster book a gated unit's number must be
+    --       literally written ("10 li", "5 span"), so spelled-number idioms
+    --       ("one go", "a tan", "two hands") structurally never convert.
+    -- Longer, unambiguous spellings ("shichen", "zhang", "koku", "tsubo",
+    -- "cubit", "league") convert freely — the momentum here is FP-suppression,
+    -- not recall.
     do
-        local asian = function(r)
-            return r._unit and FootFree._ASIAN_UNITS[r._unit]
+        -- Strip a plural "s" so "hands"/"hand", "spans"/"span" share one key.
+        local core = function(u)
+            return u:gsub("s$", "")
+        end
+        local gated = function(r)
+            if not r._unit then return false end
+            local c = core(r._unit)
+            return FootFree._GATED_UNITS[c] or FootFree._GATED_LONG[c]
         end
         local short = function(r)
-            return asian(r) and #r._unit <= 4
+            if not gated(r) then return false end
+            local c = core(r._unit)
+            return #c <= 4 or FootFree._GATED_LONG[c]
         end
         local distinct, nd = {}, 0
         for _, r in ipairs(filtered) do
-            if asian(r) and not distinct[r._unit] then
-                distinct[r._unit] = true
-                nd = nd + 1
+            if gated(r) then
+                local c = core(r._unit)
+                if not distinct[c] then
+                    distinct[c] = true
+                    nd = nd + 1
+                end
             end
         end
         for i = #filtered, 1, -1 do
@@ -8698,7 +8758,10 @@ function FootFree:addToMainMenu(menu_items)
         -- TRANSLATORS: Long-press explainer for the 'Length & Distance' category. The unit
         -- names are English measurement words - use your language's names for the same
         -- units.
-        length = _("Inches, feet, yards, miles, fathoms, furlongs, leagues, cubits — and in the imperial direction: millimeters, centimeters, meters, kilometers."),
+        -- TRANSLATORS: Long-press explainer for the 'Length & Distance' category. The unit
+        -- names are English measurement words - use your language's names for the same
+        -- units.
+        length = _("Inches, feet, yards, miles, fathoms, furlongs, leagues, cubits, spans, hands, ells, rods, chains, paces — and in the imperial direction: millimeters, centimeters, meters, kilometers."),
         -- TRANSLATORS: Long-press explainer for the 'Weight' category. Tons convert only in a
         -- weight context; the figurative and ship-tonnage senses are left alone.
         weight = _("Ounces, pounds and stone — and in the imperial direction: grams and kilos. Tons convert only with a weight context (figurative and ship tonnage are left alone)."),

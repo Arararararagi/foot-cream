@@ -69,3 +69,72 @@ end)
 T("green around the gills is a fish idiom, not a volume", function()
     assert_no_match("He looked green around the gills.", "gills")
 end)
+
+-- ── Historical/fantasy units (upstream issue #3) ─────────────────────────────
+-- Short homographs (span/rod/pole/ell/hand/pace) and the flagged 5-letter ones
+-- (perch/chain) only convert with a CLUSTER of ≥2 distinct gated units AND a
+-- literal digit — the same rule that guards the Asian transliterations.
+T("3 ell and 5 span (cluster) convert", function()
+    assert_conv("The cloth was 3 ell and 5 span wide.", "3 ell", "= 3.4 m")
+    assert_conv("The cloth was 3 ell and 5 span wide.", "5 span", "= 1.1 m")
+end)
+
+T("15 hands and 4 chain (cluster) convert", function()
+    assert_conv("The stallion stood 15 hands and the road measured 4 chain.",
+                "15 hands", "= 1.5 m")
+    assert_conv("The stallion stood 15 hands and the road measured 4 chain.",
+                "4 chain", "= 80 m")
+end)
+
+T("10 paces and 4 ell (cluster) convert", function()
+    assert_conv("He stood 10 paces from the wall and 4 ell from the door.",
+                "10 paces", "= 7.6 m")
+    assert_conv("He stood 10 paces from the wall and 4 ell from the door.",
+                "4 ell", "= 4.6 m")
+end)
+
+T("rod and pole are the same measure", function()
+    assert_conv("He surveyed 2 rods by 3 poles of land.", "2 rods by 3", "= 10")
+end)
+
+-- Single gated unit with no cluster is left alone
+T("5 span alone is not a length", function()
+    assert_no_match("The cloth was 5 span wide.", "span")
+end)
+
+T("4 chain alone is not a length", function()
+    assert_no_match("The road measured 4 chain.", "chain")
+end)
+
+T("15 hands alone is not a length", function()
+    assert_no_match("The stallion stood 15 hands tall.", "hands")
+end)
+
+-- Everyday-word idioms never convert
+T("life span is an idiom", function()
+    assert_no_match("Her life span was remarkable.", "span")
+end)
+
+T("fishing rod is an idiom", function()
+    assert_no_match("He bought a new fishing rod.", "rod")
+end)
+
+T("Ellen is a name, not an ell", function()
+    assert_no_match("Ellen lived in the old house.", "ell")
+end)
+
+T("two hands of cards is not a length", function()
+    assert_no_match("He held two hands of cards.", "hands")
+end)
+
+T("keep pace is an idiom", function()
+    assert_no_match("She struggled to keep pace.", "pace")
+end)
+
+T("chain of events is an idiom", function()
+    assert_no_match("It was a chain of events.", "chain")
+end)
+
+T("two perch is a fish, not 10 m", function()
+    assert_no_match("We caught two perch that day.", "perch")
+end)

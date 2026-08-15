@@ -47,6 +47,10 @@ NOTE: Although Claude Code helped a lot in the writing of Lua, I have QA:ed this
 | 📏 Length       | nautical mile / nmi                  | km             |
 | 📏 Length       | league / leagues                     | km             |
 | 📏 Length       | cubit / cubits                       | m              |
+| 📏 Length       | span / spans / hand / hands          | m              |
+| 📏 Length       | rod / rods / pole / poles / perch / perches | m        |
+| 📏 Length       | chain / chains                       | m              |
+| 📏 Length       | ell / ells / pace / paces            | m              |
 | 📏 Length       | verst / versts                       | km             |
 | 📏 Length       | arshin / arshins                     | m              |
 | ⚖️ Weight       | ounce / ounces / oz                  | g              |
