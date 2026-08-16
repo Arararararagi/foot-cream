@@ -80,6 +80,8 @@ NOTE: Although Claude Code helped a lot in the writing of Lua, I have QA:ed this
 | 🧪 Volume       | shō / gō / koku                      | L              |
 | 🟩 Area         | mu / tan / tsubo / pyeong (*)        | m²             |
 | ⏱ Time         | shichen / geng / dian / ke           | min            |
+| ⏱ Time         | the Shen/Chou/…/Hai Hour (12 時辰)    | min            |
+| ⏱ Time         | Hour / Watch / Mark / Ke             | min            |
 
 *Volumes follow the book's locale: UK imperial vs. US measures. Energy and pressure categories work in both directions (imperial↔metric).*
 
@@ -90,6 +92,8 @@ NOTE: Although Claude Code helped a lot in the writing of Lua, I have QA:ed this
 > **A note on tons:** Footcream converts *tons* using a context classifier. Standing weights (*"weighed ten tons"*) convert to kilograms (*≈ 9 000 kg*), while register tonnage (*"displacement of 50 000 tons"*) and figurative uses (*"tons of trouble"*) are left untouched. Carat is similarly guarded: *"18 carat gold"* (fineness) is preserved, while *"a 2-carat diamond"* (weight) converts to grams.
 
 > **A note on Asian/transliteration units (\*) and other short spellings:** these stage in historical-CJK fiction (wuxia etc.), but several spell like English words (*"go"*, *"sun"*, *"tan"*, *"ken"*, *"mu"*, *"li"*). So the short ones (≤ 4 letters) only convert when the **book** clearly uses them — at least two distinct transliteration units somewhere in it — **and** the number is written as digits (*"30 li"*). That keeps *"in one go"* (an idiom, not 0.18 litres) and *"she got a tan"* from ever converting, while *"the caravan went 30 li, the farm covered 2 mu"* converts normally. Longer spellings (*"zhang"*, *"shichen"*, *"koku"*) are unambiguous and convert freely.
+
+> **A note on 時辰 (traditional Chinese time):** besides the pinyin forms *shichen / geng / dian / ke*, Footcream recognises the English renderings of the twelve named two-hour periods — *"the Shen Hour"*, *"the Chou Hour"*, … *"the Hai Hour"* (broad pinyin/Wade-Giles romanizations) — each converting to its fixed 2 h (*120 min*), even without a count. The capitalized generic *Hour / Watch / Mark / Ke* (→ *shichen / geng / dian / ke*) convert like the other short homographs: they need a literal number and a book cluster, so ordinary *"happy hour"* and clock *"hour"* are never touched.
 
 ***
 

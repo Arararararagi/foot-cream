@@ -138,3 +138,46 @@ end)
 T("two perch is a fish, not 10 m", function()
     assert_no_match("We caught two perch that day.", "perch")
 end)
+
+-- ── Pinyin 時辰 appellations ("Shen Hour") ────────────────────────────────────
+-- A named shichen converts to its fixed 2 h (120 min) even without a count.
+T("the Shen Hour -> 120 min", function()
+    assert_conv("It was the Shen Hour when they left.", "Shen Hour", "= 120 min")
+end)
+
+T("the Chou Hour -> 120 min", function()
+    assert_conv("The raid began during the Chou Hour.", "Chou Hour", "= 120 min")
+end)
+
+T("the Si Hour -> 120 min", function()
+    assert_conv("At the Si Hour the temple bells rang.", "Si Hour", "= 120 min")
+end)
+
+T("the Ch'en Hour (Wade-Giles) -> 120 min", function()
+    assert_conv("The attack came at the Ch'en Hour.", "Ch'en Hour", "= 120 min")
+end)
+
+T("a preceding ordinal does not multiply a shichen", function()
+    assert_conv("They met at the third Shen Hour.", "Shen Hour", "= 120 min")
+end)
+
+T("lowercase clock hour never matches", function()
+    assert_no_match("It was the third hour of the day.", "hour")
+    assert_no_match("We went for happy hour.", "hour")
+end)
+
+-- Capitalized English renderings of 更/點/刻: like the Asian units they need a
+-- literal digit AND a book cluster of >=2 distinct gated units.
+T("3 Watch and 7 Mark (cluster) convert", function()
+    assert_conv("3 Watch passed, then 7 Mark fell.", "3 Watch", "= 432 min")
+    assert_conv("3 Watch passed, then 7 Mark fell.", "7 Mark", "= 168 min")
+end)
+
+T("2 Hour with 3 Ke (cluster) convert", function()
+    assert_conv("The ritual took 2 Hour and 3 Ke.", "2 Hour", "= 240 min")
+    assert_conv("The ritual took 2 Hour and 3 Ke.", "3 Ke", "= 45 min")
+end)
+
+T("a lone capitalized Watch needs a cluster", function()
+    assert_no_match("3 Watch passed.", "Watch")
+end)

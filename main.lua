@@ -57,7 +57,7 @@ local _ENDASH = "\226\128\147"   -- –  U+2013
 local _TIMES  = "\195\151"       -- ×  U+00D7
 local _SUP2   = "\194\178"       -- ²  U+00B2 (superscript two)
 
-local CACHE_VERSION = 65  -- fork: merged upstream v1.7.0 (64) — the fork's added units (carat, ton, verst/arshin/pood, gill, hp/BTU/psi, Asian transliterations) change match/convert output, so sidecars from 64 (no such units) and earlier fork builds must be rescanned. (64 was: the year/decade possessive guard for a bare feet-mark ("2001's", "the 90's") ACTUALLY WORKS now. It shipped in 63 but was inert: it tested next_text for a leading "s", and crengine builds context word-by-word — "2001’s" is one token, so the possessive "s" is swallowed and next_text starts at " Ghosts of Mars". The test could never fire, so reports #11-13 (2001’ = 600 m) were still live; VM-verified 2026-08-07, 5 false positives in smoketest5 CH49. Now reads the actual next character from the document via _xpointer_offset, the same one-char xpointer read the mid-word guard below already uses (a genuine height reads a space there: "6’ wide"). (63 was: "square <unit>" now recognizes "league"/"leagues" (was missing from _AREA_CONV entirely — the "square" cue had nothing to convert with, so "twenty-three square leagues" was a total miss, report #10). "<count>-toed/-legged/-clawed/-pawed/etc. feet/foot" no longer reads as a distance — anatomy, not a measurement (report #9: "three-toed feet" was reading as 91 cm; the shared _parse_num word-number fallback treats a hyphen right after a number word as an ordinary compound-number boundary, the same mechanism that composes "twenty-three", so it doesn't distinguish "three-toed" from "twenty-three"). (62 was: shorthand height notation (issue #2) now recognizes curly/smart quotes ("6’2”"), not just straight ASCII/true-prime — most commercial EPUBs are typeset this way, which is why it looked entirely broken to the reporter. A digit-adjacent bare feet-mark ('/′/’) immediately followed by "s" is now read as a year/decade possessive or plural ("2001's", "the 90's"), not a height — closes the false positive in reports #11-13 ("2001's Ghosts of Mars" was reading as 2001 ft = 600 m). (61 was: bare "degrees" (no F/Fahrenheit qualifier) now converts as a Fahrenheit temperature when a nearby word suggests one (cold/hot/warm/chill/freez.../temperature/weather/humid/...); default is still to leave it alone (angle, rotation, proof, heading, latitude). Spelled "minus" before a number now negates it ("minus seventy degrees" = -70), matching the existing symbolic-dash handling. "N degrees below zero" is suppressed rather than mis-signed (residual — reports #14-33). (60 was: hyphenated adjectival "square <unit>" compounds ("a 250,000-square-foot room", "a three-million-square-foot cave") now detect as area — the "square" cue check missed the hyphen glue and fell through to the linear-foot factor, badly wrong and missing the ² (reports #22-24). (59 was: metric→imperial direction ("Preferred units": metric/us/uk; sidecars carry a direction field, matches can now target imperial compound formats). (58 was: hyphen-glued attributive fractions parse — "<ordinal>-of-a-<unit>-thick/long" reads as 1/denominator ("a third-of-a-mile-thick" = 540 m; "quarter-of-a" worked already via _WORD_NUMS, ordinals like "third" were nil because bare ordinals are ambiguous — the glued "-of-a" tail disambiguates). (57 was: bare-article "a million miles" (incl. "an hour"/"away" forms) suppressed as hyperbole — user-approved 2026-07-06, all 7 corpus hits figurative; digits and real multiples ("two million miles", "half a million miles") still convert. (56 was: URL path fragments never convert (digit/letter slash in matched_text — "178650/League" was 860 000 km); "N-foot-by-M-foot" dimension adjectives convert both sides ("twenty-foot-by-hundred-foot" = 6 × 30 m, was a bare 6 m). (55 was: shy-book plain passes enforce true \\b via adjacent-char probes on BOTH sides (plain-path contexts are word-based, so "15 mi|nutes"/"one kn|ows" looked clean and inflated matches 3-6x). (54 was: soft-hyphen books (U+00AD in the text) scan via per-alias PLAIN findAllText passes — the regex path returns span-shifted/missing hits in such books (The Rise and Fall of the Dinosaurs: "1,700 miles" never hit, "seven-ton" garbled). (53 was: new-test-books sweep fixes — em-dash/ellipsis glued to the number no longer defeats _prev_num_words ("too far—eleven feet six inches", "off course by…sixty miles", "park—four acres"); fused digit+unit forms hit via a digit lookbehind in _FAST_UNIT_PAT ("260lbs", "6ft"); banking vocabulary (bank/account/bills/untraceable) added to the soft-currency cues. (52 was: "for a mile" article cue (user-approved) + attributive-tail guard ("ran a mile RELAY" is a compound noun — the batch-2 motion-verb cues were wrongly converting it). (51 was: tight U+2044 fractions from sup/sub-span markup ("21⁄2-inch" = 2½, "13⁄16-inch" = 13/16 — improper-looking numerator reads as a mixed number, proper as a plain fraction). 50 was: corpus-sweep batch 2 follow-ups — prime matches re-check the coordinate/astronomy vocab on the tail of their own paragraph (the 5-word hit window missed "ABERRATION … is established 20″"); spaced U+2044 mixed fractions parse ("2 1 ⁄ 2 -inch plank" = 2.5); _prev_num_words' article-fraction tail requires both words ("half LONG" no longer reads 0.5, which spawned a bogus 0.5–1000 range eating "…a mile and a half long and 1000 ft. deep"). (49 was: batch 2 — FP guards for closing-quote/middle-dot/arcsecond; enumeration lists; ASCII mixed fractions; million; article-mile directional/motion cues; at-a-time ≤ 2; "<digit> of a mile" fraction guard. 48 was: foot-idiom positional cues gated ≤ 2.)
+local CACHE_VERSION = 66  -- fork: pinyin 時辰 稱謂 units — English "X Hour" periods (Zi/Chou/…/Hai, broad romanizations) via the _SHICHEN_PATS literal pass, plus the capitalized English renderings Hour/Watch/Mark/Ke on the fast path; sidecars from 65 (no such units) must be rescanned. (65 was: fork merged upstream v1.7.0 (64) — the fork's added units (carat, ton, verst/arshin/pood, gill, hp/BTU/psi, Asian transliterations) change match/convert output, so sidecars from 64 (no such units) and earlier fork builds must be rescanned. (64 was: the year/decade possessive guard for a bare feet-mark ("2001's", "the 90's") ACTUALLY WORKS now. It shipped in 63 but was inert: it tested next_text for a leading "s", and crengine builds context word-by-word — "2001’s" is one token, so the possessive "s" is swallowed and next_text starts at " Ghosts of Mars". The test could never fire, so reports #11-13 (2001’ = 600 m) were still live; VM-verified 2026-08-07, 5 false positives in smoketest5 CH49. Now reads the actual next character from the document via _xpointer_offset, the same one-char xpointer read the mid-word guard below already uses (a genuine height reads a space there: "6’ wide"). (63 was: "square <unit>" now recognizes "league"/"leagues" (was missing from _AREA_CONV entirely — the "square" cue had nothing to convert with, so "twenty-three square leagues" was a total miss, report #10). "<count>-toed/-legged/-clawed/-pawed/etc. feet/foot" no longer reads as a distance — anatomy, not a measurement (report #9: "three-toed feet" was reading as 91 cm; the shared _parse_num word-number fallback treats a hyphen right after a number word as an ordinary compound-number boundary, the same mechanism that composes "twenty-three", so it doesn't distinguish "three-toed" from "twenty-three"). (62 was: shorthand height notation (issue #2) now recognizes curly/smart quotes ("6’2”"), not just straight ASCII/true-prime — most commercial EPUBs are typeset this way, which is why it looked entirely broken to the reporter. A digit-adjacent bare feet-mark ('/′/’) immediately followed by "s" is now read as a year/decade possessive or plural ("2001's", "the 90's"), not a height — closes the false positive in reports #11-13 ("2001's Ghosts of Mars" was reading as 2001 ft = 600 m). (61 was: bare "degrees" (no F/Fahrenheit qualifier) now converts as a Fahrenheit temperature when a nearby word suggests one (cold/hot/warm/chill/freez.../temperature/weather/humid/...); default is still to leave it alone (angle, rotation, proof, heading, latitude). Spelled "minus" before a number now negates it ("minus seventy degrees" = -70), matching the existing symbolic-dash handling. "N degrees below zero" is suppressed rather than mis-signed (residual — reports #14-33). (60 was: hyphenated adjectival "square <unit>" compounds ("a 250,000-square-foot room", "a three-million-square-foot cave") now detect as area — the "square" cue check missed the hyphen glue and fell through to the linear-foot factor, badly wrong and missing the ² (reports #22-24). (59 was: metric→imperial direction ("Preferred units": metric/us/uk; sidecars carry a direction field, matches can now target imperial compound formats). (58 was: hyphen-glued attributive fractions parse — "<ordinal>-of-a-<unit>-thick/long" reads as 1/denominator ("a third-of-a-mile-thick" = 540 m; "quarter-of-a" worked already via _WORD_NUMS, ordinals like "third" were nil because bare ordinals are ambiguous — the glued "-of-a" tail disambiguates). (57 was: bare-article "a million miles" (incl. "an hour"/"away" forms) suppressed as hyperbole — user-approved 2026-07-06, all 7 corpus hits figurative; digits and real multiples ("two million miles", "half a million miles") still convert. (56 was: URL path fragments never convert (digit/letter slash in matched_text — "178650/League" was 860 000 km); "N-foot-by-M-foot" dimension adjectives convert both sides ("twenty-foot-by-hundred-foot" = 6 × 30 m, was a bare 6 m). (55 was: shy-book plain passes enforce true \\b via adjacent-char probes on BOTH sides (plain-path contexts are word-based, so "15 mi|nutes"/"one kn|ows" looked clean and inflated matches 3-6x). (54 was: soft-hyphen books (U+00AD in the text) scan via per-alias PLAIN findAllText passes — the regex path returns span-shifted/missing hits in such books (The Rise and Fall of the Dinosaurs: "1,700 miles" never hit, "seven-ton" garbled). (53 was: new-test-books sweep fixes — em-dash/ellipsis glued to the number no longer defeats _prev_num_words ("too far—eleven feet six inches", "off course by…sixty miles", "park—four acres"); fused digit+unit forms hit via a digit lookbehind in _FAST_UNIT_PAT ("260lbs", "6ft"); banking vocabulary (bank/account/bills/untraceable) added to the soft-currency cues. (52 was: "for a mile" article cue (user-approved) + attributive-tail guard ("ran a mile RELAY" is a compound noun — the batch-2 motion-verb cues were wrongly converting it). (51 was: tight U+2044 fractions from sup/sub-span markup ("21⁄2-inch" = 2½, "13⁄16-inch" = 13/16 — improper-looking numerator reads as a mixed number, proper as a plain fraction). 50 was: corpus-sweep batch 2 follow-ups — prime matches re-check the coordinate/astronomy vocab on the tail of their own paragraph (the 5-word hit window missed "ABERRATION … is established 20″"); spaced U+2044 mixed fractions parse ("2 1 ⁄ 2 -inch plank" = 2.5); _prev_num_words' article-fraction tail requires both words ("half LONG" no longer reads 0.5, which spawned a bogus 0.5–1000 range eating "…a mile and a half long and 1000 ft. deep"). (49 was: batch 2 — FP guards for closing-quote/middle-dot/arcsecond; enumeration lists; ASCII mixed fractions; million; article-mile directional/motion cues; at-a-time ≤ 2; "<digit> of a mile" fraction guard. 48 was: foot-idiom positional cues gated ≤ 2.)
 local _REVERSE_VERSION = 2  -- v2: ordered originals per converted string (position-aware reverse lookup)
 
 -- ── Number prefixes ───────────────────────────────────────────────────────────
@@ -2789,6 +2789,41 @@ local _UNIT_CONV = {
     ["geng"]               = { factor=144,     offset=0, target="min",    cat="time"        }, -- 2.4 hours
     ["dian"]               = { factor=24,      offset=0, target="min",    cat="time"        },
     ["ke"]                 = { factor=15,      offset=0, target="min",    cat="time"        },
+    -- Pinyin 時辰 appellations rendered in English ("Shen Hour", "Chou Hour",
+    -- ...) — each named period is ONE 2-hour shichen. These appear WITHOUT a
+    -- count ("the Shen Hour"), so they're matched by the _SHICHEN_PATS literal
+    -- pass (converter always yields the fixed 2 h), not the fast path. The
+    -- entries below keep the unit table / category list complete. Values
+    -- mirror "shichen" (120 min).
+    ["Zi Hour"]            = { factor=120,     offset=0, target="min",    cat="time"        },
+    ["Tzu Hour"]           = { factor=120,     offset=0, target="min",    cat="time"        },
+    ["Chou Hour"]          = { factor=120,     offset=0, target="min",    cat="time"        },
+    ["Ch'u Hour"]          = { factor=120,     offset=0, target="min",    cat="time"        },
+    ["Yin Hour"]           = { factor=120,     offset=0, target="min",    cat="time"        },
+    ["Mao Hour"]           = { factor=120,     offset=0, target="min",    cat="time"        },
+    ["Mou Hour"]           = { factor=120,     offset=0, target="min",    cat="time"        },
+    ["Chen Hour"]          = { factor=120,     offset=0, target="min",    cat="time"        },
+    ["Ch'en Hour"]         = { factor=120,     offset=0, target="min",    cat="time"        },
+    ["Ssu Hour"]           = { factor=120,     offset=0, target="min",    cat="time"        },
+    ["Szu Hour"]           = { factor=120,     offset=0, target="min",    cat="time"        },
+    ["Si Hour"]            = { factor=120,     offset=0, target="min",    cat="time"        },
+    ["Wu Hour"]            = { factor=120,     offset=0, target="min",    cat="time"        },
+    ["Wou Hour"]           = { factor=120,     offset=0, target="min",    cat="time"        },
+    ["Wei Hour"]           = { factor=120,     offset=0, target="min",    cat="time"        },
+    ["Shen Hour"]          = { factor=120,     offset=0, target="min",    cat="time"        },
+    ["Yu Hour"]            = { factor=120,     offset=0, target="min",    cat="time"        },
+    ["You Hour"]           = { factor=120,     offset=0, target="min",    cat="time"        },
+    ["Yiu Hour"]           = { factor=120,     offset=0, target="min",    cat="time"        },
+    ["Hsu Hour"]           = { factor=120,     offset=0, target="min",    cat="time"        },
+    ["Xu Hour"]            = { factor=120,     offset=0, target="min",    cat="time"        },
+    ["Hai Hour"]           = { factor=120,     offset=0, target="min",    cat="time"        },
+    -- English renderings of the generic/ 更/點/刻 units, ridden by the FAST
+    -- path (they need a count: "three Watch"). Capitalized on purpose so
+    -- ordinary "hour"/"ke" never match. "Ke" (capitalized) identifies as the
+    -- existing lowercase "ke" above.
+    ["Hour"]               = { factor=120,     offset=0, target="min",    cat="time"        }, -- = shichen
+    ["Watch"]              = { factor=144,     offset=0, target="min",    cat="time"        }, -- = geng
+    ["Mark"]               = { factor=24,      offset=0, target="min",    cat="time"        }, -- = dian
 }
 
 -- Ambiguous short units, gated in _finishScan against false positives. Two
@@ -2818,11 +2853,14 @@ FootFree._GATED_UNITS = {
     shichen = true, geng = true, dian = true, ke = true,
     -- Historical/fantasy English units (short homographs):
     span = true, rod = true, pole = true, ell = true, hand = true, pace = true,
+    -- English renderings of 時辰/點 (capitalized; "the third Hour"/"seven
+    -- Mark" are ambiguous without a book cluster):
+    Hour = true, Mark = true,
 }
 -- 5-letter historical units that are also ordinary English words (perch =
 -- fish, chain = everyday noun). Longer than the ≤4 "short" rule, so flagged
 -- here to receive the same cluster+digit gate.
-FootFree._GATED_LONG = { perch = true, chain = true }
+FootFree._GATED_LONG = { perch = true, chain = true, Watch = true }
 
 -- Longest-first so "miles per hour" matches before "miles", etc.
 local _UNIT_SUFFIXES = {
@@ -2863,6 +2901,13 @@ local _UNIT_SUFFIXES = {
     "millimeters of mercury", "millimeter of mercury",
     "fluid ounces", "fluid ounce",
     "miles per hour", "miles an hour",
+    -- English renderings of 時辰/更/點/刻 (capitalized so clock "hour" and the
+    -- "ke" syllable never match). Placed AFTER "* per hour"/"* an hour" so
+    -- _identify_unit (first-tail-match wins) never shadows "miles per hour"
+    -- with the generic "Hour". The named periods ("Shen Hour") are matched by
+    -- the _SHICHEN_PATS literal pass instead, since they appear without a
+    -- count.
+    "Hour", "Watch", "Mark", "Ke",
     "horse power", "horsepower",
     "fl oz", "fathoms", "fathom", "furlongs", "furlong",
     "leagues", "league",
@@ -3735,6 +3780,48 @@ end
 -- (ASCII + U+2019/U+201D + Unicode primes) are handled; inches may carry a
 -- vulgar-fraction glyph ("6'8½\""). The penultimate pattern is the bare
 -- compound "6'4" (US shorthand, no closing inch mark).
+-- Held on the CLASS (not chunk locals) — the chunk sits near LuaJIT's
+-- 200-locals ceiling (same convention as FootFree._TON/_GATED_UNITS).
+-- Pinyin 時辰 appellations rendered in English — each named period is ONE
+-- 2-hour shichen, and in prose it appears WITHOUT a count ("the Shen Hour",
+-- "during the Chou Hour"), so it can't ride the fast path (which requires a
+-- number). These run as their own findAllText pass instead, always converting
+-- to the fixed 2 h (120 min). Capitalized on purpose: lowercase "hour" is the
+-- ordinary 60-minute word and must never match. Romanizations are broad —
+-- translators mix pinyin (Shen, Xu, You) and Wade-Giles (Ch'en, Hsu, Yu).
+FootFree._SHICHEN_HOURS = {
+    "Zi Hour", "Tzu Hour",
+    "Chou Hour", "Ch'u Hour",
+    "Yin Hour",
+    "Mao Hour", "Mou Hour",
+    "Chen Hour", "Ch'en Hour",
+    "Ssu Hour", "Szu Hour", "Si Hour",
+    "Wu Hour", "Wou Hour",
+    "Wei Hour",
+    "Shen Hour",
+    "Yu Hour", "You Hour", "Yiu Hour",
+    "Hsu Hour", "Xu Hour",
+    "Hai Hour",
+}
+-- Any named shichen is a single 2-hour period; the value is fixed regardless
+-- of an ordinal article before it ("the third Shen Hour" is still the Shen
+-- period = 2 h, not three).
+FootFree._conv_shichen = function(text)
+    local clean = _display(text):lower():gsub("^%s+", ""):gsub("%s+$", "")
+    for _, name in ipairs(FootFree._SHICHEN_HOURS) do
+        if clean == name:lower() then
+            return _fmt_dist(120, "min")
+        end
+    end
+    return nil
+end
+FootFree._SHICHEN_PATS = {
+    {
+        pat = "\\b(" .. table.concat(FootFree._SHICHEN_HOURS, "|") .. ")\\b",
+        converter = FootFree._conv_shichen, cat = "time", unit = "shichen",
+    },
+}
+
 local _PRIME_PATS = {
     { pat = _ND.._PRIME_MARKS.ft.."[ ]*".._TIMES.."[ ]*[0-9][0-9.,]*".._PRIME_MARKS.in_mark,
       converter = _conv_dim_to_m_cm, target = "m×cm", cat = "length" },
@@ -4853,6 +4940,11 @@ local function _fast_scan_matches(doc, cat_enabled)
                             if conv_ok then
                                 r._search = e
                                 r._cat = e.cat
+                                -- Pass entries may tag a canonical unit so the
+                                -- match joins the _GATED_UNITS cluster bookkeeping
+                                -- (e.g. a named shichen counts as its "shichen"
+                                -- unit) — see FootFree._SHICHEN_PATS.
+                                if e.unit then r._unit = e.unit end
                                 out[#out + 1] = r
                             end
                         else
@@ -4880,6 +4972,9 @@ local function _fast_scan_matches(doc, cat_enabled)
         if #upats > 0 then run_passes(upats) end
     else
         if maybe_primes then run_passes(_PRIME_PATS) end
+
+        -- Pinyin 時辰 periods ("the Shen Hour") — see FootFree._SHICHEN_PATS.
+        if cat_enabled["time"] ~= false then run_passes(FootFree._SHICHEN_PATS) end
 
         local has_degf = (cat_enabled["temperature"] ~= false)
             and ((not ok_t) or (not bt) or bt:find(_DEGF, 1, true) ~= nil)
