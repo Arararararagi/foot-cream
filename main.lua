@@ -1890,23 +1890,6 @@ local function _read_metric_version(doc_path)
     return tonumber(v), tonumber(applied), tonumber(amode), adir
 end
 
--- Escape ERE metacharacters so a converted string (e.g. "1.8 m") can be used
--- as a literal alternative inside a findAllText regex pattern.
-local _RE_MAGIC = {
-    ["."] = true, ["^"] = true, ["$"] = true, ["*"] = true, ["+"] = true,
-    ["?"] = true, ["("] = true, [")"] = true, ["["] = true, ["]"] = true,
-    ["{"] = true, ["}"] = true, ["|"] = true, ["\\"] = true,
-}
-local function _re_escape(s)
-    local out = {}
-    for i = 1, #s do
-        local c = s:sub(i, i)
-        if _RE_MAGIC[c] then out[#out + 1] = "\\" end
-        out[#out + 1] = c
-    end
-    return table.concat(out)
-end
-
 -- xpointers look like ".../text().162" — split into the node path and the
 -- trailing character offset so overlapping matches on the same text node
 -- can be compared numerically.
@@ -5342,6 +5325,25 @@ function FootFree:onReaderReady()
                     UIManager:show(Notification:new{
                         text = self:_scanNoticeText(0, doc),
                     })
+                    -- THEN re-locate, in the background and unannounced. It
+                    -- resolves where each converted phrase now sits, which only
+                    -- hold-to-flag and mode 3's "show original units" ever read
+                    -- — nobody long-presses in the six seconds after a convert.
+                    -- Running it before the notice made the reader watch a
+                    -- spinner for work they never asked for: on a Kobo it was
+                    -- 6.2s of a 28.8s action (2026-08-18), and 18.5s of 42s
+                    -- before the plain-pass rewrite.
+                    --
+                    -- A tap cancels it (Trapper's invisible trap is still
+                    -- dismiss-on-tap) and a page turn is a tap, so this may not
+                    -- finish. That is deliberate: the reader is reading, and
+                    -- reading wins. The next open retries, exactly as it always
+                    -- did when the old blocking version was dismissed.
+                    UIManager:nextTick(function()
+                        if self.view and self.ui.document then
+                            self:_loadReverseMatches(doc, true)
+                        end
+                    end)
                 end)
             end
         -- Skip auto-scan for a book whose data the user JUST removed: the
@@ -5363,7 +5365,27 @@ function FootFree:onReaderReady()
         end
     end
 
-    self:_loadReverseMatches(doc)
+    -- Mode switched back to underline-only on a converted book. The revert that
+    -- carried it out was deliberately silent (see `chained` in
+    -- _revertMetricEdition), so this is where the reader learns the new mode is
+    -- live — and the count only exists here, after the sidecar reload. Reuses
+    -- the existing "Underlined %1 units in book" string, so no new msgid and
+    -- nothing for translators to redo.
+    if FootFree._pending_underline == doc.file then
+        FootFree._pending_underline = nil
+        local n = (self._all_matches and #self._all_matches) or 0
+        self:_deferNotice(function()
+            UIManager:show(Notification:new{
+                text = self:_scanNoticeText(n, doc),
+            })
+        end)
+    end
+
+    -- Skipped when a notice is pending: that path (just converted) runs this
+    -- itself once the notice has been shown, so the reader is not made to wait
+    -- for it. Every other path — a plain open of a converted book, a toggle —
+    -- still resolves here, with its ring, as before.
+    if not self._pending_notice then self:_loadReverseMatches(doc) end
 
     -- Flush any error reports queued while offline (no-op unless sharing is
     -- on and the queue file exists).
@@ -7047,6 +7069,12 @@ function FootFree:_confirmScanAndConvert(doc, cancel_restore_mode, start_scan)
         -- other button is the shared 'Cancel'.
         _("Scan and convert"), function()
             logger.info("FootFree: scan+convert confirmed up front")
+            -- Stamp for the end-to-end timer. What the reader experiences is
+            -- tap -> notice, which spans the scan, the rewrite, the reload AND
+            -- KOReader's re-render; the scan phase log alone accounts for well
+            -- under a quarter of it. Class table, not a local: main.lua is at
+            -- the 200-locals-per-chunk ceiling.
+            FootFree._action_t0 = _now()
             self:_armConvertAfterScan(true)
             start_scan()
         end, nil, on_cancel)
@@ -7309,9 +7337,11 @@ function FootFree:_doApplyMetricEdition(doc)
         -- Stops short of a full circle: the reload and the re-locate that
         -- follow own the last slice, so the ring must not look finished here.
         self:_startRingPulse(_RING.tail_from, _RING.relocate_from)
+        local _tAP = _now()
         local completed, result = Trapper:dismissableRunInSubprocess(function()
             return Metric.apply(doc.file, patches, reps, apply_opts)
         end, shield, true)
+        logger.info(string.format("FootFree: rewrite took %.2fs", _now() - _tAP))
         UIManager:unschedule(convert_watchdog)
         UIManager:close(shield)
         self:_stopRingPulse()
@@ -7419,6 +7449,7 @@ function FootFree:_revertMetricEdition(doc, on_done)
             -- Same for the mode-switch _pending_reapply chain.
             if _pending_rescan == doc.file then _pending_rescan = nil end
             if FootFree._pending_reapply == doc.file then FootFree._pending_reapply = nil end
+            if FootFree._pending_underline == doc.file then FootFree._pending_underline = nil end
             return
         end
         result = result or ""
@@ -7430,6 +7461,7 @@ function FootFree:_revertMetricEdition(doc, on_done)
         if result ~= "OK" then
             if _pending_rescan == doc.file then _pending_rescan = nil end
             if FootFree._pending_reapply == doc.file then FootFree._pending_reapply = nil end
+            if FootFree._pending_underline == doc.file then FootFree._pending_underline = nil end
         end
         if result == "OK" then
             logger.info("FootFree: metric edition reverted")
@@ -7437,6 +7469,7 @@ function FootFree:_revertMetricEdition(doc, on_done)
             -- which consumes them.
             local chained = _pending_rescan == doc.file
                 or FootFree._pending_reapply == doc.file
+                or FootFree._pending_underline == doc.file
                 or on_done ~= nil
             -- The revert just rewrote the epub (byte-identical text, new
             -- mtime). The sidecar's recorded epub_mtime no longer matches, so
@@ -7547,6 +7580,16 @@ function FootFree:_reconcileModeWithBook(cancel_restore_mode)
         -- fresh scan (version refresh, manual "Rescan & reconvert").
         if self._tap_mode >= 2 then
             FootFree._pending_reapply = doc.file
+        else
+            -- Switching a converted book back to underline-only. The revert is
+            -- how that mode change is CARRIED OUT, not the end state, so
+            -- "Restored original units in book" answers a question the reader
+            -- did not ask: they changed the mode and want to know the new mode
+            -- took effect (user report, 2026-08-18). Suppress the restore
+            -- toast and announce the underlines instead, after the reload —
+            -- which is also the only point at which the count is known.
+            -- Class field: the reload builds a fresh plugin instance.
+            FootFree._pending_underline = doc.file
         end
         UIManager:scheduleIn(0.3, function() self:_revertMetricEdition(doc) end)
         return
@@ -7636,7 +7679,7 @@ end
 -- was converted before the map covered its mode. The toggle caller surfaces
 -- a message rather than silently doing nothing (5.4). Returns true/nil
 -- otherwise.
-function FootFree:_loadReverseMatches(doc)
+function FootFree:_loadReverseMatches(doc, quiet)
     self._reverse_matches = nil
     -- Consume the ring hand-off UNCONDITIONALLY, before any early return below.
     -- It is set by the convert directly before its reload and means "resume the
@@ -7669,17 +7712,32 @@ function FootFree:_loadReverseMatches(doc)
         return true
     end
 
-    -- First time after applying: scan once for the converted strings, then
-    -- cache. findAllText returns hits in document order; for each converted
-    -- string we walk its ordered originals list in lockstep so the Nth
+    -- First time after applying: find each converted string, then cache. For
+    -- each string we walk its ordered originals list in lockstep so the Nth
     -- occurrence recovers the Nth original (6.2).
+    --
+    -- ONE PLAIN PASS PER STRING, not one regex alternation of all of them.
+    -- This was the last place still paying the regex-alternation price the
+    -- scanner shed in cache 66: a plain walk costs ~1/100th of a regex walk,
+    -- so 41 plain passes beat one 41-branch alternation by a wide margin.
+    -- Measured on a Kobo (Bedlam Bride, 41 strings, 2026-08-18): 18.5s -> see
+    -- the "re-locate" phase log below. That 18.5s was the whole reason a
+    -- scan-and-convert read as 42 seconds when the scan itself was 9.9s.
+    --
+    -- Precedence is preserved WITHOUT the longest-first sort the alternation
+    -- needed: _filter_overlapping_matches sorts by (prefix, start, longest
+    -- end first) and drops anything overlapping a kept hit, so where two
+    -- converted strings overlap the longer still wins — the same outcome
+    -- leftmost-longest alternation gave, now decided after the fact.
     local alts = {}
     for to in pairs(data.map) do table.insert(alts, to) end
     if #alts == 0 then return true end
-    table.sort(alts, function(a, b) return #a > #b end)
-    local esc = {}
-    for _, a in ipairs(alts) do esc[#esc + 1] = _re_escape(a) end
-    local pat = "(" .. table.concat(esc, "|") .. ")"
+    -- Sorted because pairs() order is arbitrary and the passes are no longer
+    -- one atomic regex: two map keys differing only in case ("one foot (30 cm)"
+    -- / "One foot (30 cm)") match the SAME span, so whichever pass ran first
+    -- decided the answer and the result changed between runs. Equivalence runs
+    -- caught it as an intermittent diff; sorting makes the order reproducible.
+    table.sort(alts)
 
     -- First-time scan: run findAllText in a dismissable subprocess so the UI
     -- doesn't freeze; the resolved positions are then cached so future opens hit
@@ -7696,20 +7754,46 @@ function FootFree:_loadReverseMatches(doc)
         -- circle. ring_from is set only by the convert directly before the
         -- reload; when this runs on its own (the "show original units" toggle,
         -- a plain open of a converted book) it falls back to the usual start.
-        self:_startRingPulse(ring_from, 1.0)
+        -- quiet = this is background work the reader never asked for (see the
+        -- deferred call in onReaderReady), so it gets NO indicator. Showing a
+        -- ring here would put a spinner on screen after the "converted" notice
+        -- already said the job was done — the exact contradiction the notice
+        -- deferral exists to avoid.
+        if not quiet then self:_startRingPulse(ring_from, 1.0) end
+        local _tRL = _now()
         local completed, filtered = Trapper:dismissableRunInSubprocess(function()
-            local ok, results = pcall(function()
-                return doc:findAllText(pat, true, 0, 1000, true)
-            end)
-            if not ok or not results then return {} end
+            local results = {}
+            for _, a in ipairs(alts) do
+                local okp, res = pcall(function()
+                    return doc:findAllText(a, true, 0, 1000, false)
+                end)
+                if okp and res then
+                    for _, h in ipairs(res) do
+                        -- Prefer what the DOCUMENT actually holds, falling
+                        -- back to the searched string. Neither alone is right:
+                        -- findAllText matches case-insensitively, so the "one
+                        -- foot (30 cm)" pass also hits "One foot (30 cm)" and
+                        -- tagging it with the searched string recovers the
+                        -- wrong original's case; but matched_text on a
+                        -- soft-hyphen book carries U+00AD and is no map key at
+                        -- all. Take matched_text when it IS a key, else `a`.
+                        h._src = (data.map[h.matched_text] and h.matched_text)
+                                 or a
+                        results[#results + 1] = h
+                    end
+                end
+            end
             local out = {}
             for _, r in ipairs(_filter_overlapping_matches(results)) do
                 out[#out + 1] = { start = r.start, ["end"] = r["end"],
-                                   matched_text = r.matched_text }
+                                   matched_text = r._src }
             end
             return out
         end, nil)
-        self:_stopRingPulse()
+        logger.info(string.format("FootFree: re-locate %.2fs (%d plain passes)%s",
+                                  _now() - _tRL, #alts,
+                                  quiet and " [background]" or ""))
+        if not quiet then self:_stopRingPulse() end
         if not completed then return end  -- dismissed
         filtered = filtered or {}
         local counters = {}
@@ -8226,6 +8310,13 @@ end
 function FootFree:_deferNotice(fn)
     self._pending_notice = fn
     local waited = 0
+    -- Instrumented because this hold is INVISIBLE in the log and lands at the
+    -- very end of the action, so it is indistinguishable from "the convert is
+    -- slow" without knowing WHICH condition held. Measured on a Kobo
+    -- (2026-08-18) the whole action read as 42s while the scan was 9.9s and the
+    -- rewrite 6s — everything else was here, waiting. Counting per condition is
+    -- what separates our work from KOReader's re-render.
+    local n_ring, n_prog, n_render = 0, 0, 0
     local function poll()
         if self._pending_notice ~= fn then return end   -- superseded
         -- Book closed under us: drop it rather than toasting over the next book.
@@ -8233,14 +8324,27 @@ function FootFree:_deferNotice(fn)
             self._pending_notice = nil
             return
         end
-        local busy = self._ring_pulse or self._scan_progress ~= nil
-            or (self.ui.rolling and self.ui.rolling.rendering_state
-                and self.ui.rolling.rendering_state ~= 0)
+        local rendering = self.ui.rolling and self.ui.rolling.rendering_state
+                          and self.ui.rolling.rendering_state ~= 0
+        local busy = self._ring_pulse or self._scan_progress ~= nil or rendering
+        if busy then
+            if self._ring_pulse        then n_ring   = n_ring   + 1 end
+            if self._scan_progress ~= nil then n_prog = n_prog + 1 end
+            if rendering               then n_render = n_render + 1 end
+        end
         if busy and waited < _RING.notice_wait_s then
             waited = waited + 0.5
             UIManager:scheduleIn(0.5, poll)
             return
         end
+        local total = FootFree._action_t0
+                      and string.format("  action total=%.1fs",
+                                        _now() - FootFree._action_t0) or ""
+        logger.info(string.format(
+            "FootFree: notice held %.1fs (ring=%.1fs scan=%.1fs render=%.1fs)%s%s",
+            waited, n_ring * 0.5, n_prog * 0.5, n_render * 0.5,
+            waited >= _RING.notice_wait_s and "  HIT THE 60s CAP" or "", total))
+        FootFree._action_t0 = nil
         self._pending_notice = nil
         fn()
     end
