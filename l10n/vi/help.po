@@ -2,8 +2,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: foot-cream\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-18 13:56+0200\n"
-"PO-Revision-Date: 2026-08-18 12:15\n"
+"POT-Creation-Date: 2026-08-18 15:40+0200\n"
+"PO-Revision-Date: 2026-08-18 13:47\n"
 "Last-Translator: \n"
 "Language-Team: Vietnamese\n"
 "Language: vi_VN\n"
@@ -20,153 +20,306 @@ msgstr ""
 #. TRANSLATORS: Long-press explainer for the 'Length & Distance' category. The unit
 #. names are English measurement words - use your language's names for the same
 #. units.
-#: main.lua:9221
-msgid "Inches, feet, yards, miles, fathoms, furlongs, leagues, cubits — and in the imperial direction: millimeters, centimeters, meters, kilometers."
-msgstr "Inch, foot, yard, dặm, sải, furlong, league và cubit — và theo chiều sang hệ Anh: milimét, xentimét, mét, kilômét."
+#: main.lua:9325
+msgid ""
+"Inches, feet, yards, miles, fathoms, furlongs, leagues, cubits — and in the "
+"imperial direction: millimeters, centimeters, meters, kilometers."
+msgstr ""
+"Inch, foot, yard, dặm, sải, furlong, league và cubit — và theo chiều sang hệ "
+"Anh: milimét, xentimét, mét, kilômét."
 
 #. TRANSLATORS: Long-press explainer for the 'Weight' category. Tons are left alone
 #. on purpose because the word means several different quantities.
-#: main.lua:9224
-msgid "Ounces, pounds and stone — and in the imperial direction: grams and kilos. Tons are deliberately not converted (the word is too ambiguous)."
-msgstr "Ounce, pound và stone — và theo chiều sang hệ Anh: gam và kilôgam. Tấn cố ý không được chuyển đổi (từ này quá đa nghĩa)."
+#: main.lua:9328
+msgid ""
+"Ounces, pounds and stone — and in the imperial direction: grams and kilos. "
+"Tons are deliberately not converted (the word is too ambiguous)."
+msgstr ""
+"Ounce, pound và stone — và theo chiều sang hệ Anh: gam và kilôgam. Tấn cố ý "
+"không được chuyển đổi (từ này quá đa nghĩa)."
 
 #. TRANSLATORS: Long-press explainer for the 'Temperature' category.
-#: main.lua:9226
-msgid "°F and \"degrees Fahrenheit\" — and in the imperial direction, °C and \"degrees Celsius\"."
-msgstr "°F và \"độ Fahrenheit\" — và theo chiều sang hệ Anh, °C và \"độ Celsius\"."
+#: main.lua:9330
+msgid ""
+"°F and \"degrees Fahrenheit\" — and in the imperial direction, °C and "
+"\"degrees Celsius\"."
+msgstr ""
+"°F và \"độ Fahrenheit\" — và theo chiều sang hệ Anh, °C và \"độ Celsius\"."
 
 #. TRANSLATORS: Long-press explainer for the 'Volume' category. UK and US pints and
 #. gallons are different sizes, hence the note about the book's origin.
-#: main.lua:9229
-msgid "Pints, quarts, gallons and fluid ounces — and in the imperial direction, liters and milliliters. UK and US gallons differ; Footcream picks the right one from the book."
-msgstr "Pint, quart, gallon và ounce chất lỏng — và theo chiều sang hệ Anh, lít và mililít. Gallon Anh và gallon Mỹ khác nhau; Footcream chọn loại đúng dựa vào cuốn sách."
+#: main.lua:9333
+msgid ""
+"Pints, quarts, gallons and fluid ounces — and in the imperial direction, "
+"liters and milliliters. UK and US gallons differ; Footcream picks the right "
+"one from the book."
+msgstr ""
+"Pint, quart, gallon và ounce chất lỏng — và theo chiều sang hệ Anh, lít và "
+"mililít. Gallon Anh và gallon Mỹ khác nhau; Footcream chọn loại đúng dựa vào "
+"cuốn sách."
 
 #. TRANSLATORS: Long-press explainer for the 'Speed' category.
-#: main.lua:9231
-msgid "Miles per hour and knots — and in the imperial direction, km/h and meters per second."
-msgstr "Dặm một giờ và hải lý một giờ — và theo chiều sang hệ Anh, km/h và mét một giây."
+#: main.lua:9335
+msgid ""
+"Miles per hour and knots — and in the imperial direction, km/h and meters "
+"per second."
+msgstr ""
+"Dặm một giờ và hải lý một giờ — và theo chiều sang hệ Anh, km/h và mét một "
+"giây."
 
 #. TRANSLATORS: Long-press explainer for the 'Area' category.
-#: main.lua:9233
-msgid "Acres and square miles/feet/yards — and in the imperial direction, hectares and square kilometers/meters/centimeters."
-msgstr "Mẫu Anh và dặm, foot, yard vuông — và theo chiều sang hệ Anh, hécta và kilômét, mét, xentimét vuông."
+#: main.lua:9337
+msgid ""
+"Acres and square miles/feet/yards — and in the imperial direction, hectares "
+"and square kilometers/meters/centimeters."
+msgstr ""
+"Mẫu Anh và dặm, foot, yard vuông — và theo chiều sang hệ Anh, hécta và "
+"kilômét, mét, xentimét vuông."
 
 #. TRANSLATORS: Long-press explainer for the hint-count line at the top of 'Menu >
 #. Footcream'.
-#: main.lua:9330
-msgid "How many measurements Footcream found in this book. The count always shows everything that was found, whichever mode you are in."
-msgstr "Số số đo mà Footcream tìm thấy trong sách này. Con số này luôn hiển thị tất cả những gì tìm được, dù bạn đang ở chế độ nào."
+#: main.lua:9434
+msgid ""
+"How many measurements Footcream found in this book. The count always shows "
+"everything that was found, whichever mode you are in."
+msgstr ""
+"Số số đo mà Footcream tìm thấy trong sách này. Con số này luôn hiển thị tất "
+"cả những gì tìm được, dù bạn đang ở chế độ nào."
 
 #. TRANSLATORS: Long-press explainer for 'Enable Footcream in this book'.
-#: main.lua:9345
-msgid "Turn Footcream off for this book only: no underlines, no conversions, no prompts — and a converted book gets its original text back. Other books are unaffected, and the choice is remembered for this book. To disable Footcream everywhere, use KOReader's plugin management."
-msgstr "Tắt Footcream chỉ cho sách này: không gạch chân, không chuyển đổi, không hỏi han — và cuốn sách đã chuyển đổi sẽ lấy lại văn bản gốc. Các sách khác không bị ảnh hưởng, và lựa chọn này được nhớ cho sách này. Để tắt Footcream ở mọi nơi, hãy dùng phần quản lý phần mở rộng của KOReader."
+#: main.lua:9449
+msgid ""
+"Turn Footcream off for this book only: no underlines, no conversions, no "
+"prompts — and a converted book gets its original text back. Other books are "
+"unaffected, and the choice is remembered for this book. To disable Footcream "
+"everywhere, use KOReader's plugin management."
+msgstr ""
+"Tắt Footcream chỉ cho sách này: không gạch chân, không chuyển đổi, không hỏi "
+"han — và cuốn sách đã chuyển đổi sẽ lấy lại văn bản gốc. Các sách khác không "
+"bị ảnh hưởng, và lựa chọn này được nhớ cho sách này. Để tắt Footcream ở mọi "
+"nơi, hãy dùng phần quản lý phần mở rộng của KOReader."
 
 #. TRANSLATORS: Long-press explainer for 'Convert units to'.
-#: main.lua:9403
-msgid "The unit system you want to read in. Metric converts imperial measurements (feet, miles, °F) to metric. The Imperial options do the reverse: they find metric measurements (meters, kilometers, kilos, °C) and show imperial values. Works in every mode; a converted book is restored and reconverted when you switch."
-msgstr "Hệ đơn vị mà bạn muốn đọc. 'Hệ mét' chuyển các số đo hệ Anh (foot, dặm, °F) sang hệ mét. Các lựa chọn hệ Anh làm điều ngược lại: tìm các số đo hệ mét (mét, kilômét, kilôgam, °C) rồi hiển thị giá trị hệ Anh. Hoạt động ở mọi chế độ; khi bạn đổi lựa chọn, cuốn sách đã chuyển đổi sẽ được khôi phục rồi chuyển đổi lại."
+#: main.lua:9507
+msgid ""
+"The unit system you want to read in. Metric converts imperial measurements "
+"(feet, miles, °F) to metric. The Imperial options do the reverse: they find "
+"metric measurements (meters, kilometers, kilos, °C) and show imperial "
+"values. Works in every mode; a converted book is restored and reconverted "
+"when you switch."
+msgstr ""
+"Hệ đơn vị mà bạn muốn đọc. 'Hệ mét' chuyển các số đo hệ Anh (foot, dặm, °F) "
+"sang hệ mét. Các lựa chọn hệ Anh làm điều ngược lại: tìm các số đo hệ mét "
+"(mét, kilômét, kilôgam, °C) rồi hiển thị giá trị hệ Anh. Hoạt động ở mọi chế "
+"độ; khi bạn đổi lựa chọn, cuốn sách đã chuyển đổi sẽ được khôi phục rồi "
+"chuyển đổi lại."
 
 #. TRANSLATORS: Long-press explainer for the 'Metric' choice.
-#: main.lua:9412
-msgid "Convert imperial measurements (feet, miles, pounds, °F, gallons…) to metric."
+#: main.lua:9516
+msgid ""
+"Convert imperial measurements (feet, miles, pounds, °F, gallons…) to metric."
 msgstr "Chuyển các số đo hệ Anh (foot, dặm, pound, °F, gallon…) sang hệ mét."
 
 #. TRANSLATORS: Long-press explainer for the 'Imperial (US)' choice. The quoted
 #. measurements are examples of the output; 'm', 'ft' and 'in' are unit symbols and
 #. are not translated.
-#: main.lua:9426
-msgid "Convert metric measurements to US units: meters become feet and inches (\"1.8 m\" → \"5 ft 11 in\"), kilometers become miles, kilos become pounds, °C becomes °F, liters become quarts and gallons."
-msgstr "Chuyển các số đo hệ mét sang đơn vị Mỹ: mét thành foot và inch (\"1.8 m\" → \"5 ft 11 in\"), kilômét thành dặm, kilôgam thành pound, °C thành °F, lít thành quart và gallon."
+#: main.lua:9530
+msgid ""
+"Convert metric measurements to US units: meters become feet and inches "
+"(\"1.8 m\" → \"5 ft 11 in\"), kilometers become miles, kilos become pounds, "
+"°C becomes °F, liters become quarts and gallons."
+msgstr ""
+"Chuyển các số đo hệ mét sang đơn vị Mỹ: mét thành foot và inch (\"1.8 m\" → "
+"\"5 ft 11 in\"), kilômét thành dặm, kilôgam thành pound, °C thành °F, lít "
+"thành quart và gallon."
 
 #. TRANSLATORS: Long-press explainer for the 'Imperial (UK)' choice. The quoted
 #. measurements are examples of the output; 'kg', 'st' and 'lb' are unit symbols
 #. and are not translated.
-#: main.lua:9441
-msgid "Like Imperial (US), but with UK measures: body weights in stones (\"75 kg\" → \"11 st 11 lb\") and volumes in imperial pints and gallons."
-msgstr "Giống 'Hệ Anh (Mỹ)', nhưng dùng số đo của Anh Quốc: cân nặng tính bằng stone (\"75 kg\" → \"11 st 11 lb\") và thể tích tính bằng pint và gallon Anh."
+#: main.lua:9545
+msgid ""
+"Like Imperial (US), but with UK measures: body weights in stones (\"75 kg\" "
+"→ \"11 st 11 lb\") and volumes in imperial pints and gallons."
+msgstr ""
+"Giống 'Hệ Anh (Mỹ)', nhưng dùng số đo của Anh Quốc: cân nặng tính bằng stone "
+"(\"75 kg\" → \"11 st 11 lb\") và thể tích tính bằng pint và gallon Anh."
 
 #. TRANSLATORS: Long-press explainer for the 'Mode' entry.
-#: main.lua:9468
-msgid "How conversions are shown while you read. Opens a picker showing a sample sentence in each of the three modes; the change is applied to the book when you leave the menu. The two \"written into the text\" modes rewrite the book file itself — fully reversible at any time. In the \"converted only\" mode, the Advanced option \"Show original unit in tooltip\" lets you tap a converted value to see the original text."
-msgstr "Cách các chuyển đổi hiện ra trong lúc bạn đọc. Mở một bảng chọn hiển thị một câu mẫu ở mỗi chế độ trong ba chế độ; thay đổi được áp dụng vào sách khi bạn rời trình đơn. Hai chế độ \"ghi vào văn bản\" sẽ viết lại chính tệp sách — và luôn có thể hoàn tác hoàn toàn. Ở chế độ \"chỉ giá trị đã chuyển đổi\", tùy chọn Nâng cao \"Hiện đơn vị gốc trong chú giải\" cho phép bạn chạm vào một giá trị đã chuyển đổi để xem văn bản gốc."
+#: main.lua:9572
+msgid ""
+"How conversions are shown while you read. Opens a picker showing a sample "
+"sentence in each of the three modes; the change is applied to the book when "
+"you leave the menu. The two \"written into the text\" modes rewrite the book "
+"file itself — fully reversible at any time. In the \"converted only\" mode, "
+"the Advanced option \"Show original unit in tooltip\" lets you tap a "
+"converted value to see the original text."
+msgstr ""
+"Cách các chuyển đổi hiện ra trong lúc bạn đọc. Mở một bảng chọn hiển thị một "
+"câu mẫu ở mỗi chế độ trong ba chế độ; thay đổi được áp dụng vào sách khi bạn "
+"rời trình đơn. Hai chế độ \"ghi vào văn bản\" sẽ viết lại chính tệp sách — "
+"và luôn có thể hoàn tác hoàn toàn. Ở chế độ \"chỉ giá trị đã chuyển đổi\", "
+"tùy chọn Nâng cao \"Hiện đơn vị gốc trong chú giải\" cho phép bạn chạm vào "
+"một giá trị đã chuyển đổi để xem văn bản gốc."
 
 #. TRANSLATORS: Long-press explainer for 'Auto-convert when opening a new book'.
 #. Shown only in the in-text modes, which rewrite the book's own text.
-#: main.lua:9507
-msgid "Convert every new book automatically when you open it, without asking first — this rewrites the book's own text. Only English books are converted; other languages are left alone. Turn this off to convert books one by one with \"Scan book\", which asks before it starts."
+#: main.lua:9611
+msgid ""
+"Convert every new book automatically when you open it, without asking first "
+"— this rewrites the book's own text. Only English books are converted; other "
+"languages are left alone. Turn this off to convert books one by one with "
+"\"Scan book\", which asks before it starts."
 msgstr ""
+"Tự động chuyển đổi mọi sách mới ngay khi bạn mở, không hỏi trước — thao tác "
+"này viết lại chính văn bản của sách. Chỉ những sách tiếng Anh mới được "
+"chuyển đổi; các ngôn ngữ khác được giữ nguyên. Tắt tùy chọn này để chuyển "
+"đổi từng cuốn một bằng 'Quét sách', vốn sẽ hỏi trước khi bắt đầu."
 
 #. TRANSLATORS: Long-press explainer for 'Auto-scan when opening a new book'.
-#: main.lua:9510
-msgid "Scan every new book automatically when you open it. Only English books are scanned — other languages are left alone. Turn this off to scan books one by one with \"Scan book\"."
-msgstr "Tự động quét mọi cuốn sách mới khi bạn mở nó. Chỉ sách tiếng Anh được quét — các ngôn ngữ khác không bị đụng tới. Hãy tắt tùy chọn này để quét từng cuốn một bằng \"Quét sách\"."
+#: main.lua:9614
+msgid ""
+"Scan every new book automatically when you open it. Only English books are "
+"scanned — other languages are left alone. Turn this off to scan books one by "
+"one with \"Scan book\"."
+msgstr ""
+"Tự động quét mọi cuốn sách mới khi bạn mở nó. Chỉ sách tiếng Anh được quét — "
+"các ngôn ngữ khác không bị đụng tới. Hãy tắt tùy chọn này để quét từng cuốn "
+"một bằng \"Quét sách\"."
 
 #. TRANSLATORS: Long-press explainer for the 'Scan book' / 'Rescan book' entry.
-#: main.lua:9534
-msgid "Scan this book now, or scan it again from scratch. The scan runs in the background, so you can keep reading while it works. Results are saved, so reopening the book later is instant."
-msgstr "Quét cuốn sách này ngay, hoặc quét lại từ đầu. Lượt quét chạy ở nền nên bạn vẫn có thể tiếp tục đọc trong lúc đó. Kết quả được lưu lại, nên lần sau mở sách sẽ hiện ra tức thì."
+#: main.lua:9638
+msgid ""
+"Scan this book now, or scan it again from scratch. The scan runs in the "
+"background, so you can keep reading while it works. Results are saved, so "
+"reopening the book later is instant."
+msgstr ""
+"Quét cuốn sách này ngay, hoặc quét lại từ đầu. Lượt quét chạy ở nền nên bạn "
+"vẫn có thể tiếp tục đọc trong lúc đó. Kết quả được lưu lại, nên lần sau mở "
+"sách sẽ hiện ra tức thì."
 
 #. TRANSLATORS: Long-press explainer for 'Styling'.
-#: main.lua:9618
-msgid "Customise how underlines look (solid or wavy, intensity, thickness) and the tooltip (size, unit icon), with a live preview. Drag the dialog around if it covers the text you want to see."
-msgstr "Tùy chỉnh dáng vẻ của gạch chân (nét liền hay lượn sóng, độ đậm, độ dày) và chú giải (cỡ chữ, biểu tượng đơn vị), có xem trước trực tiếp. Hãy kéo cửa sổ đi chỗ khác nếu nó che mất đoạn văn bạn muốn xem."
+#: main.lua:9722
+msgid ""
+"Customise how underlines look (solid or wavy, intensity, thickness) and the "
+"tooltip (size, unit icon), with a live preview. Drag the dialog around if it "
+"covers the text you want to see."
+msgstr ""
+"Tùy chỉnh dáng vẻ của gạch chân (nét liền hay lượn sóng, độ đậm, độ dày) và "
+"chú giải (cỡ chữ, biểu tượng đơn vị), có xem trước trực tiếp. Hãy kéo cửa sổ "
+"đi chỗ khác nếu nó che mất đoạn văn bạn muốn xem."
 
 #. TRANSLATORS: Long-press explainer for 'Check for updates'.
-#: main.lua:9634
-msgid "Check GitHub for a newer Footcream release and install it in place. Needs Wi-Fi; you'll be asked to restart KOReader when it's done."
-msgstr "Kiểm tra trên GitHub xem có bản Footcream mới hơn không rồi cài đặt tại chỗ. Cần Wi-Fi; xong xuôi bạn sẽ được nhắc khởi động lại KOReader."
+#: main.lua:9738
+msgid ""
+"Check GitHub for a newer Footcream release and install it in place. Needs Wi-"
+"Fi; you'll be asked to restart KOReader when it's done."
+msgstr ""
+"Kiểm tra trên GitHub xem có bản Footcream mới hơn không rồi cài đặt tại chỗ. "
+"Cần Wi-Fi; xong xuôi bạn sẽ được nhắc khởi động lại KOReader."
 
 #. TRANSLATORS: Long-press explainer for the 'Advanced' submenu.
-#: main.lua:9647
-msgid "Extra options: unit categories, rounding, original-unit tooltips, error reporting to the developer, per-book cleanup, and debug tools."
-msgstr "Các tùy chọn thêm: nhóm đơn vị, làm tròn, chú giải đơn vị gốc, báo lỗi cho nhà phát triển, dọn dẹp theo từng sách, và công cụ chẩn đoán."
+#: main.lua:9751
+msgid ""
+"Extra options: unit categories, rounding, original-unit tooltips, error "
+"reporting to the developer, per-book cleanup, and debug tools."
+msgstr ""
+"Các tùy chọn thêm: nhóm đơn vị, làm tròn, chú giải đơn vị gốc, báo lỗi cho "
+"nhà phát triển, dọn dẹp theo từng sách, và công cụ chẩn đoán."
 
 #. TRANSLATORS: Long-press explainer for 'Unit categories'.
-#: main.lua:9654
-msgid "Choose which kinds of measurements are converted. Anything you untick is ignored everywhere — no underlines, popups or in-text conversions for that category."
-msgstr "Chọn những loại số đo nào được chuyển đổi. Bất cứ thứ gì bạn bỏ chọn đều bị bỏ qua ở mọi nơi — nhóm đó sẽ không có gạch chân, chú giải hay chuyển đổi trong văn bản."
+#: main.lua:9758
+msgid ""
+"Choose which kinds of measurements are converted. Anything you untick is "
+"ignored everywhere — no underlines, popups or in-text conversions for that "
+"category."
+msgstr ""
+"Chọn những loại số đo nào được chuyển đổi. Bất cứ thứ gì bạn bỏ chọn đều bị "
+"bỏ qua ở mọi nơi — nhóm đó sẽ không có gạch chân, chú giải hay chuyển đổi "
+"trong văn bản."
 
 #. TRANSLATORS: Long-press explainer for 'Smart rounding for conversions'. The
 #. quoted values are examples; 'm' is the metre symbol, not translated.
-#: main.lua:9663
-msgid "Round conversions to friendly, readable values — \"90 m\" instead of \"91.44 m\". Turn off if you prefer exact numbers."
-msgstr "Làm tròn kết quả chuyển đổi thành những con số dễ đọc — \"90 m\" thay vì \"91.44 m\". Hãy tắt nếu bạn thích số chính xác."
+#: main.lua:9767
+msgid ""
+"Round conversions to friendly, readable values — \"90 m\" instead of \"91.44 "
+"m\". Turn off if you prefer exact numbers."
+msgstr ""
+"Làm tròn kết quả chuyển đổi thành những con số dễ đọc — \"90 m\" thay vì "
+"\"91.44 m\". Hãy tắt nếu bạn thích số chính xác."
 
 #. TRANSLATORS: Long-press explainer for 'Show original unit in tooltip'.
-#: main.lua:9705
-msgid "In the \"only (in text)\" mode, underline the converted values so you can tap any of them and see the original text. Handy if you want to double-check a conversion against what the author wrote."
-msgstr "Ở chế độ \"chỉ (trong văn bản)\", gạch chân các giá trị đã chuyển đổi để bạn có thể chạm vào bất kỳ giá trị nào và xem văn bản gốc. Tiện khi bạn muốn đối chiếu một kết quả chuyển đổi với điều tác giả đã viết."
+#: main.lua:9809
+msgid ""
+"In the \"only (in text)\" mode, underline the converted values so you can "
+"tap any of them and see the original text. Handy if you want to double-check "
+"a conversion against what the author wrote."
+msgstr ""
+"Ở chế độ \"chỉ (trong văn bản)\", gạch chân các giá trị đã chuyển đổi để bạn "
+"có thể chạm vào bất kỳ giá trị nào và xem văn bản gốc. Tiện khi bạn muốn đối "
+"chiếu một kết quả chuyển đổi với điều tác giả đã viết."
 
 #. TRANSLATORS: Long-press explainer for 'Long-press units to send errors to the
 #. developer'.
-#: main.lua:9740
-msgid "Flag bad conversions while you read: long-press a unit (or select text Footcream missed) and the error is sent anonymously to the developer. Each flag contains the book title, the measurement, its conversion and the surrounding sentence — nothing else. Works offline: flags are queued and sent when you're connected."
-msgstr "Báo các chuyển đổi sai trong lúc đọc: nhấn giữ một đơn vị (hoặc chọn đoạn văn bản mà Footcream bỏ sót) và lỗi sẽ được gửi ẩn danh tới nhà phát triển. Mỗi báo cáo chỉ chứa tên sách, số đo, kết quả chuyển đổi của nó và câu văn xung quanh — không có gì khác. Hoạt động cả khi ngoại tuyến: các báo cáo được xếp hàng và gửi đi khi bạn có kết nối."
+#: main.lua:9844
+msgid ""
+"Flag bad conversions while you read: long-press a unit (or select text "
+"Footcream missed) and the error is sent anonymously to the developer. Each "
+"flag contains the book title, the measurement, its conversion and the "
+"surrounding sentence — nothing else. Works offline: flags are queued and "
+"sent when you're connected."
+msgstr ""
+"Báo các chuyển đổi sai trong lúc đọc: nhấn giữ một đơn vị (hoặc chọn đoạn "
+"văn bản mà Footcream bỏ sót) và lỗi sẽ được gửi ẩn danh tới nhà phát triển. "
+"Mỗi báo cáo chỉ chứa tên sách, số đo, kết quả chuyển đổi của nó và câu văn "
+"xung quanh — không có gì khác. Hoạt động cả khi ngoại tuyến: các báo cáo "
+"được xếp hàng và gửi đi khi bạn có kết nối."
 
 #. TRANSLATORS: Long-press explainer for 'Remove Footcream data from this book'.
-#: main.lua:9774
-msgid "Undo everything for this book: restore the original text, remove all underlines and delete the saved scan. The book file goes back to exactly how it was before Footcream touched it."
-msgstr "Hoàn tác mọi thứ đối với cuốn sách này: khôi phục văn bản gốc, bỏ hết gạch chân và xóa kết quả quét đã lưu. Tệp sách trở về đúng như trước khi Footcream đụng vào nó."
+#: main.lua:9878
+msgid ""
+"Undo everything for this book: restore the original text, remove all "
+"underlines and delete the saved scan. The book file goes back to exactly how "
+"it was before Footcream touched it."
+msgstr ""
+"Hoàn tác mọi thứ đối với cuốn sách này: khôi phục văn bản gốc, bỏ hết gạch "
+"chân và xóa kết quả quét đã lưu. Tệp sách trở về đúng như trước khi "
+"Footcream đụng vào nó."
 
 #. TRANSLATORS: Long-press explainer for the 'Debug' submenu.
-#: main.lua:9816
-msgid "See exactly what the scan found in this book, and manage errors you've flagged on this device."
-msgstr "Xem chính xác lượt quét đã tìm thấy gì trong cuốn sách này, và quản lý những lỗi bạn đã báo trên thiết bị này."
+#: main.lua:9920
+msgid ""
+"See exactly what the scan found in this book, and manage errors you've "
+"flagged on this device."
+msgstr ""
+"Xem chính xác lượt quét đã tìm thấy gì trong cuốn sách này, và quản lý những "
+"lỗi bạn đã báo trên thiết bị này."
 
 #. TRANSLATORS: Long-press explainer for 'Units in book (list)'.
-#: main.lua:9823
-msgid "Every measurement found in this book, with its detected value and conversion. Long-press an entry to flag it as wrong."
-msgstr "Mọi số đo tìm thấy trong cuốn sách này, kèm giá trị nhận ra được và kết quả chuyển đổi. Nhấn giữ một mục để báo rằng nó sai."
+#: main.lua:9927
+msgid ""
+"Every measurement found in this book, with its detected value and "
+"conversion. Long-press an entry to flag it as wrong."
+msgstr ""
+"Mọi số đo tìm thấy trong cuốn sách này, kèm giá trị nhận ra được và kết quả "
+"chuyển đổi. Nhấn giữ một mục để báo rằng nó sai."
 
 #. TRANSLATORS: Long-press explainer for 'View flagged errors'. The path in
 #. parentheses is a file location - leave it as it is.
-#: main.lua:9838
-msgid "Show the errors you've flagged on this device. They're kept in a plain-text file (koreader/footcream/flagged_errors.txt) that you can also attach to a GitHub issue."
-msgstr "Hiển thị những lỗi bạn đã báo trên thiết bị này. Chúng được giữ trong một tệp văn bản thuần (koreader/footcream/flagged_errors.txt) mà bạn cũng có thể đính kèm vào một issue trên GitHub."
+#: main.lua:9942
+msgid ""
+"Show the errors you've flagged on this device. They're kept in a plain-text "
+"file (koreader/footcream/flagged_errors.txt) that you can also attach to a "
+"GitHub issue."
+msgstr ""
+"Hiển thị những lỗi bạn đã báo trên thiết bị này. Chúng được giữ trong một "
+"tệp văn bản thuần (koreader/footcream/flagged_errors.txt) mà bạn cũng có thể "
+"đính kèm vào một issue trên GitHub."
 
 #. TRANSLATORS: Long-press explainer for 'Clear flagged errors'.
-#: main.lua:9848
-msgid "Delete the local flagged-errors file. Reports that were already sent to the developer are not affected."
-msgstr "Xóa tệp lỗi đã báo nằm trên máy. Những báo cáo đã gửi tới nhà phát triển thì không bị ảnh hưởng."
-
+#: main.lua:9952
+msgid ""
+"Delete the local flagged-errors file. Reports that were already sent to the "
+"developer are not affected."
+msgstr ""
+"Xóa tệp lỗi đã báo nằm trên máy. Những báo cáo đã gửi tới nhà phát triển thì "
+"không bị ảnh hưởng."
