@@ -2,8 +2,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: foot-cream\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-11 14:48+0200\n"
-"PO-Revision-Date: 2026-08-11 10:54\n"
+"POT-Creation-Date: 2026-08-18 13:56+0200\n"
+"PO-Revision-Date: 2026-08-18 12:14\n"
 "Last-Translator: \n"
 "Language-Team: Czech\n"
 "Language: cs_CZ\n"
@@ -20,289 +20,153 @@ msgstr ""
 #. TRANSLATORS: Long-press explainer for the 'Length & Distance' category. The unit
 #. names are English measurement words - use your language's names for the same
 #. units.
-#: main.lua:8387
-msgid ""
-"Inches, feet, yards, miles, fathoms, furlongs, leagues, cubits — and in the "
-"imperial direction: millimeters, centimeters, meters, kilometers."
-msgstr ""
-"Palce, stopy, yardy, míle, sáhy, furlongy, ligy a lokty – a v imperiálním "
-"směru: milimetry, centimetry, metry a kilometry."
+#: main.lua:9221
+msgid "Inches, feet, yards, miles, fathoms, furlongs, leagues, cubits — and in the imperial direction: millimeters, centimeters, meters, kilometers."
+msgstr "Palce, stopy, yardy, míle, sáhy, furlongy, ligy a lokty – a v imperiálním směru: milimetry, centimetry, metry a kilometry."
 
 #. TRANSLATORS: Long-press explainer for the 'Weight' category. Tons are left alone
 #. on purpose because the word means several different quantities.
-#: main.lua:8390
-msgid ""
-"Ounces, pounds and stone — and in the imperial direction: grams and kilos. "
-"Tons are deliberately not converted (the word is too ambiguous)."
-msgstr ""
-"Unce, libry a stony – a v imperiálním směru: gramy a kilogramy. Tuny se "
-"záměrně nepřevádějí (slovo je příliš víceznačné)."
+#: main.lua:9224
+msgid "Ounces, pounds and stone — and in the imperial direction: grams and kilos. Tons are deliberately not converted (the word is too ambiguous)."
+msgstr "Unce, libry a stony – a v imperiálním směru: gramy a kilogramy. Tuny se záměrně nepřevádějí (slovo je příliš víceznačné)."
 
 #. TRANSLATORS: Long-press explainer for the 'Temperature' category.
-#: main.lua:8392
-msgid ""
-"°F and \"degrees Fahrenheit\" — and in the imperial direction, °C and "
-"\"degrees Celsius\"."
-msgstr ""
-"°F a „stupně Fahrenheita“ – a v imperiálním směru °C a „stupně Celsia“."
+#: main.lua:9226
+msgid "°F and \"degrees Fahrenheit\" — and in the imperial direction, °C and \"degrees Celsius\"."
+msgstr "°F a „stupně Fahrenheita“ – a v imperiálním směru °C a „stupně Celsia“."
 
 #. TRANSLATORS: Long-press explainer for the 'Volume' category. UK and US pints and
 #. gallons are different sizes, hence the note about the book's origin.
-#: main.lua:8395
-msgid ""
-"Pints, quarts, gallons and fluid ounces — and in the imperial direction, "
-"liters and milliliters. UK and US gallons differ; Footcream picks the right "
-"one from the book."
-msgstr ""
-"Pinty, kvarty, galony a tekuté unce – a v imperiálním směru litry a "
-"mililitry. Britský a americký galon se liší; Footcream vybere podle knihy "
-"ten správný."
+#: main.lua:9229
+msgid "Pints, quarts, gallons and fluid ounces — and in the imperial direction, liters and milliliters. UK and US gallons differ; Footcream picks the right one from the book."
+msgstr "Pinty, kvarty, galony a tekuté unce – a v imperiálním směru litry a mililitry. Britský a americký galon se liší; Footcream vybere podle knihy ten správný."
 
 #. TRANSLATORS: Long-press explainer for the 'Speed' category.
-#: main.lua:8397
-msgid ""
-"Miles per hour and knots — and in the imperial direction, km/h and meters "
-"per second."
+#: main.lua:9231
+msgid "Miles per hour and knots — and in the imperial direction, km/h and meters per second."
 msgstr "Míle za hodinu a uzly – a v imperiálním směru km/h a metry za sekundu."
 
 #. TRANSLATORS: Long-press explainer for the 'Area' category.
-#: main.lua:8399
-msgid ""
-"Acres and square miles/feet/yards — and in the imperial direction, hectares "
-"and square kilometers/meters/centimeters."
-msgstr ""
-"Akry a čtvereční míle, stopy a yardy – a v imperiálním směru hektary a "
-"čtvereční kilometry, metry a centimetry."
+#: main.lua:9233
+msgid "Acres and square miles/feet/yards — and in the imperial direction, hectares and square kilometers/meters/centimeters."
+msgstr "Akry a čtvereční míle, stopy a yardy – a v imperiálním směru hektary a čtvereční kilometry, metry a centimetry."
 
 #. TRANSLATORS: Long-press explainer for the hint-count line at the top of 'Menu >
 #. Footcream'.
-#: main.lua:8496
-msgid ""
-"How many measurements Footcream found in this book. The count always shows "
-"everything that was found, whichever mode you are in."
-msgstr ""
-"Kolik měr Footcream v této knize našel. Číslo vždy ukazuje vše nalezené, bez "
-"ohledu na zvolený režim."
+#: main.lua:9330
+msgid "How many measurements Footcream found in this book. The count always shows everything that was found, whichever mode you are in."
+msgstr "Kolik měr Footcream v této knize našel. Číslo vždy ukazuje vše nalezené, bez ohledu na zvolený režim."
 
 #. TRANSLATORS: Long-press explainer for 'Enable Footcream in this book'.
-#: main.lua:8511
-msgid ""
-"Turn Footcream off for this book only: no underlines, no conversions, no "
-"prompts — and a converted book gets its original text back. Other books are "
-"unaffected, and the choice is remembered for this book. To disable Footcream "
-"everywhere, use KOReader's plugin management."
-msgstr ""
-"Vypnout Footcream jen pro tuto knihu: žádná podtržení, žádné převody, žádné "
-"dotazy – a převedená kniha dostane zpět svůj původní text. Ostatní knihy "
-"zůstanou nedotčené a volba se pro tuto knihu zapamatuje. Chcete-li Footcream "
-"vypnout všude, použijte správu doplňků v KOReaderu."
+#: main.lua:9345
+msgid "Turn Footcream off for this book only: no underlines, no conversions, no prompts — and a converted book gets its original text back. Other books are unaffected, and the choice is remembered for this book. To disable Footcream everywhere, use KOReader's plugin management."
+msgstr "Vypnout Footcream jen pro tuto knihu: žádná podtržení, žádné převody, žádné dotazy – a převedená kniha dostane zpět svůj původní text. Ostatní knihy zůstanou nedotčené a volba se pro tuto knihu zapamatuje. Chcete-li Footcream vypnout všude, použijte správu doplňků v KOReaderu."
 
 #. TRANSLATORS: Long-press explainer for 'Convert units to'.
-#: main.lua:8569
-msgid ""
-"The unit system you want to read in. Metric converts imperial measurements "
-"(feet, miles, °F) to metric. The Imperial options do the reverse: they find "
-"metric measurements (meters, kilometers, kilos, °C) and show imperial "
-"values. Works in every mode; a converted book is restored and reconverted "
-"when you switch."
-msgstr ""
-"Soustava jednotek, ve které chcete číst. Metrické převádí imperiální míry "
-"(stopy, míle, °F) na metrické. Imperiální volby dělají opak: najdou metrické "
-"míry (metry, kilometry, kilogramy, °C) a zobrazí imperiální hodnoty. Funguje "
-"ve všech režimech; převedená kniha se při přepnutí obnoví a převede znovu."
+#: main.lua:9403
+msgid "The unit system you want to read in. Metric converts imperial measurements (feet, miles, °F) to metric. The Imperial options do the reverse: they find metric measurements (meters, kilometers, kilos, °C) and show imperial values. Works in every mode; a converted book is restored and reconverted when you switch."
+msgstr "Soustava jednotek, ve které chcete číst. Metrické převádí imperiální míry (stopy, míle, °F) na metrické. Imperiální volby dělají opak: najdou metrické míry (metry, kilometry, kilogramy, °C) a zobrazí imperiální hodnoty. Funguje ve všech režimech; převedená kniha se při přepnutí obnoví a převede znovu."
 
 #. TRANSLATORS: Long-press explainer for the 'Metric' choice.
-#: main.lua:8578
-msgid ""
-"Convert imperial measurements (feet, miles, pounds, °F, gallons…) to metric."
-msgstr ""
-"Převádět imperiální míry (stopy, míle, libry, °F, galony…) na metrické."
+#: main.lua:9412
+msgid "Convert imperial measurements (feet, miles, pounds, °F, gallons…) to metric."
+msgstr "Převádět imperiální míry (stopy, míle, libry, °F, galony…) na metrické."
 
 #. TRANSLATORS: Long-press explainer for the 'Imperial (US)' choice. The quoted
 #. measurements are examples of the output; 'm', 'ft' and 'in' are unit symbols and
 #. are not translated.
-#: main.lua:8592
-msgid ""
-"Convert metric measurements to US units: meters become feet and inches "
-"(\"1.8 m\" → \"5 ft 11 in\"), kilometers become miles, kilos become pounds, "
-"°C becomes °F, liters become quarts and gallons."
-msgstr ""
-"Převádět metrické míry na americké jednotky: z metrů se stanou stopy a palce "
-"(„1.8 m“ → „5 ft 11 in“), z kilometrů míle, z kilogramů libry, z °C se stane "
-"°F a z litrů kvarty a galony."
+#: main.lua:9426
+msgid "Convert metric measurements to US units: meters become feet and inches (\"1.8 m\" → \"5 ft 11 in\"), kilometers become miles, kilos become pounds, °C becomes °F, liters become quarts and gallons."
+msgstr "Převádět metrické míry na americké jednotky: z metrů se stanou stopy a palce („1.8 m“ → „5 ft 11 in“), z kilometrů míle, z kilogramů libry, z °C se stane °F a z litrů kvarty a galony."
 
 #. TRANSLATORS: Long-press explainer for the 'Imperial (UK)' choice. The quoted
 #. measurements are examples of the output; 'kg', 'st' and 'lb' are unit symbols
 #. and are not translated.
-#: main.lua:8607
-msgid ""
-"Like Imperial (US), but with UK measures: body weights in stones (\"75 kg\" "
-"→ \"11 st 11 lb\") and volumes in imperial pints and gallons."
-msgstr ""
-"Jako Imperiální (USA), ale s britskými mírami: tělesná hmotnost ve stonech "
-"(„75 kg“ → „11 st 11 lb“) a objemy v britských pintách a galonech."
+#: main.lua:9441
+msgid "Like Imperial (US), but with UK measures: body weights in stones (\"75 kg\" → \"11 st 11 lb\") and volumes in imperial pints and gallons."
+msgstr "Jako Imperiální (USA), ale s britskými mírami: tělesná hmotnost ve stonech („75 kg“ → „11 st 11 lb“) a objemy v britských pintách a galonech."
 
 #. TRANSLATORS: Long-press explainer for the 'Mode' entry.
-#: main.lua:8634
-msgid ""
-"How conversions are shown while you read. Opens a picker showing a sample "
-"sentence in each of the three modes; the change is applied to the book when "
-"you leave the menu. The two \"written into the text\" modes rewrite the book "
-"file itself — fully reversible at any time. In the \"converted only\" mode, "
-"the Advanced option \"Show original unit in tooltip\" lets you tap a "
-"converted value to see the original text."
+#: main.lua:9468
+msgid "How conversions are shown while you read. Opens a picker showing a sample sentence in each of the three modes; the change is applied to the book when you leave the menu. The two \"written into the text\" modes rewrite the book file itself — fully reversible at any time. In the \"converted only\" mode, the Advanced option \"Show original unit in tooltip\" lets you tap a converted value to see the original text."
+msgstr "Jak se převody zobrazují při čtení. Otevře výběr s ukázkovou větou v každém ze tří režimů; změna se na knihu použije po opuštění nabídky. Dva režimy, které zapisují do textu, mění samotný soubor knihy – vždy je lze vrátit zpět. V režimu „pouze převod“ umožňuje pokročilá volba „Zobrazit původní jednotku v bublině“ klepnout na převedenou hodnotu a zobrazit původní text."
+
+#. TRANSLATORS: Long-press explainer for 'Auto-convert when opening a new book'.
+#. Shown only in the in-text modes, which rewrite the book's own text.
+#: main.lua:9507
+msgid "Convert every new book automatically when you open it, without asking first — this rewrites the book's own text. Only English books are converted; other languages are left alone. Turn this off to convert books one by one with \"Scan book\", which asks before it starts."
 msgstr ""
-"Jak se převody zobrazují při čtení. Otevře výběr s ukázkovou větou v každém "
-"ze tří režimů; změna se na knihu použije po opuštění nabídky. Dva režimy, "
-"které zapisují do textu, mění samotný soubor knihy – vždy je lze vrátit "
-"zpět. V režimu „pouze převod“ umožňuje pokročilá volba „Zobrazit původní "
-"jednotku v bublině“ klepnout na převedenou hodnotu a zobrazit původní text."
 
 #. TRANSLATORS: Long-press explainer for 'Auto-scan when opening a new book'.
-#: main.lua:8654
-msgid ""
-"Scan every new book automatically when you open it. Only English books are "
-"scanned — other languages are left alone. Turn this off to scan books one by "
-"one with \"Scan book\"."
-msgstr ""
-"Automaticky naskenovat každou novou knihu při otevření. Skenují se pouze "
-"anglické knihy – ostatní jazyky zůstanou nedotčené. Vypněte, chcete-li knihy "
-"skenovat jednotlivě přes „Naskenovat knihu“."
+#: main.lua:9510
+msgid "Scan every new book automatically when you open it. Only English books are scanned — other languages are left alone. Turn this off to scan books one by one with \"Scan book\"."
+msgstr "Automaticky naskenovat každou novou knihu při otevření. Skenují se pouze anglické knihy – ostatní jazyky zůstanou nedotčené. Vypněte, chcete-li knihy skenovat jednotlivě přes „Naskenovat knihu“."
 
 #. TRANSLATORS: Long-press explainer for the 'Scan book' / 'Rescan book' entry.
-#: main.lua:8677
-msgid ""
-"Scan this book now, or scan it again from scratch. The scan runs in the "
-"background, so you can keep reading while it works. Results are saved, so "
-"reopening the book later is instant."
-msgstr ""
-"Naskenovat tuto knihu nyní, nebo skenování zopakovat od začátku. Skenování "
-"běží na pozadí, takže můžete dál číst. Výsledky se ukládají, takže pozdější "
-"otevření knihy je okamžité."
+#: main.lua:9534
+msgid "Scan this book now, or scan it again from scratch. The scan runs in the background, so you can keep reading while it works. Results are saved, so reopening the book later is instant."
+msgstr "Naskenovat tuto knihu nyní, nebo skenování zopakovat od začátku. Skenování běží na pozadí, takže můžete dál číst. Výsledky se ukládají, takže pozdější otevření knihy je okamžité."
 
 #. TRANSLATORS: Long-press explainer for 'Styling'.
-#: main.lua:8758
-msgid ""
-"Customise how underlines look (solid or wavy, intensity, thickness) and the "
-"tooltip (size, unit icon), with a live preview. Drag the dialog around if it "
-"covers the text you want to see."
-msgstr ""
-"Přizpůsobte vzhled podtržení (plné nebo vlnité, sytost, tloušťka) a bubliny "
-"(velikost, ikona jednotky) s živým náhledem. Přetáhněte okno, pokud zakrývá "
-"text, který chcete vidět."
+#: main.lua:9618
+msgid "Customise how underlines look (solid or wavy, intensity, thickness) and the tooltip (size, unit icon), with a live preview. Drag the dialog around if it covers the text you want to see."
+msgstr "Přizpůsobte vzhled podtržení (plné nebo vlnité, sytost, tloušťka) a bubliny (velikost, ikona jednotky) s živým náhledem. Přetáhněte okno, pokud zakrývá text, který chcete vidět."
 
 #. TRANSLATORS: Long-press explainer for 'Check for updates'.
-#: main.lua:8774
-msgid ""
-"Check GitHub for a newer Footcream release and install it in place. Needs Wi-"
-"Fi; you'll be asked to restart KOReader when it's done."
-msgstr ""
-"Zkontrolovat na GitHubu novější verzi Footcreamu a rovnou ji nainstalovat. "
-"Vyžaduje Wi-Fi; po dokončení budete vyzváni k restartování KOReaderu."
+#: main.lua:9634
+msgid "Check GitHub for a newer Footcream release and install it in place. Needs Wi-Fi; you'll be asked to restart KOReader when it's done."
+msgstr "Zkontrolovat na GitHubu novější verzi Footcreamu a rovnou ji nainstalovat. Vyžaduje Wi-Fi; po dokončení budete vyzváni k restartování KOReaderu."
 
 #. TRANSLATORS: Long-press explainer for the 'Advanced' submenu.
-#: main.lua:8787
-msgid ""
-"Extra options: unit categories, rounding, original-unit tooltips, error "
-"reporting to the developer, per-book cleanup, and debug tools."
-msgstr ""
-"Další volby: kategorie jednotek, zaokrouhlování, bubliny s původní "
-"jednotkou, hlášení chyb vývojáři, úklid u jednotlivých knih a diagnostické "
-"nástroje."
+#: main.lua:9647
+msgid "Extra options: unit categories, rounding, original-unit tooltips, error reporting to the developer, per-book cleanup, and debug tools."
+msgstr "Další volby: kategorie jednotek, zaokrouhlování, bubliny s původní jednotkou, hlášení chyb vývojáři, úklid u jednotlivých knih a diagnostické nástroje."
 
 #. TRANSLATORS: Long-press explainer for 'Unit categories'.
-#: main.lua:8794
-msgid ""
-"Choose which kinds of measurements are converted. Anything you untick is "
-"ignored everywhere — no underlines, popups or in-text conversions for that "
-"category."
-msgstr ""
-"Vyberte, které druhy měr se převádějí. Vše, co odškrtnete, se všude ignoruje "
-"– pro danou kategorii žádná podtržení, bubliny ani převody v textu."
+#: main.lua:9654
+msgid "Choose which kinds of measurements are converted. Anything you untick is ignored everywhere — no underlines, popups or in-text conversions for that category."
+msgstr "Vyberte, které druhy měr se převádějí. Vše, co odškrtnete, se všude ignoruje – pro danou kategorii žádná podtržení, bubliny ani převody v textu."
 
 #. TRANSLATORS: Long-press explainer for 'Smart rounding for conversions'. The
 #. quoted values are examples; 'm' is the metre symbol, not translated.
-#: main.lua:8803
-msgid ""
-"Round conversions to friendly, readable values — \"90 m\" instead of \"91.44 "
-"m\". Turn off if you prefer exact numbers."
-msgstr ""
-"Zaokrouhlovat převody na dobře čitelné hodnoty – „90 m“ místo „91.44 m“. "
-"Vypněte, pokud dáváte přednost přesným číslům."
+#: main.lua:9663
+msgid "Round conversions to friendly, readable values — \"90 m\" instead of \"91.44 m\". Turn off if you prefer exact numbers."
+msgstr "Zaokrouhlovat převody na dobře čitelné hodnoty – „90 m“ místo „91.44 m“. Vypněte, pokud dáváte přednost přesným číslům."
 
 #. TRANSLATORS: Long-press explainer for 'Show original unit in tooltip'.
-#: main.lua:8844
-msgid ""
-"In the \"only (in text)\" mode, underline the converted values so you can "
-"tap any of them and see the original text. Handy if you want to double-check "
-"a conversion against what the author wrote."
-msgstr ""
-"V režimu „pouze (v textu)“ podtrhávat převedené hodnoty, abyste na "
-"kteroukoli z nich mohli klepnout a zobrazit původní text. Hodí se, když "
-"chcete převod porovnat s tím, co napsal autor."
+#: main.lua:9705
+msgid "In the \"only (in text)\" mode, underline the converted values so you can tap any of them and see the original text. Handy if you want to double-check a conversion against what the author wrote."
+msgstr "V režimu „pouze (v textu)“ podtrhávat převedené hodnoty, abyste na kteroukoli z nich mohli klepnout a zobrazit původní text. Hodí se, když chcete převod porovnat s tím, co napsal autor."
 
 #. TRANSLATORS: Long-press explainer for 'Long-press units to send errors to the
 #. developer'.
-#: main.lua:8879
-msgid ""
-"Flag bad conversions while you read: long-press a unit (or select text "
-"Footcream missed) and the error is sent anonymously to the developer. Each "
-"flag contains the book title, the measurement, its conversion and the "
-"surrounding sentence — nothing else. Works offline: flags are queued and "
-"sent when you're connected."
-msgstr ""
-"Hlaste špatné převody při čtení: dlouze stiskněte jednotku (nebo označte "
-"text, který Footcream přehlédl) a chyba se anonymně odešle vývojáři. Každé "
-"hlášení obsahuje název knihy, míru, její převod a okolní větu – nic víc. "
-"Funguje i bez připojení: hlášení se zařadí do fronty a odešlou, jakmile "
-"budete online."
+#: main.lua:9740
+msgid "Flag bad conversions while you read: long-press a unit (or select text Footcream missed) and the error is sent anonymously to the developer. Each flag contains the book title, the measurement, its conversion and the surrounding sentence — nothing else. Works offline: flags are queued and sent when you're connected."
+msgstr "Hlaste špatné převody při čtení: dlouze stiskněte jednotku (nebo označte text, který Footcream přehlédl) a chyba se anonymně odešle vývojáři. Každé hlášení obsahuje název knihy, míru, její převod a okolní větu – nic víc. Funguje i bez připojení: hlášení se zařadí do fronty a odešlou, jakmile budete online."
 
 #. TRANSLATORS: Long-press explainer for 'Remove Footcream data from this book'.
-#: main.lua:8913
-msgid ""
-"Undo everything for this book: restore the original text, remove all "
-"underlines and delete the saved scan. The book file goes back to exactly how "
-"it was before Footcream touched it."
-msgstr ""
-"Vrátit u této knihy vše zpět: obnovit původní text, odstranit všechna "
-"podtržení a smazat uložené skenování. Soubor knihy se vrátí přesně do stavu, "
-"v jakém byl, než se ho Footcream dotkl."
+#: main.lua:9774
+msgid "Undo everything for this book: restore the original text, remove all underlines and delete the saved scan. The book file goes back to exactly how it was before Footcream touched it."
+msgstr "Vrátit u této knihy vše zpět: obnovit původní text, odstranit všechna podtržení a smazat uložené skenování. Soubor knihy se vrátí přesně do stavu, v jakém byl, než se ho Footcream dotkl."
 
 #. TRANSLATORS: Long-press explainer for the 'Debug' submenu.
-#: main.lua:8955
-msgid ""
-"See exactly what the scan found in this book, and manage errors you've "
-"flagged on this device."
-msgstr ""
-"Podívejte se přesně, co skenování v této knize našlo, a spravujte chyby, "
-"které jste na tomto zařízení nahlásili."
+#: main.lua:9816
+msgid "See exactly what the scan found in this book, and manage errors you've flagged on this device."
+msgstr "Podívejte se přesně, co skenování v této knize našlo, a spravujte chyby, které jste na tomto zařízení nahlásili."
 
 #. TRANSLATORS: Long-press explainer for 'Units in book (list)'.
-#: main.lua:8962
-msgid ""
-"Every measurement found in this book, with its detected value and "
-"conversion. Long-press an entry to flag it as wrong."
-msgstr ""
-"Všechny míry nalezené v této knize s rozpoznanou hodnotou a převodem. "
-"Dlouhým stiskem položky ji nahlásíte jako chybnou."
+#: main.lua:9823
+msgid "Every measurement found in this book, with its detected value and conversion. Long-press an entry to flag it as wrong."
+msgstr "Všechny míry nalezené v této knize s rozpoznanou hodnotou a převodem. Dlouhým stiskem položky ji nahlásíte jako chybnou."
 
 #. TRANSLATORS: Long-press explainer for 'View flagged errors'. The path in
 #. parentheses is a file location - leave it as it is.
-#: main.lua:8977
-msgid ""
-"Show the errors you've flagged on this device. They're kept in a plain-text "
-"file (koreader/footcream/flagged_errors.txt) that you can also attach to a "
-"GitHub issue."
-msgstr ""
-"Zobrazit chyby, které jste na tomto zařízení nahlásili. Ukládají se do "
-"textového souboru (koreader/footcream/flagged_errors.txt), který můžete také "
-"přiložit k hlášení na GitHubu."
+#: main.lua:9838
+msgid "Show the errors you've flagged on this device. They're kept in a plain-text file (koreader/footcream/flagged_errors.txt) that you can also attach to a GitHub issue."
+msgstr "Zobrazit chyby, které jste na tomto zařízení nahlásili. Ukládají se do textového souboru (koreader/footcream/flagged_errors.txt), který můžete také přiložit k hlášení na GitHubu."
 
 #. TRANSLATORS: Long-press explainer for 'Clear flagged errors'.
-#: main.lua:8987
-msgid ""
-"Delete the local flagged-errors file. Reports that were already sent to the "
-"developer are not affected."
-msgstr ""
-"Smazat místní soubor nahlášených chyb. Hlášení, která už byla odeslána "
-"vývojáři, to neovlivní."
+#: main.lua:9848
+msgid "Delete the local flagged-errors file. Reports that were already sent to the developer are not affected."
+msgstr "Smazat místní soubor nahlášených chyb. Hlášení, která už byla odeslána vývojáři, to neovlivní."
+
