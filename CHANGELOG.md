@@ -1,5 +1,42 @@
 # Changelog
 
+## v1.8.0
+
+Scanning a book is roughly four times faster, and converting one asks its question before it starts rather than after.
+
+### Scanning got much faster
+
+On a Kobo, a 1 MB novel took **87 seconds to scan. It now takes under 10.** The whole scan-and-convert, start to finish, went from about 100 seconds to 23.
+
+Nothing was dropped to get there — the plugin looks for exactly the same measurements as before, and finds exactly the same ones. Three changes did it:
+
+- It no longer reads through the whole book once for every unit name it knows. It first checks which of those 54 names the book actually contains, and only searches for those. On a typical novel that skips about 39 of them outright.
+- Where it still has to search, it now starts from the digits rather than from every character in the book, so it can skip from number to number instead of inspecting the spaces between words.
+- Several searches that used to make separate passes now share one.
+
+### One action, one question
+
+Choosing a mode that writes into your book used to scan first and ask afterwards — so you waited, then got a question you could still say no to. It now asks up front ("Scan and convert"), and the whole job runs under one progress ring.
+
+New option: **Auto-convert when opening a new book.** With it on, a new English book is converted as you open it without asking. With it off (the default), nothing is converted until you ask.
+
+### Fixed
+
+- **Long books appeared to freeze part-way through a scan.** They weren't frozen — the plugin gave up on any scan that took over a minute and stopped without saying so. Slow books are now given the time they need, and a scan that genuinely fails says so instead of leaving a stalled progress ring on screen.
+- **Tapping the screen during a conversion silently cancelled it.** A stray tap — or turning a page — abandoned the whole thing with no message.
+- **"Converted N units in book" arrived while the plugin was visibly still working**, sometimes with the progress ring jumping backwards afterwards. The notice now waits until everything has actually finished.
+- **Switching a converted book back to underline-only said "Restored original units in book"** — technically true, but it answered a question you hadn't asked. It now tells you what you actually changed: "Underlined N units in book".
+- **Rescanning announced that the previous conversion had been restored**, mid-way through redoing it, which read as the plugin undoing its own work.
+- Long-press-to-report no longer holds up the end of a conversion. It needs to work out where each converted measurement ended up; that now happens quietly in the background afterwards.
+
+### Translations
+
+Still 30 languages, now including this release's new wording. Hungarian has had its first review by a native speaker — 23 strings improved. If you read one of these languages, corrections are very welcome and take a few minutes; see [CONTRIBUTING.md](CONTRIBUTING.md).
+
+### Scanner
+
+Cache version 64 → 67; already-scanned books rescan themselves once on open.
+
 ## v1.7.0
 
 Thank you for all the errors/flags you've sent in! The conversion and filtering is now much improved thanks to that. Please keep doing that. 
