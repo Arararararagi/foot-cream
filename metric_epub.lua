@@ -267,6 +267,203 @@ function M.has_soft_hyphens(epub_path)
     return false
 end
 
+-- Does this book contain height shorthand (6'2") or a °F/°C symbol anywhere?
+--
+-- Answers from the RAW FILE, in one pass over the archive. The plugin normally
+-- answers this by asking crengine for the whole book's rendered text, which
+-- costs 0.02s on an ordinary book — and 160 SECONDS on a soft-hyphen one, where
+-- it was 98% of the entire scan (measured 2026-08-17). Such books therefore ran
+-- every prime/°F pass unconditionally, ~14s of wasted work on the 73% of books
+-- that contain no such notation at all.
+--
+-- CONSERVATIVE BY CONSTRUCTION. A wrong `false` here silently drops every height
+-- and temperature conversion in the book, with no error anywhere — the same
+-- silent-failure shape as the inert guards this project keeps finding. A wrong
+-- `true` merely costs a few passes. So: an unreadable archive answers "yes to
+-- everything", tags are stripped before testing (a mark can sit in its own
+-- element: 6<span>'</span>), and entities are decoded (&#8242; &rsquo; &deg;)
+-- because the rendered text this replaces has none.
+local ENTITIES = {
+    ["&quot;"] = '"', ["&apos;"] = "'", ["&rsquo;"] = "\226\128\153",
+    ["&lsquo;"] = "\226\128\152", ["&rdquo;"] = "\226\128\157",
+    ["&ldquo;"] = "\226\128\156", ["&deg;"] = "\194\176",
+    ["&prime;"] = "\226\128\178", ["&Prime;"] = "\226\128\179",
+}
+local function decode_entities(s)
+    s = s:gsub("&#(%d+);", function(n)
+        n = tonumber(n)
+        if not n then return nil end
+        if n < 128 then return string.char(n) end
+        if n < 2048 then
+            return string.char(192 + math.floor(n / 64), 128 + (n % 64))
+        end
+        return string.char(224 + math.floor(n / 4096),
+                           128 + (math.floor(n / 64) % 64), 128 + (n % 64))
+    end)
+    s = s:gsub("&#[xX](%x+);", function(h)
+        local n = tonumber(h, 16)
+        if not n then return nil end
+        if n < 128 then return string.char(n) end
+        if n < 2048 then
+            return string.char(192 + math.floor(n / 64), 128 + (n % 64))
+        end
+        return string.char(224 + math.floor(n / 4096),
+                           128 + (math.floor(n / 64) % 64), 128 + (n % 64))
+    end)
+    return (s:gsub("&%a+;", function(e) return ENTITIES[e] end))
+end
+
+local _PRIME_MARKS = {
+    "'", '"', "\226\128\178", "\226\128\179", "\226\128\153", "\226\128\157",
+}
+
+function M.probe_notation(epub_path)
+    local yes = { prime = true, degf = true, degc = true }
+    local reader = Archiver.Reader:new()
+    if not reader:open(epub_path) then return yes end
+    local out = { prime = false, degf = false, degc = false }
+    for entry in reader:iterate() do
+        if entry.mode == "file" then
+            local data = reader:extractToMemory(entry.path)
+            if data and is_html(entry.path, data) then
+                local text = decode_entities((data:gsub("<[^>]*>", "")))
+                if not out.degf and text:find("\194\176F", 1, true) then
+                    out.degf = true
+                end
+                if not out.degc and text:find("\194\176C", 1, true) then
+                    out.degc = true
+                end
+                if not out.prime then
+                    for _, mark in ipairs(_PRIME_MARKS) do
+                        -- A DIGIT immediately before the mark: that is what the
+                        -- rendered-text gate tested, and a bare apostrophe is in
+                        -- every book ever written.
+                        if text:find("%d" .. mark:gsub("%W", "%%%0")) then
+                            out.prime = true
+                            break
+                        end
+                    end
+                end
+                if out.prime and out.degf and out.degc then
+                    reader:close()
+                    return out
+                end
+            end
+        end
+    end
+    reader:close()
+    return out
+end
+
+-- Tags that end a word when crengine lays the page out. Everything not listed
+-- is treated as inline, i.e. as fusing the text either side of it.
+local BLOCK_TAGS = {
+    p = true, div = true, br = true, li = true, ul = true, ol = true,
+    td = true, tr = true, table = true, section = true, article = true,
+    blockquote = true, figure = true, figcaption = true, hr = true,
+    body = true, html = true, head = true, title = true, dt = true, dd = true,
+    h1 = true, h2 = true, h3 = true, h4 = true, h5 = true, h6 = true,
+}
+
+-- Strip markup the way the renderer resolves it: block tags become a space,
+-- inline tags disappear. One pass, deciding per tag, rather than one gsub per
+-- tag name over the whole file.
+local function strip_markup(data)
+    local out = data:gsub("<(/?)%s*([%a][%w]*)[^>]*>", function(_slash, name)
+        return BLOCK_TAGS[name:lower()] and " " or ""
+    end)
+    -- Comments, doctypes, processing instructions: never text, never a break.
+    return (out:gsub("<[^>]*>", ""))
+end
+
+-- Does `alias` occur as a WORD, not merely as a substring?
+--
+-- This is the whole point of the gate. A plain substring test reports "mi",
+-- "kn", "ft" and "pt" present in every English book ever written ("might",
+-- "know", "after", "kept") — and those four are 44% of the scan's alias walk,
+-- so a substring test can never skip the passes that actually cost anything.
+--
+-- The rule mirrors the scanner's own boundary check exactly: only a LETTER on
+-- either side disqualifies. Digits must NOT, or the fused "6ft" form would be
+-- gated away. ASCII %a deliberately — the scanner uses %a too, so a UTF-8
+-- continuation byte counts as a boundary in both places, and the gate can never
+-- be stricter than the thing it is gating.
+local function word_present(text, alias)
+    local n, pos = #alias, 1
+    while true do
+        local i = text:find(alias, pos, true)
+        if not i then return false end
+        local before = i > 1 and text:sub(i - 1, i - 1) or ""
+        local after  = text:sub(i + n, i + n)
+        if not before:match("%a") and not after:match("%a") then return true end
+        pos = i + 1
+    end
+end
+
+-- Which unit aliases appear ANYWHERE in this book?
+--
+-- The scan runs one plain findAllText per alias, and a pass costs a full walk
+-- of the document whether or not it matches — 54 passes were 19.5s of a 37s
+-- scan on a Kobo. A pass for an alias the book never contains is pure waste,
+-- and this answers which those are from the raw archive, in one read.
+--
+-- Every decision here is deliberately biased toward saying YES, because the two
+-- errors are not symmetric: a wrong "present" costs one pass, a wrong "absent"
+-- silently loses conversions for the rest of that book's life.
+--   * tags are removed rather than replaced by a space, so "mi<i>les</i>"
+--     fuses to "miles" — the same thing crengine renders. Fusing can invent an
+--     alias that isn't really there; that only costs a pass.
+--   * entities are decoded and soft hyphens stripped, so "mi&shy;les" and
+--     "&#109;iles" both read as "miles".
+--   * both sides are lowercased, because the scan's own search is
+--     case-insensitive.
+--   * ANY failure returns nil, which the caller reads as "run every pass".
+--
+-- Returns a set keyed by the alias strings passed in, or nil.
+function M.probe_aliases(epub_path, aliases)
+    if not aliases or #aliases == 0 then return nil end
+    local reader = Archiver.Reader:new()
+    if not reader:open(epub_path) then return nil end
+    local lower, found, remaining = {}, {}, #aliases
+    for _, a in ipairs(aliases) do lower[a] = a:lower() end
+    local saw_text = false
+    for entry in reader:iterate() do
+        if entry.mode == "file" then
+            local data = reader:extractToMemory(entry.path)
+            if data and is_html(entry.path, data) then
+                -- Block-level tags SEPARATE words, inline tags FUSE them, which
+                -- is what crengine renders: "<p>mi</p><p>les</p>" is two words,
+                -- "mi<i>les</i>" is one. Getting this backwards either way
+                -- invents a word boundary that isn't there or hides one that is.
+                local text = strip_markup(data)
+                text = decode_entities(text)
+                -- Soft hyphens vanish, whitespace runs collapse — so "fl\noz"
+                -- and "mi\194\173les" read the way the reader sees them.
+                text = text:gsub("\194\173", ""):gsub("%s+", " "):lower()
+                if #text > 0 then saw_text = true end
+                for _, a in ipairs(aliases) do
+                    if not found[a] and word_present(text, lower[a]) then
+                        found[a] = true
+                        remaining = remaining - 1
+                    end
+                end
+                if remaining <= 0 then
+                    reader:close()
+                    return found
+                end
+            end
+        end
+    end
+    reader:close()
+    -- Sanity check on the EXTRACTION, not on the book. An EPUB we decoded
+    -- wrongly (unexpected encoding, an archive read as empty) would report every
+    -- alias absent and silently disable the entire scan. Any English book uses
+    -- at least a few of these as real words, so a near-empty result means we
+    -- failed to read it.
+    if not saw_text or (#aliases - remaining) < 3 then return nil end
+    return found
+end
+
 function M.apply(epub_path, record_path, reps, opts)
     if not reps or #reps == 0 then return "OK:0" end
     local append_mode = opts and opts.append
