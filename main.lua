@@ -5203,6 +5203,7 @@ function FootFree:onReaderReady()
     -- reload recreated the reader UI.
     if _pending_rescan == doc.file then
         _pending_rescan = nil
+        logger.info("FootFree: post-revert rescan+reconvert leg starting")
         os.remove(_sidecar_path(doc.file))
         self._after_scan = function()
             local d2 = self.ui.document
@@ -5260,31 +5261,36 @@ function FootFree:onReaderReady()
         local stamped = _read_metric_version(doc.file)
         if (not stamped or stamped < CACHE_VERSION)
            and not self._metric_update_tried[doc.file] then
-            self._metric_update_tried[doc.file] = true
-            local function refresh()
-                _pending_rescan = doc.file
-                self:_revertMetricEdition(doc)
-            end
-            if self._auto_scan and _is_english(doc) then
+            -- ONLY with auto-convert on. Refreshing means reverting the book
+            -- and rewriting its text again — a large, unrequested edit to the
+            -- reader's own file, triggered by an internal version number they
+            -- cannot see. "Auto-convert when opening a new book" is precisely
+            -- the standing consent for rewriting without asking, so it is the
+            -- right and only gate (user decision, 2026-08-19).
+            --
+            -- Without it the book keeps its older conversions indefinitely, and
+            -- that is fine: "Rescan book" refreshes on demand. Prompting on
+            -- open was the previous behaviour and it asked a question the
+            -- reader had no way to evaluate, mid-way into opening a book.
+            if not (self._auto_scan and _is_english(doc)) then
+                logger.info("FootFree: conversions are from scanner "
+                            .. tostring(stamped or "?") .. " (now " .. CACHE_VERSION
+                            .. ") — leaving them alone; auto-convert is off")
+            else
+                self._metric_update_tried[doc.file] = true
+                logger.info("FootFree: refreshing conversions from scanner "
+                            .. tostring(stamped or "?") .. " -> " .. CACHE_VERSION)
                 UIManager:show(Notification:new{
                     -- TRANSLATORS: Toast shown when a book was converted by an older Footcream and the
                     -- new version is silently redoing the conversion (auto-scan on).
                     text = _("Footcream improved — updating this book's conversions…"),
                 })
-                UIManager:scheduleIn(0.2, refresh)
-            else
-                self._confirm(
-                    -- TRANSLATORS: Asked when a book was converted by an older Footcream and the
-                    -- conversion can now be improved. Redoing it rewrites the book's text.
-                    _("Footcream's converter has improved — update this book's in-text conversions?"),
-                    -- TRANSLATORS: Left button on the 'converter has improved' question; rescans the
-                    -- book and rewrites its conversions now.
-                    _("Update now"), refresh,
-                    -- TRANSLATORS: Right button on the 'converter has improved' question; leaves the
-                    -- book's existing conversions as they are.
-                    _("Not now"))
+                UIManager:scheduleIn(0.2, function()
+                    _pending_rescan = doc.file
+                    self:_revertMetricEdition(doc)
+                end)
+                return
             end
-            return
         end
     end
 
@@ -7898,6 +7904,7 @@ function FootFree:_startFastScan(doc)
             logger.info("FootFree: fast-scan subprocess pid=" .. tostring(pid))
             self._scan_pid = pid
             self._scan_doc = doc
+            self._covered_n = 0
             UIManager:scheduleIn(0.12, function() self:_pollFastScan() end)
             return
         end
@@ -7939,6 +7946,18 @@ end
 -- Reads _after_scan BEFORE _runAfterScan consumes it; both call sites announce
 -- first, so the flag is still set here.
 function FootFree:_announceScan(n, doc)
+    -- The reader may have left this book while the scan ran. The subprocess
+    -- runs to completion regardless, so without this the toast lands over the
+    -- file browser or over whatever book was opened next — reported on device
+    -- 2026-08-19 ("'Underlined 58 units' still shows on the home screen").
+    -- The scan itself still finishes and its sidecar is still saved; only the
+    -- announcement is dropped, because an announcement is about what the
+    -- reader is looking at.
+    if not self.view or not self.ui.document
+       or (doc and doc.file and self.ui.document.file ~= doc.file) then
+        logger.info("FootFree: scan notice dropped — that book is no longer open")
+        return
+    end
     if self._after_scan and self._tap_mode >= 2
        and doc and not _is_metric_mode(doc.file) then
         logger.info("FootFree: scan notice suppressed — convert queued behind it")
@@ -7956,7 +7975,17 @@ function FootFree:_runAfterScan()
 end
 
 function FootFree:_onScanComplete(err)
-    logger.info("FootFree: subprocess complete")
+    -- Effective poll interval vs the 0.12s it is scheduled at. If the UI event
+    -- loop is saturated (ring repaints + the forked child on a slow single-core
+    -- reader), polls slip — and if polls slip, so do taps, which is the
+    -- difference between "the scan blocks input" and "the reader took a while".
+    local slip = ""
+    if self._scan_t0 and self._scan_poll_n and self._scan_poll_n > 0 then
+        slip = string.format("  polls=%d effective=%.0fms (scheduled 120ms)",
+                             self._scan_poll_n,
+                             (_now() - self._scan_t0) / self._scan_poll_n * 1000)
+    end
+    logger.info("FootFree: subprocess complete" .. slip)
     if self._scan_indicator then
         UIManager:close(self._scan_indicator)
         self._scan_indicator = nil
@@ -8051,8 +8080,49 @@ end
 -- complete" notification over the file browser / the next book.
 function FootFree:_cancelScan()
     if not self._scan_pid then return end
+    local pid = self._scan_pid
+    -- Logged with the OUTCOME, not just the intent. terminateSubProcess sends
+    -- SIGKILL to the process GROUP (kill(-pid, 9)) and returns nothing, so a
+    -- kill that failed — wrong pid, group already gone, API absent — is
+    -- indistinguishable from success unless we go and look.
+    local killed = "no terminateSubProcess API"
     if ok_ffiutil and ffiutil.terminateSubProcess then
-        pcall(function() ffiutil.terminateSubProcess(self._scan_pid) end)
+        pcall(function() ffiutil.terminateSubProcess(pid) end)
+        killed = "kill sent"
+        if ffiutil.isSubProcessDone then
+            local okd, done = pcall(function() return ffiutil.isSubProcessDone(pid) end)
+            killed = killed .. ", done=" .. tostring(okd and done)
+        end
+    end
+    logger.info("FootFree: cancelling scan pid=" .. tostring(pid) .. " — " .. killed)
+    -- Reap it. terminateSubProcess only SIGNALS; the child then sits in the
+    -- process table as a zombie until someone waitpid()s it, which is exactly
+    -- what isSubProcessDone does. We are about to clear _scan_pid, which stops
+    -- the poll loop, so nothing else would ever collect it — verified on device
+    -- 2026-08-19: pid 12959 stayed in state Z (RSS 0) for as long as we
+    -- watched. It costs no memory and no CPU, but it is our litter and every
+    -- cancelled scan would leave another for the life of the process.
+    if ok_ffiutil and ffiutil.isSubProcessDone then
+        local tries = 0
+        local function reap()
+            tries = tries + 1
+            local okd, done = pcall(function() return ffiutil.isSubProcessDone(pid) end)
+            if okd and done then
+                logger.info("FootFree: scan pid=" .. tostring(pid)
+                            .. " reaped after " .. tries .. " check(s)")
+                return
+            end
+            if tries < 20 then UIManager:scheduleIn(0.25, reap) end
+        end
+        UIManager:scheduleIn(0.25, reap)
+    end
+    -- Drop anything queued behind the scan. In an in-text mode that is the
+    -- CONVERT, and a convert that fires after the reader has left rewrites the
+    -- book and reloads it behind the file browser — which is exactly what
+    -- "I see the horizontal bar on the home screen" is (device, 2026-08-19).
+    if self._after_scan then
+        logger.info("FootFree: dropping the convert queued behind the cancelled scan")
+        self._after_scan = nil
     end
     self._scan_pid      = nil
     self._scan_doc      = nil
@@ -8068,6 +8138,8 @@ end
 -- Book closing: stop any background scan (see _cancelScan). The poll loop checks
 -- self._scan_pid at its top, so it halts on its own once this clears it.
 function FootFree:onCloseDocument()
+    logger.info("FootFree: onCloseDocument — scan in flight: "
+                .. tostring(self._scan_pid ~= nil))
     self:_cancelScan()
 end
 
@@ -8093,6 +8165,47 @@ end
 -- prime/°F tail. Completion hands off to the shared completion handler.
 function FootFree:_pollFastScan()
     if not self._scan_pid then return end
+    -- Has the reader left this book? Three signals were tried on device
+    -- (2026-08-19) and all three were wrong, for the same underlying reason:
+    -- leaving a book does NOT close the reader.
+    --   * onCloseDocument never arrives (measured 22s late, 3 runs).
+    --   * ReaderUI.instance is still us — nothing was torn down.
+    --   * FileManager.instance is nil — the built-in browser need not be
+    --     involved at all. This device's home screen is the Bookshelf plugin.
+    -- The signal that does not care WHICH screen is in front is the one
+    -- KOReader's own renderer uses: walk the window stack from the top to the
+    -- first widget with covers_fullscreen; everything beneath it is not
+    -- painted. ReaderUI sets it, and so does any full-screen home screen. If
+    -- that widget is not ours, the reader is buried and this scan is for a
+    -- book nobody is looking at.
+    -- Two consecutive polls (0.24s) before acting, so a transient during a
+    -- screen handover cannot cancel a scan that has only just started.
+    local stack = UIManager._window_stack
+    local covered = false
+    if type(stack) == "table" then
+        for i = #stack, 1, -1 do
+            local w = stack[i] and stack[i].widget
+            if w and w.covers_fullscreen then
+                covered = w ~= self.ui and w ~= (self.view and self.view.dialog)
+                break
+            end
+        end
+    end
+    if covered then
+        self._covered_n = (self._covered_n or 0) + 1
+        if self._covered_n >= 2 then
+            logger.warn("FootFree: reader is covered by another screen — cancelling scan")
+            self:_cancelScan()
+            return
+        end
+    else
+        self._covered_n = 0
+    end
+    if not self.ui.document then
+        logger.warn("FootFree: document is gone — cancelling scan")
+        self:_cancelScan()
+        return
+    end
     -- Safety net: never poll forever. isSubProcessDone (waitpid) reaps a crashed
     -- child fine, so the only way we keep polling is a child that is still alive
     -- but stuck — an infinite loop, or (more likely here) blocked on I/O when the
