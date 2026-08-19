@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: foot-cream\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-18 15:40+0200\n"
+"POT-Creation-Date: 2026-08-19 13:38+0200\n"
 "PO-Revision-Date: 2026-08-18 13:59\n"
 "Last-Translator: \n"
 "Language-Team: Japanese\n"
@@ -20,153 +20,301 @@ msgstr ""
 #. TRANSLATORS: Long-press explainer for the 'Length & Distance' category. The unit
 #. names are English measurement words - use your language's names for the same
 #. units.
-#: main.lua:9325
-msgid "Inches, feet, yards, miles, fathoms, furlongs, leagues, cubits — and in the imperial direction: millimeters, centimeters, meters, kilometers."
-msgstr "インチ、フィート、ヤード、マイル、尋、ハロン、リーグ、キュビット — そしてヤード・ポンド法方向では、ミリメートル、センチメートル、メートル、キロメートル。"
+#: main.lua:9438
+msgid ""
+"Inches, feet, yards, miles, fathoms, furlongs, leagues, cubits — and in the "
+"imperial direction: millimeters, centimeters, meters, kilometers."
+msgstr ""
+"インチ、フィート、ヤード、マイル、尋、ハロン、リーグ、キュビット — そしてヤー"
+"ド・ポンド法方向では、ミリメートル、センチメートル、メートル、キロメートル。"
 
 #. TRANSLATORS: Long-press explainer for the 'Weight' category. Tons are left alone
 #. on purpose because the word means several different quantities.
-#: main.lua:9328
-msgid "Ounces, pounds and stone — and in the imperial direction: grams and kilos. Tons are deliberately not converted (the word is too ambiguous)."
-msgstr "オンス、ポンド、ストーン — そしてヤード・ポンド法方向では、グラムとキログラム。トンは意図的に変換しません（語の意味が曖昧すぎるため）。"
+#: main.lua:9441
+msgid ""
+"Ounces, pounds and stone — and in the imperial direction: grams and kilos. "
+"Tons are deliberately not converted (the word is too ambiguous)."
+msgstr ""
+"オンス、ポンド、ストーン — そしてヤード・ポンド法方向では、グラムとキログラ"
+"ム。トンは意図的に変換しません（語の意味が曖昧すぎるため）。"
 
 #. TRANSLATORS: Long-press explainer for the 'Temperature' category.
-#: main.lua:9330
-msgid "°F and \"degrees Fahrenheit\" — and in the imperial direction, °C and \"degrees Celsius\"."
+#: main.lua:9443
+msgid ""
+"°F and \"degrees Fahrenheit\" — and in the imperial direction, °C and "
+"\"degrees Celsius\"."
 msgstr "°F と「華氏」 — そしてヤード・ポンド法方向では、°C と「摂氏」。"
 
 #. TRANSLATORS: Long-press explainer for the 'Volume' category. UK and US pints and
 #. gallons are different sizes, hence the note about the book's origin.
-#: main.lua:9333
-msgid "Pints, quarts, gallons and fluid ounces — and in the imperial direction, liters and milliliters. UK and US gallons differ; Footcream picks the right one from the book."
-msgstr "パイント、クォート、ガロン、液量オンス — そしてヤード・ポンド法方向では、リットルとミリリットル。英国と米国のガロンは異なります。Footcream は本の内容から適切な方を選びます。"
+#: main.lua:9446
+msgid ""
+"Pints, quarts, gallons and fluid ounces — and in the imperial direction, "
+"liters and milliliters. UK and US gallons differ; Footcream picks the right "
+"one from the book."
+msgstr ""
+"パイント、クォート、ガロン、液量オンス — そしてヤード・ポンド法方向では、リッ"
+"トルとミリリットル。英国と米国のガロンは異なります。Footcream は本の内容から"
+"適切な方を選びます。"
 
 #. TRANSLATORS: Long-press explainer for the 'Speed' category.
-#: main.lua:9335
-msgid "Miles per hour and knots — and in the imperial direction, km/h and meters per second."
-msgstr "時速マイルとノット — そしてヤード・ポンド法方向では、km/h とメートル毎秒。"
+#: main.lua:9448
+msgid ""
+"Miles per hour and knots — and in the imperial direction, km/h and meters "
+"per second."
+msgstr ""
+"時速マイルとノット — そしてヤード・ポンド法方向では、km/h とメートル毎秒。"
 
 #. TRANSLATORS: Long-press explainer for the 'Area' category.
-#: main.lua:9337
-msgid "Acres and square miles/feet/yards — and in the imperial direction, hectares and square kilometers/meters/centimeters."
-msgstr "エーカーと平方マイル・平方フィート・平方ヤード — そしてヤード・ポンド法方向では、ヘクタールと平方キロメートル・平方メートル・平方センチメートル。"
+#: main.lua:9450
+msgid ""
+"Acres and square miles/feet/yards — and in the imperial direction, hectares "
+"and square kilometers/meters/centimeters."
+msgstr ""
+"エーカーと平方マイル・平方フィート・平方ヤード — そしてヤード・ポンド法方向で"
+"は、ヘクタールと平方キロメートル・平方メートル・平方センチメートル。"
 
 #. TRANSLATORS: Long-press explainer for the hint-count line at the top of 'Menu >
 #. Footcream'.
-#: main.lua:9434
-msgid "How many measurements Footcream found in this book. The count always shows everything that was found, whichever mode you are in."
-msgstr "Footcream がこの本で見つけた寸法の数です。この数は、どのモードでも常に見つかったものすべてを表示します。"
+#: main.lua:9547
+msgid ""
+"How many measurements Footcream found in this book. The count always shows "
+"everything that was found, whichever mode you are in."
+msgstr ""
+"Footcream がこの本で見つけた寸法の数です。この数は、どのモードでも常に見つ"
+"かったものすべてを表示します。"
 
 #. TRANSLATORS: Long-press explainer for 'Enable Footcream in this book'.
-#: main.lua:9449
-msgid "Turn Footcream off for this book only: no underlines, no conversions, no prompts — and a converted book gets its original text back. Other books are unaffected, and the choice is remembered for this book. To disable Footcream everywhere, use KOReader's plugin management."
-msgstr "この本だけ Footcream を無効にします。下線も変換も確認も表示されず、変換済みの本は元の本文に戻ります。他の本には影響せず、この選択はこの本について記憶されます。すべての本で Footcream を無効にするには、KOReader のプラグイン管理を使用してください。"
+#: main.lua:9562
+msgid ""
+"Turn Footcream off for this book only: no underlines, no conversions, no "
+"prompts — and a converted book gets its original text back. Other books are "
+"unaffected, and the choice is remembered for this book. To disable Footcream "
+"everywhere, use KOReader's plugin management."
+msgstr ""
+"この本だけ Footcream を無効にします。下線も変換も確認も表示されず、変換済みの"
+"本は元の本文に戻ります。他の本には影響せず、この選択はこの本について記憶され"
+"ます。すべての本で Footcream を無効にするには、KOReader のプラグイン管理を使"
+"用してください。"
 
 #. TRANSLATORS: Long-press explainer for 'Convert units to'.
-#: main.lua:9507
-msgid "The unit system you want to read in. Metric converts imperial measurements (feet, miles, °F) to metric. The Imperial options do the reverse: they find metric measurements (meters, kilometers, kilos, °C) and show imperial values. Works in every mode; a converted book is restored and reconverted when you switch."
-msgstr "読みたい単位系です。「メートル法」はヤード・ポンド法の寸法（フィート、マイル、°F）をメートル法に変換します。ヤード・ポンド法の選択肢はその逆で、メートル法の寸法（メートル、キロメートル、キログラム、°C）を見つけてヤード・ポンド法の値を表示します。すべてのモードで機能し、切り替えると変換済みの本はいったん復元されてから再変換されます。"
+#: main.lua:9620
+msgid ""
+"The unit system you want to read in. Metric converts imperial measurements "
+"(feet, miles, °F) to metric. The Imperial options do the reverse: they find "
+"metric measurements (meters, kilometers, kilos, °C) and show imperial "
+"values. Works in every mode; a converted book is restored and reconverted "
+"when you switch."
+msgstr ""
+"読みたい単位系です。「メートル法」はヤード・ポンド法の寸法（フィート、マイ"
+"ル、°F）をメートル法に変換します。ヤード・ポンド法の選択肢はその逆で、メート"
+"ル法の寸法（メートル、キロメートル、キログラム、°C）を見つけてヤード・ポンド"
+"法の値を表示します。すべてのモードで機能し、切り替えると変換済みの本はいった"
+"ん復元されてから再変換されます。"
 
 #. TRANSLATORS: Long-press explainer for the 'Metric' choice.
-#: main.lua:9516
-msgid "Convert imperial measurements (feet, miles, pounds, °F, gallons…) to metric."
-msgstr "ヤード・ポンド法の寸法（フィート、マイル、ポンド、°F、ガロン…）をメートル法に変換します。"
+#: main.lua:9629
+msgid ""
+"Convert imperial measurements (feet, miles, pounds, °F, gallons…) to metric."
+msgstr ""
+"ヤード・ポンド法の寸法（フィート、マイル、ポンド、°F、ガロン…）をメートル法に"
+"変換します。"
 
 #. TRANSLATORS: Long-press explainer for the 'Imperial (US)' choice. The quoted
 #. measurements are examples of the output; 'm', 'ft' and 'in' are unit symbols and
 #. are not translated.
-#: main.lua:9530
-msgid "Convert metric measurements to US units: meters become feet and inches (\"1.8 m\" → \"5 ft 11 in\"), kilometers become miles, kilos become pounds, °C becomes °F, liters become quarts and gallons."
-msgstr "メートル法の寸法を米国単位に変換します。メートルはフィートとインチに（「1.8 m」→「5 ft 11 in」）、キロメートルはマイルに、キログラムはポンドに、°C は °F に、リットルはクォートとガロンになります。"
+#: main.lua:9643
+msgid ""
+"Convert metric measurements to US units: meters become feet and inches "
+"(\"1.8 m\" → \"5 ft 11 in\"), kilometers become miles, kilos become pounds, "
+"°C becomes °F, liters become quarts and gallons."
+msgstr ""
+"メートル法の寸法を米国単位に変換します。メートルはフィートとインチに（「1.8 "
+"m」→「5 ft 11 in」）、キロメートルはマイルに、キログラムはポンドに、°C は °F "
+"に、リットルはクォートとガロンになります。"
 
 #. TRANSLATORS: Long-press explainer for the 'Imperial (UK)' choice. The quoted
 #. measurements are examples of the output; 'kg', 'st' and 'lb' are unit symbols
 #. and are not translated.
-#: main.lua:9545
-msgid "Like Imperial (US), but with UK measures: body weights in stones (\"75 kg\" → \"11 st 11 lb\") and volumes in imperial pints and gallons."
-msgstr "「ヤード・ポンド法（米）」と同様ですが、英国の単位を使います。体重はストーン（「75 kg」→「11 st 11 lb」）、体積は英パイントと英ガロンです。"
+#: main.lua:9658
+msgid ""
+"Like Imperial (US), but with UK measures: body weights in stones (\"75 kg\" "
+"→ \"11 st 11 lb\") and volumes in imperial pints and gallons."
+msgstr ""
+"「ヤード・ポンド法（米）」と同様ですが、英国の単位を使います。体重はストーン"
+"（「75 kg」→「11 st 11 lb」）、体積は英パイントと英ガロンです。"
 
 #. TRANSLATORS: Long-press explainer for the 'Mode' entry.
-#: main.lua:9572
-msgid "How conversions are shown while you read. Opens a picker showing a sample sentence in each of the three modes; the change is applied to the book when you leave the menu. The two \"written into the text\" modes rewrite the book file itself — fully reversible at any time. In the \"converted only\" mode, the Advanced option \"Show original unit in tooltip\" lets you tap a converted value to see the original text."
-msgstr "読書中に変換をどう表示するかです。3 つのモードそれぞれの例文を示す選択画面が開き、メニューを離れると変更が本に適用されます。「本文に書き込む」2 つのモードは本のファイル自体を書き換えますが、いつでも完全に元に戻せます。「変換後のみ」モードでは、詳細設定の「ツールチップに元の単位を表示」により、変換された値をタップして元の本文を確認できます。"
+#: main.lua:9685
+msgid ""
+"How conversions are shown while you read. Opens a picker showing a sample "
+"sentence in each of the three modes; the change is applied to the book when "
+"you leave the menu. The two \"written into the text\" modes rewrite the book "
+"file itself — fully reversible at any time. In the \"converted only\" mode, "
+"the Advanced option \"Show original unit in tooltip\" lets you tap a "
+"converted value to see the original text."
+msgstr ""
+"読書中に変換をどう表示するかです。3 つのモードそれぞれの例文を示す選択画面が"
+"開き、メニューを離れると変更が本に適用されます。「本文に書き込む」2 つのモー"
+"ドは本のファイル自体を書き換えますが、いつでも完全に元に戻せます。「変換後の"
+"み」モードでは、詳細設定の「ツールチップに元の単位を表示」により、変換された"
+"値をタップして元の本文を確認できます。"
 
 #. TRANSLATORS: Long-press explainer for 'Auto-convert when opening a new book'.
 #. Shown only in the in-text modes, which rewrite the book's own text.
-#: main.lua:9611
-msgid "Convert every new book automatically when you open it, without asking first — this rewrites the book's own text. Only English books are converted; other languages are left alone. Turn this off to convert books one by one with \"Scan book\", which asks before it starts."
-msgstr "新しい本を開いたときに、確認せずに自動で変換します — 本文そのものが書き換えられます。変換されるのは英語の本のみで、他の言語の本はそのままです。これをオフにすると、開始前に確認する「本をスキャン」で本を1冊ずつ変換できます。"
+#: main.lua:9724
+msgid ""
+"Convert every new book automatically when you open it, without asking first "
+"— this rewrites the book's own text. Only English books are converted; other "
+"languages are left alone. Turn this off to convert books one by one with "
+"\"Scan book\", which asks before it starts."
+msgstr ""
+"新しい本を開いたときに、確認せずに自動で変換します — 本文そのものが書き換えら"
+"れます。変換されるのは英語の本のみで、他の言語の本はそのままです。これをオフ"
+"にすると、開始前に確認する「本をスキャン」で本を1冊ずつ変換できます。"
 
 #. TRANSLATORS: Long-press explainer for 'Auto-scan when opening a new book'.
-#: main.lua:9614
-msgid "Scan every new book automatically when you open it. Only English books are scanned — other languages are left alone. Turn this off to scan books one by one with \"Scan book\"."
-msgstr "新しい本を開いたときに自動でスキャンします。スキャンされるのは英語の本だけで、他の言語の本には手を触れません。1 冊ずつ「本をスキャン」でスキャンしたい場合はオフにしてください。"
+#: main.lua:9727
+msgid ""
+"Scan every new book automatically when you open it. Only English books are "
+"scanned — other languages are left alone. Turn this off to scan books one by "
+"one with \"Scan book\"."
+msgstr ""
+"新しい本を開いたときに自動でスキャンします。スキャンされるのは英語の本だけ"
+"で、他の言語の本には手を触れません。1 冊ずつ「本をスキャン」でスキャンしたい"
+"場合はオフにしてください。"
 
 #. TRANSLATORS: Long-press explainer for the 'Scan book' / 'Rescan book' entry.
-#: main.lua:9638
-msgid "Scan this book now, or scan it again from scratch. The scan runs in the background, so you can keep reading while it works. Results are saved, so reopening the book later is instant."
-msgstr "この本を今スキャンするか、最初からスキャンし直します。スキャンはバックグラウンドで実行されるため、その間も読書を続けられます。結果は保存されるので、次に本を開くときは即座に表示されます。"
+#: main.lua:9751
+msgid ""
+"Scan this book now, or scan it again from scratch. The scan runs in the "
+"background, so you can keep reading while it works. Results are saved, so "
+"reopening the book later is instant."
+msgstr ""
+"この本を今スキャンするか、最初からスキャンし直します。スキャンはバックグラウ"
+"ンドで実行されるため、その間も読書を続けられます。結果は保存されるので、次に"
+"本を開くときは即座に表示されます。"
 
 #. TRANSLATORS: Long-press explainer for 'Styling'.
-#: main.lua:9722
-msgid "Customise how underlines look (solid or wavy, intensity, thickness) and the tooltip (size, unit icon), with a live preview. Drag the dialog around if it covers the text you want to see."
-msgstr "下線の見た目（実線か波線か、濃さ、太さ）とツールチップ（サイズ、単位アイコン）を、その場のプレビューを見ながら調整できます。見たい本文が隠れる場合はダイアログをドラッグしてください。"
+#: main.lua:9835
+msgid ""
+"Customise how underlines look (solid or wavy, intensity, thickness) and the "
+"tooltip (size, unit icon), with a live preview. Drag the dialog around if it "
+"covers the text you want to see."
+msgstr ""
+"下線の見た目（実線か波線か、濃さ、太さ）とツールチップ（サイズ、単位アイコ"
+"ン）を、その場のプレビューを見ながら調整できます。見たい本文が隠れる場合はダ"
+"イアログをドラッグしてください。"
 
 #. TRANSLATORS: Long-press explainer for 'Check for updates'.
-#: main.lua:9738
-msgid "Check GitHub for a newer Footcream release and install it in place. Needs Wi-Fi; you'll be asked to restart KOReader when it's done."
-msgstr "GitHub で Footcream の新しいリリースを確認し、その場でインストールします。Wi-Fi が必要です。完了すると KOReader の再起動を求められます。"
+#: main.lua:9851
+msgid ""
+"Check GitHub for a newer Footcream release and install it in place. Needs Wi-"
+"Fi; you'll be asked to restart KOReader when it's done."
+msgstr ""
+"GitHub で Footcream の新しいリリースを確認し、その場でインストールします。Wi-"
+"Fi が必要です。完了すると KOReader の再起動を求められます。"
 
 #. TRANSLATORS: Long-press explainer for the 'Advanced' submenu.
-#: main.lua:9751
-msgid "Extra options: unit categories, rounding, original-unit tooltips, error reporting to the developer, per-book cleanup, and debug tools."
-msgstr "追加の設定: 単位のカテゴリ、丸め、元の単位のツールチップ、開発者へのエラー報告、本ごとのデータ削除、診断ツール。"
+#: main.lua:9864
+msgid ""
+"Extra options: unit categories, rounding, original-unit tooltips, error "
+"reporting to the developer, per-book cleanup, and debug tools."
+msgstr ""
+"追加の設定: 単位のカテゴリ、丸め、元の単位のツールチップ、開発者へのエラー報"
+"告、本ごとのデータ削除、診断ツール。"
 
 #. TRANSLATORS: Long-press explainer for 'Unit categories'.
-#: main.lua:9758
-msgid "Choose which kinds of measurements are converted. Anything you untick is ignored everywhere — no underlines, popups or in-text conversions for that category."
-msgstr "どの種類の寸法を変換するかを選びます。チェックを外したものはどこでも無視され、そのカテゴリには下線もツールチップも本文内変換も適用されません。"
+#: main.lua:9871
+msgid ""
+"Choose which kinds of measurements are converted. Anything you untick is "
+"ignored everywhere — no underlines, popups or in-text conversions for that "
+"category."
+msgstr ""
+"どの種類の寸法を変換するかを選びます。チェックを外したものはどこでも無視さ"
+"れ、そのカテゴリには下線もツールチップも本文内変換も適用されません。"
 
 #. TRANSLATORS: Long-press explainer for 'Smart rounding for conversions'. The
 #. quoted values are examples; 'm' is the metre symbol, not translated.
-#: main.lua:9767
-msgid "Round conversions to friendly, readable values — \"90 m\" instead of \"91.44 m\". Turn off if you prefer exact numbers."
-msgstr "変換値を読みやすいきりのよい値に丸めます — 「91.44 m」ではなく「90 m」。正確な数値がよければオフにしてください。"
+#: main.lua:9880
+msgid ""
+"Round conversions to friendly, readable values — \"90 m\" instead of \"91.44 "
+"m\". Turn off if you prefer exact numbers."
+msgstr ""
+"変換値を読みやすいきりのよい値に丸めます — 「91.44 m」ではなく「90 m」。正確"
+"な数値がよければオフにしてください。"
 
 #. TRANSLATORS: Long-press explainer for 'Show original unit in tooltip'.
-#: main.lua:9809
-msgid "In the \"only (in text)\" mode, underline the converted values so you can tap any of them and see the original text. Handy if you want to double-check a conversion against what the author wrote."
-msgstr "「のみ（本文内）」モードで、変換された値に下線を引き、タップして元の本文を確認できるようにします。著者が書いた値と変換結果を見比べたいときに便利です。"
+#: main.lua:9922
+msgid ""
+"In the \"only (in text)\" mode, underline the converted values so you can "
+"tap any of them and see the original text. Handy if you want to double-check "
+"a conversion against what the author wrote."
+msgstr ""
+"「のみ（本文内）」モードで、変換された値に下線を引き、タップして元の本文を確"
+"認できるようにします。著者が書いた値と変換結果を見比べたいときに便利です。"
 
 #. TRANSLATORS: Long-press explainer for 'Long-press units to send errors to the
 #. developer'.
-#: main.lua:9844
-msgid "Flag bad conversions while you read: long-press a unit (or select text Footcream missed) and the error is sent anonymously to the developer. Each flag contains the book title, the measurement, its conversion and the surrounding sentence — nothing else. Works offline: flags are queued and sent when you're connected."
-msgstr "読書中に誤った変換を報告できます。単位を長押しする（または Footcream が見落としたテキストを選択する）と、エラーが匿名で開発者に送信されます。各報告に含まれるのは、本のタイトル、寸法、その変換結果、前後の文だけです。オフラインでも動作し、報告は順番待ちに入り、接続時に送信されます。"
+#: main.lua:9957
+msgid ""
+"Flag bad conversions while you read: long-press a unit (or select text "
+"Footcream missed) and the error is sent anonymously to the developer. Each "
+"flag contains the book title, the measurement, its conversion and the "
+"surrounding sentence — nothing else. Works offline: flags are queued and "
+"sent when you're connected."
+msgstr ""
+"読書中に誤った変換を報告できます。単位を長押しする（または Footcream が見落と"
+"したテキストを選択する）と、エラーが匿名で開発者に送信されます。各報告に含ま"
+"れるのは、本のタイトル、寸法、その変換結果、前後の文だけです。オフラインでも"
+"動作し、報告は順番待ちに入り、接続時に送信されます。"
 
 #. TRANSLATORS: Long-press explainer for 'Remove Footcream data from this book'.
-#: main.lua:9878
-msgid "Undo everything for this book: restore the original text, remove all underlines and delete the saved scan. The book file goes back to exactly how it was before Footcream touched it."
-msgstr "この本に対する操作をすべて取り消します。元の本文を復元し、すべての下線を取り除き、保存されたスキャン結果を削除します。本のファイルは Footcream が触れる前とまったく同じ状態に戻ります。"
+#: main.lua:9991
+msgid ""
+"Undo everything for this book: restore the original text, remove all "
+"underlines and delete the saved scan. The book file goes back to exactly how "
+"it was before Footcream touched it."
+msgstr ""
+"この本に対する操作をすべて取り消します。元の本文を復元し、すべての下線を取り"
+"除き、保存されたスキャン結果を削除します。本のファイルは Footcream が触れる前"
+"とまったく同じ状態に戻ります。"
 
 #. TRANSLATORS: Long-press explainer for the 'Debug' submenu.
-#: main.lua:9920
-msgid "See exactly what the scan found in this book, and manage errors you've flagged on this device."
-msgstr "この本でスキャンが何を見つけたかを正確に確認し、この端末で報告したエラーを管理します。"
+#: main.lua:10033
+msgid ""
+"See exactly what the scan found in this book, and manage errors you've "
+"flagged on this device."
+msgstr ""
+"この本でスキャンが何を見つけたかを正確に確認し、この端末で報告したエラーを管"
+"理します。"
 
 #. TRANSLATORS: Long-press explainer for 'Units in book (list)'.
-#: main.lua:9927
-msgid "Every measurement found in this book, with its detected value and conversion. Long-press an entry to flag it as wrong."
-msgstr "この本で見つかったすべての寸法と、検出された値および変換結果です。項目を長押しすると誤りとして報告できます。"
+#: main.lua:10040
+msgid ""
+"Every measurement found in this book, with its detected value and "
+"conversion. Long-press an entry to flag it as wrong."
+msgstr ""
+"この本で見つかったすべての寸法と、検出された値および変換結果です。項目を長押"
+"しすると誤りとして報告できます。"
 
 #. TRANSLATORS: Long-press explainer for 'View flagged errors'. The path in
 #. parentheses is a file location - leave it as it is.
-#: main.lua:9942
-msgid "Show the errors you've flagged on this device. They're kept in a plain-text file (koreader/footcream/flagged_errors.txt) that you can also attach to a GitHub issue."
-msgstr "この端末で報告したエラーを表示します。プレーンテキストファイル（koreader/footcream/flagged_errors.txt）に保存されており、GitHub のイシューに添付することもできます。"
+#: main.lua:10055
+msgid ""
+"Show the errors you've flagged on this device. They're kept in a plain-text "
+"file (koreader/footcream/flagged_errors.txt) that you can also attach to a "
+"GitHub issue."
+msgstr ""
+"この端末で報告したエラーを表示します。プレーンテキストファイル（koreader/"
+"footcream/flagged_errors.txt）に保存されており、GitHub のイシューに添付するこ"
+"ともできます。"
 
 #. TRANSLATORS: Long-press explainer for 'Clear flagged errors'.
-#: main.lua:9952
-msgid "Delete the local flagged-errors file. Reports that were already sent to the developer are not affected."
-msgstr "端末内の報告済みエラーファイルを削除します。すでに開発者へ送信された報告には影響しません。"
-
+#: main.lua:10065
+msgid ""
+"Delete the local flagged-errors file. Reports that were already sent to the "
+"developer are not affected."
+msgstr ""
+"端末内の報告済みエラーファイルを削除します。すでに開発者へ送信された報告には"
+"影響しません。"

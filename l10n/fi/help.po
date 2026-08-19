@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: foot-cream\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-18 15:40+0200\n"
+"POT-Creation-Date: 2026-08-19 13:38+0200\n"
 "PO-Revision-Date: 2026-08-18 13:59\n"
 "Last-Translator: \n"
 "Language-Team: Finnish\n"
@@ -20,153 +20,312 @@ msgstr ""
 #. TRANSLATORS: Long-press explainer for the 'Length & Distance' category. The unit
 #. names are English measurement words - use your language's names for the same
 #. units.
-#: main.lua:9325
-msgid "Inches, feet, yards, miles, fathoms, furlongs, leagues, cubits — and in the imperial direction: millimeters, centimeters, meters, kilometers."
-msgstr "Tuumat, jalat, jaardit, mailit, syllat, furlongit, leaguet ja kyynärät – ja imperiaaliseen suuntaan: millimetrit, senttimetrit, metrit ja kilometrit."
+#: main.lua:9438
+msgid ""
+"Inches, feet, yards, miles, fathoms, furlongs, leagues, cubits — and in the "
+"imperial direction: millimeters, centimeters, meters, kilometers."
+msgstr ""
+"Tuumat, jalat, jaardit, mailit, syllat, furlongit, leaguet ja kyynärät – ja "
+"imperiaaliseen suuntaan: millimetrit, senttimetrit, metrit ja kilometrit."
 
 #. TRANSLATORS: Long-press explainer for the 'Weight' category. Tons are left alone
 #. on purpose because the word means several different quantities.
-#: main.lua:9328
-msgid "Ounces, pounds and stone — and in the imperial direction: grams and kilos. Tons are deliberately not converted (the word is too ambiguous)."
-msgstr "Unssit, naulat ja stonet – ja imperiaaliseen suuntaan: grammat ja kilot. Tonneja ei muunneta tarkoituksella (sana on liian monimerkityksinen)."
+#: main.lua:9441
+msgid ""
+"Ounces, pounds and stone — and in the imperial direction: grams and kilos. "
+"Tons are deliberately not converted (the word is too ambiguous)."
+msgstr ""
+"Unssit, naulat ja stonet – ja imperiaaliseen suuntaan: grammat ja kilot. "
+"Tonneja ei muunneta tarkoituksella (sana on liian monimerkityksinen)."
 
 #. TRANSLATORS: Long-press explainer for the 'Temperature' category.
-#: main.lua:9330
-msgid "°F and \"degrees Fahrenheit\" — and in the imperial direction, °C and \"degrees Celsius\"."
-msgstr "°F ja ”Fahrenheit-astetta” – ja imperiaaliseen suuntaan °C ja ”Celsius-astetta”."
+#: main.lua:9443
+msgid ""
+"°F and \"degrees Fahrenheit\" — and in the imperial direction, °C and "
+"\"degrees Celsius\"."
+msgstr ""
+"°F ja ”Fahrenheit-astetta” – ja imperiaaliseen suuntaan °C ja ”Celsius-"
+"astetta”."
 
 #. TRANSLATORS: Long-press explainer for the 'Volume' category. UK and US pints and
 #. gallons are different sizes, hence the note about the book's origin.
-#: main.lua:9333
-msgid "Pints, quarts, gallons and fluid ounces — and in the imperial direction, liters and milliliters. UK and US gallons differ; Footcream picks the right one from the book."
-msgstr "Pintit, kvartit, gallonat ja nesteunssit – ja imperiaaliseen suuntaan litrat ja millilitrat. Brittiläinen ja yhdysvaltalainen gallona ovat eri kokoisia; Footcream valitsee oikean kirjan perusteella."
+#: main.lua:9446
+msgid ""
+"Pints, quarts, gallons and fluid ounces — and in the imperial direction, "
+"liters and milliliters. UK and US gallons differ; Footcream picks the right "
+"one from the book."
+msgstr ""
+"Pintit, kvartit, gallonat ja nesteunssit – ja imperiaaliseen suuntaan litrat "
+"ja millilitrat. Brittiläinen ja yhdysvaltalainen gallona ovat eri kokoisia; "
+"Footcream valitsee oikean kirjan perusteella."
 
 #. TRANSLATORS: Long-press explainer for the 'Speed' category.
-#: main.lua:9335
-msgid "Miles per hour and knots — and in the imperial direction, km/h and meters per second."
-msgstr "Mailia tunnissa ja solmut – ja imperiaaliseen suuntaan km/h ja metriä sekunnissa."
+#: main.lua:9448
+msgid ""
+"Miles per hour and knots — and in the imperial direction, km/h and meters "
+"per second."
+msgstr ""
+"Mailia tunnissa ja solmut – ja imperiaaliseen suuntaan km/h ja metriä "
+"sekunnissa."
 
 #. TRANSLATORS: Long-press explainer for the 'Area' category.
-#: main.lua:9337
-msgid "Acres and square miles/feet/yards — and in the imperial direction, hectares and square kilometers/meters/centimeters."
-msgstr "Aakkerit sekä neliömailit, -jalat ja -jaardit – ja imperiaaliseen suuntaan hehtaarit sekä neliökilometrit, -metrit ja -senttimetrit."
+#: main.lua:9450
+msgid ""
+"Acres and square miles/feet/yards — and in the imperial direction, hectares "
+"and square kilometers/meters/centimeters."
+msgstr ""
+"Aakkerit sekä neliömailit, -jalat ja -jaardit – ja imperiaaliseen suuntaan "
+"hehtaarit sekä neliökilometrit, -metrit ja -senttimetrit."
 
 #. TRANSLATORS: Long-press explainer for the hint-count line at the top of 'Menu >
 #. Footcream'.
-#: main.lua:9434
-msgid "How many measurements Footcream found in this book. The count always shows everything that was found, whichever mode you are in."
-msgstr "Kuinka monta mittaa Footcream löysi tästä kirjasta. Luku näyttää aina kaiken löydetyn riippumatta käytössä olevasta tilasta."
+#: main.lua:9547
+msgid ""
+"How many measurements Footcream found in this book. The count always shows "
+"everything that was found, whichever mode you are in."
+msgstr ""
+"Kuinka monta mittaa Footcream löysi tästä kirjasta. Luku näyttää aina kaiken "
+"löydetyn riippumatta käytössä olevasta tilasta."
 
 #. TRANSLATORS: Long-press explainer for 'Enable Footcream in this book'.
-#: main.lua:9449
-msgid "Turn Footcream off for this book only: no underlines, no conversions, no prompts — and a converted book gets its original text back. Other books are unaffected, and the choice is remembered for this book. To disable Footcream everywhere, use KOReader's plugin management."
-msgstr "Poista Footcream käytöstä vain tässä kirjassa: ei alleviivauksia, ei muunnoksia, ei kysymyksiä – ja muunnettu kirja saa alkuperäisen tekstinsä takaisin. Muihin kirjoihin tämä ei vaikuta, ja valinta muistetaan tälle kirjalle. Jos haluat poistaa Footcreamin käytöstä kaikkialta, käytä KOReaderin lisäosien hallintaa."
+#: main.lua:9562
+msgid ""
+"Turn Footcream off for this book only: no underlines, no conversions, no "
+"prompts — and a converted book gets its original text back. Other books are "
+"unaffected, and the choice is remembered for this book. To disable Footcream "
+"everywhere, use KOReader's plugin management."
+msgstr ""
+"Poista Footcream käytöstä vain tässä kirjassa: ei alleviivauksia, ei "
+"muunnoksia, ei kysymyksiä – ja muunnettu kirja saa alkuperäisen tekstinsä "
+"takaisin. Muihin kirjoihin tämä ei vaikuta, ja valinta muistetaan tälle "
+"kirjalle. Jos haluat poistaa Footcreamin käytöstä kaikkialta, käytä "
+"KOReaderin lisäosien hallintaa."
 
 #. TRANSLATORS: Long-press explainer for 'Convert units to'.
-#: main.lua:9507
-msgid "The unit system you want to read in. Metric converts imperial measurements (feet, miles, °F) to metric. The Imperial options do the reverse: they find metric measurements (meters, kilometers, kilos, °C) and show imperial values. Works in every mode; a converted book is restored and reconverted when you switch."
-msgstr "Yksikköjärjestelmä, jolla haluat lukea. Metriset muuntaa imperiaaliset mitat (jalat, mailit, °F) metrisiksi. Imperiaaliset vaihtoehdot tekevät päinvastoin: ne etsivät metrisiä mittoja (metrejä, kilometrejä, kiloja, °C) ja näyttävät imperiaaliset arvot. Toimii kaikissa tiloissa; muunnettu kirja palautetaan ja muunnetaan uudelleen, kun vaihdat."
+#: main.lua:9620
+msgid ""
+"The unit system you want to read in. Metric converts imperial measurements "
+"(feet, miles, °F) to metric. The Imperial options do the reverse: they find "
+"metric measurements (meters, kilometers, kilos, °C) and show imperial "
+"values. Works in every mode; a converted book is restored and reconverted "
+"when you switch."
+msgstr ""
+"Yksikköjärjestelmä, jolla haluat lukea. Metriset muuntaa imperiaaliset mitat "
+"(jalat, mailit, °F) metrisiksi. Imperiaaliset vaihtoehdot tekevät "
+"päinvastoin: ne etsivät metrisiä mittoja (metrejä, kilometrejä, kiloja, °C) "
+"ja näyttävät imperiaaliset arvot. Toimii kaikissa tiloissa; muunnettu kirja "
+"palautetaan ja muunnetaan uudelleen, kun vaihdat."
 
 #. TRANSLATORS: Long-press explainer for the 'Metric' choice.
-#: main.lua:9516
-msgid "Convert imperial measurements (feet, miles, pounds, °F, gallons…) to metric."
-msgstr "Muunna imperiaaliset mitat (jalat, mailit, naulat, °F, gallonat…) metrijärjestelmän yksiköiksi."
+#: main.lua:9629
+msgid ""
+"Convert imperial measurements (feet, miles, pounds, °F, gallons…) to metric."
+msgstr ""
+"Muunna imperiaaliset mitat (jalat, mailit, naulat, °F, gallonat…) "
+"metrijärjestelmän yksiköiksi."
 
 #. TRANSLATORS: Long-press explainer for the 'Imperial (US)' choice. The quoted
 #. measurements are examples of the output; 'm', 'ft' and 'in' are unit symbols and
 #. are not translated.
-#: main.lua:9530
-msgid "Convert metric measurements to US units: meters become feet and inches (\"1.8 m\" → \"5 ft 11 in\"), kilometers become miles, kilos become pounds, °C becomes °F, liters become quarts and gallons."
-msgstr "Muunna metriset mitat yhdysvaltalaisiksi yksiköiksi: metreistä tulee jalkoja ja tuumia (”1.8 m” → ”5 ft 11 in”), kilometreistä maileja, kiloista nauloja, °C:sta °F ja litroista kvartteja ja gallonia."
+#: main.lua:9643
+msgid ""
+"Convert metric measurements to US units: meters become feet and inches "
+"(\"1.8 m\" → \"5 ft 11 in\"), kilometers become miles, kilos become pounds, "
+"°C becomes °F, liters become quarts and gallons."
+msgstr ""
+"Muunna metriset mitat yhdysvaltalaisiksi yksiköiksi: metreistä tulee jalkoja "
+"ja tuumia (”1.8 m” → ”5 ft 11 in”), kilometreistä maileja, kiloista nauloja, "
+"°C:sta °F ja litroista kvartteja ja gallonia."
 
 #. TRANSLATORS: Long-press explainer for the 'Imperial (UK)' choice. The quoted
 #. measurements are examples of the output; 'kg', 'st' and 'lb' are unit symbols
 #. and are not translated.
-#: main.lua:9545
-msgid "Like Imperial (US), but with UK measures: body weights in stones (\"75 kg\" → \"11 st 11 lb\") and volumes in imperial pints and gallons."
-msgstr "Kuten Imperiaaliset (US), mutta brittiläisillä mitoilla: painot stoneina (”75 kg” → ”11 st 11 lb”) ja tilavuudet brittiläisinä pintteinä ja gallonina."
+#: main.lua:9658
+msgid ""
+"Like Imperial (US), but with UK measures: body weights in stones (\"75 kg\" "
+"→ \"11 st 11 lb\") and volumes in imperial pints and gallons."
+msgstr ""
+"Kuten Imperiaaliset (US), mutta brittiläisillä mitoilla: painot stoneina "
+"(”75 kg” → ”11 st 11 lb”) ja tilavuudet brittiläisinä pintteinä ja gallonina."
 
 #. TRANSLATORS: Long-press explainer for the 'Mode' entry.
-#: main.lua:9572
-msgid "How conversions are shown while you read. Opens a picker showing a sample sentence in each of the three modes; the change is applied to the book when you leave the menu. The two \"written into the text\" modes rewrite the book file itself — fully reversible at any time. In the \"converted only\" mode, the Advanced option \"Show original unit in tooltip\" lets you tap a converted value to see the original text."
-msgstr "Miten muunnokset näytetään lukemisen aikana. Avaa valitsimen, jossa näkyy esimerkkilause kussakin kolmesta tilasta; muutos otetaan käyttöön kirjassa, kun poistut valikosta. Kaksi tekstiin kirjoittavaa tilaa muuttavat itse kirjatiedostoa – tämän voi aina perua. Tilassa ”vain muunnos” lisäasetus ”Näytä alkuperäinen yksikkö vihjelaatikossa” antaa napauttaa muunnettua arvoa ja nähdä alkuperäisen tekstin."
+#: main.lua:9685
+msgid ""
+"How conversions are shown while you read. Opens a picker showing a sample "
+"sentence in each of the three modes; the change is applied to the book when "
+"you leave the menu. The two \"written into the text\" modes rewrite the book "
+"file itself — fully reversible at any time. In the \"converted only\" mode, "
+"the Advanced option \"Show original unit in tooltip\" lets you tap a "
+"converted value to see the original text."
+msgstr ""
+"Miten muunnokset näytetään lukemisen aikana. Avaa valitsimen, jossa näkyy "
+"esimerkkilause kussakin kolmesta tilasta; muutos otetaan käyttöön kirjassa, "
+"kun poistut valikosta. Kaksi tekstiin kirjoittavaa tilaa muuttavat itse "
+"kirjatiedostoa – tämän voi aina perua. Tilassa ”vain muunnos” lisäasetus "
+"”Näytä alkuperäinen yksikkö vihjelaatikossa” antaa napauttaa muunnettua "
+"arvoa ja nähdä alkuperäisen tekstin."
 
 #. TRANSLATORS: Long-press explainer for 'Auto-convert when opening a new book'.
 #. Shown only in the in-text modes, which rewrite the book's own text.
-#: main.lua:9611
-msgid "Convert every new book automatically when you open it, without asking first — this rewrites the book's own text. Only English books are converted; other languages are left alone. Turn this off to convert books one by one with \"Scan book\", which asks before it starts."
-msgstr "Muuntaa jokaisen uuden kirjan automaattisesti, kun avaat sen, kysymättä ensin — tämä kirjoittaa kirjan oman tekstin uudelleen. Vain englanninkieliset kirjat muunnetaan; muut kielet jätetään rauhaan. Poista tämä käytöstä, jos haluat muuntaa kirjat yksitellen toiminnolla ”Skannaa kirja”, joka kysyy ennen aloittamista."
+#: main.lua:9724
+msgid ""
+"Convert every new book automatically when you open it, without asking first "
+"— this rewrites the book's own text. Only English books are converted; other "
+"languages are left alone. Turn this off to convert books one by one with "
+"\"Scan book\", which asks before it starts."
+msgstr ""
+"Muuntaa jokaisen uuden kirjan automaattisesti, kun avaat sen, kysymättä "
+"ensin — tämä kirjoittaa kirjan oman tekstin uudelleen. Vain "
+"englanninkieliset kirjat muunnetaan; muut kielet jätetään rauhaan. Poista "
+"tämä käytöstä, jos haluat muuntaa kirjat yksitellen toiminnolla ”Skannaa "
+"kirja”, joka kysyy ennen aloittamista."
 
 #. TRANSLATORS: Long-press explainer for 'Auto-scan when opening a new book'.
-#: main.lua:9614
-msgid "Scan every new book automatically when you open it. Only English books are scanned — other languages are left alone. Turn this off to scan books one by one with \"Scan book\"."
-msgstr "Skannaa jokainen uusi kirja automaattisesti, kun avaat sen. Vain englanninkieliset kirjat skannataan – muihin kieliin ei kosketa. Poista tämä käytöstä, jos haluat skannata kirjat yksitellen toiminnolla ”Skannaa kirja”."
+#: main.lua:9727
+msgid ""
+"Scan every new book automatically when you open it. Only English books are "
+"scanned — other languages are left alone. Turn this off to scan books one by "
+"one with \"Scan book\"."
+msgstr ""
+"Skannaa jokainen uusi kirja automaattisesti, kun avaat sen. Vain "
+"englanninkieliset kirjat skannataan – muihin kieliin ei kosketa. Poista tämä "
+"käytöstä, jos haluat skannata kirjat yksitellen toiminnolla ”Skannaa kirja”."
 
 #. TRANSLATORS: Long-press explainer for the 'Scan book' / 'Rescan book' entry.
-#: main.lua:9638
-msgid "Scan this book now, or scan it again from scratch. The scan runs in the background, so you can keep reading while it works. Results are saved, so reopening the book later is instant."
-msgstr "Skannaa tämä kirja nyt tai tee skannaus uudelleen alusta. Skannaus tapahtuu taustalla, joten voit jatkaa lukemista sen aikana. Tulokset tallennetaan, joten kirjan avaaminen myöhemmin uudelleen on välitöntä."
+#: main.lua:9751
+msgid ""
+"Scan this book now, or scan it again from scratch. The scan runs in the "
+"background, so you can keep reading while it works. Results are saved, so "
+"reopening the book later is instant."
+msgstr ""
+"Skannaa tämä kirja nyt tai tee skannaus uudelleen alusta. Skannaus tapahtuu "
+"taustalla, joten voit jatkaa lukemista sen aikana. Tulokset tallennetaan, "
+"joten kirjan avaaminen myöhemmin uudelleen on välitöntä."
 
 #. TRANSLATORS: Long-press explainer for 'Styling'.
-#: main.lua:9722
-msgid "Customise how underlines look (solid or wavy, intensity, thickness) and the tooltip (size, unit icon), with a live preview. Drag the dialog around if it covers the text you want to see."
-msgstr "Mukauta alleviivausten ulkoasua (yhtenäinen tai aaltoileva, voimakkuus, paksuus) ja vihjelaatikkoa (koko, yksikkökuvake) reaaliaikaisen esikatselun kanssa. Vedä ikkunaa sivuun, jos se peittää tekstin, jonka haluat nähdä."
+#: main.lua:9835
+msgid ""
+"Customise how underlines look (solid or wavy, intensity, thickness) and the "
+"tooltip (size, unit icon), with a live preview. Drag the dialog around if it "
+"covers the text you want to see."
+msgstr ""
+"Mukauta alleviivausten ulkoasua (yhtenäinen tai aaltoileva, voimakkuus, "
+"paksuus) ja vihjelaatikkoa (koko, yksikkökuvake) reaaliaikaisen esikatselun "
+"kanssa. Vedä ikkunaa sivuun, jos se peittää tekstin, jonka haluat nähdä."
 
 #. TRANSLATORS: Long-press explainer for 'Check for updates'.
-#: main.lua:9738
-msgid "Check GitHub for a newer Footcream release and install it in place. Needs Wi-Fi; you'll be asked to restart KOReader when it's done."
-msgstr "Etsi GitHubista uudempi Footcream-versio ja asenna se suoraan. Vaatii Wi-Fi-yhteyden; lopuksi sinua pyydetään käynnistämään KOReader uudelleen."
+#: main.lua:9851
+msgid ""
+"Check GitHub for a newer Footcream release and install it in place. Needs Wi-"
+"Fi; you'll be asked to restart KOReader when it's done."
+msgstr ""
+"Etsi GitHubista uudempi Footcream-versio ja asenna se suoraan. Vaatii Wi-Fi-"
+"yhteyden; lopuksi sinua pyydetään käynnistämään KOReader uudelleen."
 
 #. TRANSLATORS: Long-press explainer for the 'Advanced' submenu.
-#: main.lua:9751
-msgid "Extra options: unit categories, rounding, original-unit tooltips, error reporting to the developer, per-book cleanup, and debug tools."
-msgstr "Lisävaihtoehtoja: yksikköluokat, pyöristys, alkuperäisen yksikön vihjelaatikot, virheiden ilmoittaminen kehittäjälle, kirjakohtainen siivous ja vianmääritystyökalut."
+#: main.lua:9864
+msgid ""
+"Extra options: unit categories, rounding, original-unit tooltips, error "
+"reporting to the developer, per-book cleanup, and debug tools."
+msgstr ""
+"Lisävaihtoehtoja: yksikköluokat, pyöristys, alkuperäisen yksikön "
+"vihjelaatikot, virheiden ilmoittaminen kehittäjälle, kirjakohtainen siivous "
+"ja vianmääritystyökalut."
 
 #. TRANSLATORS: Long-press explainer for 'Unit categories'.
-#: main.lua:9758
-msgid "Choose which kinds of measurements are converted. Anything you untick is ignored everywhere — no underlines, popups or in-text conversions for that category."
-msgstr "Valitse, millaiset mitat muunnetaan. Kaikki, minkä poistat valinnasta, ohitetaan kaikkialla – ei alleviivauksia, vihjelaatikoita eikä muunnoksia tekstissä kyseiselle luokalle."
+#: main.lua:9871
+msgid ""
+"Choose which kinds of measurements are converted. Anything you untick is "
+"ignored everywhere — no underlines, popups or in-text conversions for that "
+"category."
+msgstr ""
+"Valitse, millaiset mitat muunnetaan. Kaikki, minkä poistat valinnasta, "
+"ohitetaan kaikkialla – ei alleviivauksia, vihjelaatikoita eikä muunnoksia "
+"tekstissä kyseiselle luokalle."
 
 #. TRANSLATORS: Long-press explainer for 'Smart rounding for conversions'. The
 #. quoted values are examples; 'm' is the metre symbol, not translated.
-#: main.lua:9767
-msgid "Round conversions to friendly, readable values — \"90 m\" instead of \"91.44 m\". Turn off if you prefer exact numbers."
-msgstr "Pyöristä muunnokset helposti luettaviksi arvoiksi – ”90 m” eikä ”91.44 m”. Poista käytöstä, jos haluat tarkat luvut."
+#: main.lua:9880
+msgid ""
+"Round conversions to friendly, readable values — \"90 m\" instead of \"91.44 "
+"m\". Turn off if you prefer exact numbers."
+msgstr ""
+"Pyöristä muunnokset helposti luettaviksi arvoiksi – ”90 m” eikä ”91.44 m”. "
+"Poista käytöstä, jos haluat tarkat luvut."
 
 #. TRANSLATORS: Long-press explainer for 'Show original unit in tooltip'.
-#: main.lua:9809
-msgid "In the \"only (in text)\" mode, underline the converted values so you can tap any of them and see the original text. Handy if you want to double-check a conversion against what the author wrote."
-msgstr "Tilassa ”vain (tekstissä)” muunnetut arvot alleviivataan, jotta voit napauttaa mitä tahansa niistä ja nähdä alkuperäisen tekstin. Kätevää, jos haluat tarkistaa muunnoksen kirjoittajan tekstiä vasten."
+#: main.lua:9922
+msgid ""
+"In the \"only (in text)\" mode, underline the converted values so you can "
+"tap any of them and see the original text. Handy if you want to double-check "
+"a conversion against what the author wrote."
+msgstr ""
+"Tilassa ”vain (tekstissä)” muunnetut arvot alleviivataan, jotta voit "
+"napauttaa mitä tahansa niistä ja nähdä alkuperäisen tekstin. Kätevää, jos "
+"haluat tarkistaa muunnoksen kirjoittajan tekstiä vasten."
 
 #. TRANSLATORS: Long-press explainer for 'Long-press units to send errors to the
 #. developer'.
-#: main.lua:9844
-msgid "Flag bad conversions while you read: long-press a unit (or select text Footcream missed) and the error is sent anonymously to the developer. Each flag contains the book title, the measurement, its conversion and the surrounding sentence — nothing else. Works offline: flags are queued and sent when you're connected."
-msgstr "Ilmoita virheellisistä muunnoksista lukiessasi: paina yksikköä pitkään (tai valitse teksti, jonka Footcream ohitti), niin virhe lähetetään nimettömänä kehittäjälle. Kukin ilmoitus sisältää kirjan nimen, mitan, sen muunnoksen ja ympäröivän lauseen – ei muuta. Toimii myös ilman verkkoyhteyttä: ilmoitukset jonotetaan ja lähetetään, kun olet yhteydessä."
+#: main.lua:9957
+msgid ""
+"Flag bad conversions while you read: long-press a unit (or select text "
+"Footcream missed) and the error is sent anonymously to the developer. Each "
+"flag contains the book title, the measurement, its conversion and the "
+"surrounding sentence — nothing else. Works offline: flags are queued and "
+"sent when you're connected."
+msgstr ""
+"Ilmoita virheellisistä muunnoksista lukiessasi: paina yksikköä pitkään (tai "
+"valitse teksti, jonka Footcream ohitti), niin virhe lähetetään nimettömänä "
+"kehittäjälle. Kukin ilmoitus sisältää kirjan nimen, mitan, sen muunnoksen ja "
+"ympäröivän lauseen – ei muuta. Toimii myös ilman verkkoyhteyttä: ilmoitukset "
+"jonotetaan ja lähetetään, kun olet yhteydessä."
 
 #. TRANSLATORS: Long-press explainer for 'Remove Footcream data from this book'.
-#: main.lua:9878
-msgid "Undo everything for this book: restore the original text, remove all underlines and delete the saved scan. The book file goes back to exactly how it was before Footcream touched it."
-msgstr "Kumoa kaikki tämän kirjan osalta: palauta alkuperäinen teksti, poista kaikki alleviivaukset ja poista tallennettu skannaus. Kirjatiedosto palautuu täsmälleen sellaiseksi kuin se oli ennen kuin Footcream kosketti sitä."
+#: main.lua:9991
+msgid ""
+"Undo everything for this book: restore the original text, remove all "
+"underlines and delete the saved scan. The book file goes back to exactly how "
+"it was before Footcream touched it."
+msgstr ""
+"Kumoa kaikki tämän kirjan osalta: palauta alkuperäinen teksti, poista kaikki "
+"alleviivaukset ja poista tallennettu skannaus. Kirjatiedosto palautuu "
+"täsmälleen sellaiseksi kuin se oli ennen kuin Footcream kosketti sitä."
 
 #. TRANSLATORS: Long-press explainer for the 'Debug' submenu.
-#: main.lua:9920
-msgid "See exactly what the scan found in this book, and manage errors you've flagged on this device."
-msgstr "Katso tarkalleen, mitä skannaus löysi tästä kirjasta, ja hallitse tällä laitteella ilmoittamiasi virheitä."
+#: main.lua:10033
+msgid ""
+"See exactly what the scan found in this book, and manage errors you've "
+"flagged on this device."
+msgstr ""
+"Katso tarkalleen, mitä skannaus löysi tästä kirjasta, ja hallitse tällä "
+"laitteella ilmoittamiasi virheitä."
 
 #. TRANSLATORS: Long-press explainer for 'Units in book (list)'.
-#: main.lua:9927
-msgid "Every measurement found in this book, with its detected value and conversion. Long-press an entry to flag it as wrong."
-msgstr "Kaikki tästä kirjasta löytyneet mitat tunnistettuine arvoineen ja muunnoksineen. Paina riviä pitkään ilmoittaaksesi sen virheelliseksi."
+#: main.lua:10040
+msgid ""
+"Every measurement found in this book, with its detected value and "
+"conversion. Long-press an entry to flag it as wrong."
+msgstr ""
+"Kaikki tästä kirjasta löytyneet mitat tunnistettuine arvoineen ja "
+"muunnoksineen. Paina riviä pitkään ilmoittaaksesi sen virheelliseksi."
 
 #. TRANSLATORS: Long-press explainer for 'View flagged errors'. The path in
 #. parentheses is a file location - leave it as it is.
-#: main.lua:9942
-msgid "Show the errors you've flagged on this device. They're kept in a plain-text file (koreader/footcream/flagged_errors.txt) that you can also attach to a GitHub issue."
-msgstr "Näytä tällä laitteella ilmoittamasi virheet. Ne säilytetään tekstitiedostossa (koreader/footcream/flagged_errors.txt), jonka voit myös liittää GitHub-ilmoitukseen."
+#: main.lua:10055
+msgid ""
+"Show the errors you've flagged on this device. They're kept in a plain-text "
+"file (koreader/footcream/flagged_errors.txt) that you can also attach to a "
+"GitHub issue."
+msgstr ""
+"Näytä tällä laitteella ilmoittamasi virheet. Ne säilytetään "
+"tekstitiedostossa (koreader/footcream/flagged_errors.txt), jonka voit myös "
+"liittää GitHub-ilmoitukseen."
 
 #. TRANSLATORS: Long-press explainer for 'Clear flagged errors'.
-#: main.lua:9952
-msgid "Delete the local flagged-errors file. Reports that were already sent to the developer are not affected."
-msgstr "Poista paikallinen ilmoitettujen virheiden tiedosto. Jo kehittäjälle lähetettyihin ilmoituksiin tämä ei vaikuta."
-
+#: main.lua:10065
+msgid ""
+"Delete the local flagged-errors file. Reports that were already sent to the "
+"developer are not affected."
+msgstr ""
+"Poista paikallinen ilmoitettujen virheiden tiedosto. Jo kehittäjälle "
+"lähetettyihin ilmoituksiin tämä ei vaikuta."
