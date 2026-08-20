@@ -215,8 +215,8 @@ wrong. That happens here, with nothing to install and no programming:
 
 **https://crowdin.com/project/foot-cream**
 
-Even ten corrected lines genuinely help. See [TRANSLATING.md](TRANSLATING.md)
-for where to start.
+Even ten corrected lines genuinely help. See
+[CONTRIBUTING.md](CONTRIBUTING.md) for where to start.
 
 ***
 
@@ -235,4 +235,4 @@ modified version, ship its source under the same terms.
 
 Community translations contributed through Crowdin are under the same licence,
 so they can be shipped as part of the plugin — see
-[l10n/README.md](l10n/README.md).
+[CONTRIBUTING.md](CONTRIBUTING.md).

@@ -53,17 +53,38 @@ local _DPRIME = "\226\128\179"   -- ″  U+2033
 -- references/gotchas.md.
 FootFree._CAPOS  = "\226\128\153"   -- '  U+2019 curly right single quote (apostrophe)
 FootFree._CDQ    = "\226\128\157"   -- "  U+201D curly right double quote
+-- The OPENING twin. Not a measurement glyph — it is how we tell a closing
+-- quotation mark apart from an inches mark when a digit sits before it
+-- (“Reach 18” is a call sign, 18” is a measurement; see the quotation guard).
+FootFree._CLDQ   = "\226\128\156"   -- "  U+201C curly left double quote
 local _ENDASH = "\226\128\147"   -- –  U+2013
 local _TIMES  = "\195\151"       -- ×  U+00D7
 local _SUP2   = "\194\178"       -- ²  U+00B2 (superscript two)
 
-local CACHE_VERSION = 66  -- fork: pinyin 時辰 稱謂 units — English "X Hour" periods (Zi/Chou/…/Hai, broad romanizations) via the _SHICHEN_PATS literal pass, plus the capitalized English renderings Hour/Watch/Mark/Ke on the fast path; sidecars from 65 (no such units) must be rescanned. (65 was: fork merged upstream v1.7.0 (64) — the fork's added units (carat, ton, verst/arshin/pood, gill, hp/BTU/psi, Asian transliterations) change match/convert output, so sidecars from 64 (no such units) and earlier fork builds must be rescanned. (64 was: the year/decade possessive guard for a bare feet-mark ("2001's", "the 90's") ACTUALLY WORKS now. It shipped in 63 but was inert: it tested next_text for a leading "s", and crengine builds context word-by-word — "2001’s" is one token, so the possessive "s" is swallowed and next_text starts at " Ghosts of Mars". The test could never fire, so reports #11-13 (2001’ = 600 m) were still live; VM-verified 2026-08-07, 5 false positives in smoketest5 CH49. Now reads the actual next character from the document via _xpointer_offset, the same one-char xpointer read the mid-word guard below already uses (a genuine height reads a space there: "6’ wide"). (63 was: "square <unit>" now recognizes "league"/"leagues" (was missing from _AREA_CONV entirely — the "square" cue had nothing to convert with, so "twenty-three square leagues" was a total miss, report #10). "<count>-toed/-legged/-clawed/-pawed/etc. feet/foot" no longer reads as a distance — anatomy, not a measurement (report #9: "three-toed feet" was reading as 91 cm; the shared _parse_num word-number fallback treats a hyphen right after a number word as an ordinary compound-number boundary, the same mechanism that composes "twenty-three", so it doesn't distinguish "three-toed" from "twenty-three"). (62 was: shorthand height notation (issue #2) now recognizes curly/smart quotes ("6’2”"), not just straight ASCII/true-prime — most commercial EPUBs are typeset this way, which is why it looked entirely broken to the reporter. A digit-adjacent bare feet-mark ('/′/’) immediately followed by "s" is now read as a year/decade possessive or plural ("2001's", "the 90's"), not a height — closes the false positive in reports #11-13 ("2001's Ghosts of Mars" was reading as 2001 ft = 600 m). (61 was: bare "degrees" (no F/Fahrenheit qualifier) now converts as a Fahrenheit temperature when a nearby word suggests one (cold/hot/warm/chill/freez.../temperature/weather/humid/...); default is still to leave it alone (angle, rotation, proof, heading, latitude). Spelled "minus" before a number now negates it ("minus seventy degrees" = -70), matching the existing symbolic-dash handling. "N degrees below zero" is suppressed rather than mis-signed (residual — reports #14-33). (60 was: hyphenated adjectival "square <unit>" compounds ("a 250,000-square-foot room", "a three-million-square-foot cave") now detect as area — the "square" cue check missed the hyphen glue and fell through to the linear-foot factor, badly wrong and missing the ² (reports #22-24). (59 was: metric→imperial direction ("Preferred units": metric/us/uk; sidecars carry a direction field, matches can now target imperial compound formats). (58 was: hyphen-glued attributive fractions parse — "<ordinal>-of-a-<unit>-thick/long" reads as 1/denominator ("a third-of-a-mile-thick" = 540 m; "quarter-of-a" worked already via _WORD_NUMS, ordinals like "third" were nil because bare ordinals are ambiguous — the glued "-of-a" tail disambiguates). (57 was: bare-article "a million miles" (incl. "an hour"/"away" forms) suppressed as hyperbole — user-approved 2026-07-06, all 7 corpus hits figurative; digits and real multiples ("two million miles", "half a million miles") still convert. (56 was: URL path fragments never convert (digit/letter slash in matched_text — "178650/League" was 860 000 km); "N-foot-by-M-foot" dimension adjectives convert both sides ("twenty-foot-by-hundred-foot" = 6 × 30 m, was a bare 6 m). (55 was: shy-book plain passes enforce true \\b via adjacent-char probes on BOTH sides (plain-path contexts are word-based, so "15 mi|nutes"/"one kn|ows" looked clean and inflated matches 3-6x). (54 was: soft-hyphen books (U+00AD in the text) scan via per-alias PLAIN findAllText passes — the regex path returns span-shifted/missing hits in such books (The Rise and Fall of the Dinosaurs: "1,700 miles" never hit, "seven-ton" garbled). (53 was: new-test-books sweep fixes — em-dash/ellipsis glued to the number no longer defeats _prev_num_words ("too far—eleven feet six inches", "off course by…sixty miles", "park—four acres"); fused digit+unit forms hit via a digit lookbehind in _FAST_UNIT_PAT ("260lbs", "6ft"); banking vocabulary (bank/account/bills/untraceable) added to the soft-currency cues. (52 was: "for a mile" article cue (user-approved) + attributive-tail guard ("ran a mile RELAY" is a compound noun — the batch-2 motion-verb cues were wrongly converting it). (51 was: tight U+2044 fractions from sup/sub-span markup ("21⁄2-inch" = 2½, "13⁄16-inch" = 13/16 — improper-looking numerator reads as a mixed number, proper as a plain fraction). 50 was: corpus-sweep batch 2 follow-ups — prime matches re-check the coordinate/astronomy vocab on the tail of their own paragraph (the 5-word hit window missed "ABERRATION … is established 20″"); spaced U+2044 mixed fractions parse ("2 1 ⁄ 2 -inch plank" = 2.5); _prev_num_words' article-fraction tail requires both words ("half LONG" no longer reads 0.5, which spawned a bogus 0.5–1000 range eating "…a mile and a half long and 1000 ft. deep"). (49 was: batch 2 — FP guards for closing-quote/middle-dot/arcsecond; enumeration lists; ASCII mixed fractions; million; article-mile directional/motion cues; at-a-time ≤ 2; "<digit> of a mile" fraction guard. 48 was: foot-idiom positional cues gated ≤ 2.)
+local CACHE_VERSION = 68  -- merged fork 66 (pinyin 時辰 稱謂 units: English "X Hour" periods via _SHICHEN_PATS plus Hour/Watch/Mark/Ke fast-path renderings; sidecars from 65 (no such units) must be rescanned) and upstream 67 (reader-flagged fixes: sig-digit distance floor for precise sources — 29,028 ft -> 8 848 m; closing-curly-quote call-sign guard — "Reach 18" is not 46 cm; ≤2 body-part foot guards). Both sides change match/convert output, so sidecars from either lineage (fork <66, upstream <67) must be rescanned. (66 was: fork: pinyin 時辰 稱謂 units — English "X Hour" periods (Zi/Chou/…/Hai, broad romanizations) via the _SHICHEN_PATS literal pass, plus the capitalized English renderings Hour/Watch/Mark/Ke on the fast path; sidecars from 65 (no such units) must be rescanned. (65 was: fork merged upstream v1.7.0 (64) — the fork's added units (carat, ton, verst/arshin/pood, gill, hp/BTU/psi, Asian transliterations) change match/convert output, so sidecars from 64 (no such units) and earlier fork builds must be rescanned. (64 was: the year/decade possessive guard for a bare feet-mark ("2001's", "the 90's") ACTUALLY WORKS now. It shipped in 63 but was inert: it tested next_text for a leading "s", and crengine builds context word-by-word — "2001’s" is one token, so the possessive "s" is swallowed and next_text starts at " Ghosts of Mars". The test could never fire, so reports #11-13 (2001’ = 600 m) were still live; VM-verified 2026-08-07, 5 false positives in smoketest5 CH49. Now reads the actual next character from the document via _xpointer_offset, the same one-char xpointer read the mid-word guard below already uses (a genuine height reads a space there: "6’ wide"). (63 was: "square <unit>" now recognizes "league"/"leagues" (was missing from _AREA_CONV entirely — the "square" cue had nothing to convert with, so "twenty-three square leagues" was a total miss, report #10). "<count>-toed/-legged/-clawed/-pawed/etc. feet/foot" no longer reads as a distance — anatomy, not a measurement (report #9: "three-toed feet" was reading as 91 cm; the shared _parse_num word-number fallback treats a hyphen right after a number word as an ordinary compound-number boundary, the same mechanism that composes "twenty-three", so it doesn't distinguish "three-toed" from "twenty-three"). (62 was: shorthand height notation (issue #2) now recognizes curly/smart quotes ("6’2”"), not just straight ASCII/true-prime — most commercial EPUBs are typeset this way, which is why it looked entirely broken to the reporter. A digit-adjacent bare feet-mark ('/′/’) immediately followed by "s" is now read as a year/decade possessive or plural ("2001's", "the 90's"), not a height — closes the false positive in reports #11-13 ("2001's Ghosts of Mars" was reading as 2001 ft = 600 m). (61 was: bare "degrees" (no F/Fahrenheit qualifier) now converts as a Fahrenheit temperature when a nearby word suggests one (cold/hot/warm/chill/freez.../temperature/weather/humid/...); default is still to leave it alone (angle, rotation, proof, heading, latitude). Spelled "minus" before a number now negates it ("minus seventy degrees" = -70), matching the existing symbolic-dash handling. "N degrees below zero" is suppressed rather than mis-signed (residual — reports #14-33). (60 was: hyphenated adjectival "square <unit>" compounds ("a 250,000-square-foot room", "a three-million-square-foot cave") now detect as area — the "square" cue check missed the hyphen glue and fell through to the linear-foot factor, badly wrong and missing the ² (reports #22-24). (59 was: metric→imperial direction ("Preferred units": metric/us/uk; sidecars carry a direction field, matches can now target imperial compound formats). (58 was: hyphen-glued attributive fractions parse — "<ordinal>-of-a-<unit>-thick/long" reads as 1/denominator ("a third-of-a-mile-thick" = 540 m; "quarter-of-a" worked already via _WORD_NUMS, ordinals like "third" were nil because bare ordinals are ambiguous — the glued "-of-a" tail disambiguates). (57 was: bare-article "a million miles" (incl. "an hour"/"away" forms) suppressed as hyperbole — user-approved 2026-07-06, all 7 corpus hits figurative; digits and real multiples ("two million miles", "half a million miles") still convert. (56 was: URL path fragments never convert (digit/letter slash in matched_text — "178650/League" was 860 000 km); "N-foot-by-M-foot" dimension adjectives convert both sides ("twenty-foot-by-hundred-foot" = 6 × 30 m, was a bare 6 m). (55 was: shy-book plain passes enforce true \\b via adjacent-char probes on BOTH sides (plain-path contexts are word-based, so "15 mi|nutes"/"one kn|ows" looked clean and inflated matches 3-6x). (54 was: soft-hyphen books (U+00AD in the text) scan via per-alias PLAIN findAllText passes — the regex path returns span-shifted/missing hits in such books (The Rise and Fall of the Dinosaurs: "1,700 miles" never hit, "seven-ton" garbled). (53 was: new-test-books sweep fixes — em-dash/ellipsis glued to the number no longer defeats _prev_num_words ("too far—eleven feet six inches", "off course by…sixty miles", "park—four acres"); fused digit+unit forms hit via a digit lookbehind in _FAST_UNIT_PAT ("260lbs", "6ft"); banking vocabulary (bank/account/bills/untraceable) added to the soft-currency cues. (52 was: "for a mile" article cue (user-approved) + attributive-tail guard ("ran a mile RELAY" is a compound noun — the batch-2 motion-verb cues were wrongly converting it). (51 was: tight U+2044 fractions from sup/sub-span markup ("21⁄2-inch" = 2½, "13⁄16-inch" = 13/16 — improper-looking numerator reads as a mixed number, proper as a plain fraction). 50 was: corpus-sweep batch 2 follow-ups — prime matches re-check the coordinate/astronomy vocab on the tail of their own paragraph (the 5-word hit window missed "ABERRATION … is established 20″"); spaced U+2044 mixed fractions parse ("2 1 ⁄ 2 -inch plank" = 2.5); _prev_num_words' article-fraction tail requires both words ("half LONG" no longer reads 0.5, which spawned a bogus 0.5–1000 range eating "…a mile and a half long and 1000 ft. deep"). (49 was: batch 2 — FP guards for closing-quote/middle-dot/arcsecond; enumeration lists; ASCII mixed fractions; million; article-mile directional/motion cues; at-a-time ≤ 2; "<digit> of a mile" fraction guard. 48 was: foot-idiom positional cues gated ≤ 2.) (67 was: bumped: two reader-flagged fixes. (1) Report #37 — "29,028 feet" (Everest) converted to "9 000 m". The conversion was right (8 847.7 m); smart rounding then flattened it, because plain metres at distance scale round within a 4% band REGARDLESS of source precision and 9 000 is only 1.72% away, so one significant figure swallowed a five-figure surveyed number. Distance targets (m/km) now floor the collapse at the source's own significant digits via _sig_digits, gated on `not _is_approx_num(n)` so an admittedly-round source still rounds hard: 29,028 ft -> 8 848 m and 511 ft -> 156 m (which the comment at the top of that section always CLAIMED happened), while 1,700 ft -> 500 m and 3,000 ft -> 900 m are unchanged. Ranges keep rounding coarse (force=true). (2) Reports #40/#41 — a closing curly quote after a digit read as inches: the call sign "Reach 18" came out as 46 cm. The existing guard only catches a quote after PUNCTUATION ("1836."); here a digit genuinely precedes the glyph, so the tell is an unmatched OPENING curly quote earlier in the context. Bare inches only — a spoken height ("5'10\"") carries a feet mark and is matched by the compound pattern, which never reaches this guard. Corpus-checked over 45 books before adding: 4 matches sit inside an open quotation, ALL FOUR citations or call signs, zero genuine measurements (one, "1913-1914\" -> -5 000 cm, was a live FP nobody had reported). (3) Reports #35/#36 — a foot as a BODY PART read as a distance. "had done so on two feet, and operated the door" = 60 cm: the "on/with <n> feet" idiom guard only covered the literal word "one", so it is now the whole ≤2 body scale (the "of" exception still protects a real "on two feet of packed snow"). "one foot is wrapped around the calf of her other leg" = 30 cm: every body-verb cue is anchored at the START of the following text and a copula sat in front of them all, so a leading is/was/were/are is now stripped before the cues run, and wrapp/hook/tuck/curl/propp/cross joined them (≤2-gated — "fifty feet wrapped around the post" is rope). Both were VM-confirmed STILL LIVE on a probe book before fixing, not assumed from the v59 report. Covered by smoketest5 CH50 and CH41; EXPECTED_TOTAL 321 -> 329. (66 was: the scan is now ONE PLAIN findAllText per unit alias for every book. It was a single 54-branch regex alternation, justified by "the cost is the per-call document walk, not the matching" — profiling says the opposite (2026-08-17, Lonesome Dove 366k words): plain search for "miles" 0.03s, regex \bmiles\b 0.52s for the IDENTICAL 177 hits, and the alternation grew ~0.08s per branch to 4.82s of a 5.0s scan. Its (?:\b|(?<=[0-9])) left anchor alone was 2.34s. 54 plain passes cost ~1.6s, so doing it 54 times is ~3x cheaper; plain search also needs no \b anchor, which is what let cache 65's bug exist (\b cannot see a soft hyphen where a letter would be). Equivalence was PROVEN before the switch, not assumed: 12 books both ways, both directions, every match set identical — smoketest5 321, smoketest6 39, smoketest5shy 13, Lonesome Dove 261. Measured end to end: Lonesome Dove 5.13s -> 2.43s, The End of Men 1.91s -> 0.69s, SPQR 16.6s -> 12.2s; tiny books pay slightly more (smoketest5 0.24s -> 0.28s) because each pass has a fixed cost. The regex path is DELETED rather than kept as a fallback: two paths that were supposed to agree and silently did not is exactly what produced cache 65, and only the unprofiled one had the hole. Shy books also stopped running the prime/°F regex passes unconditionally: they now answer "does this book contain 6'2\" or °F at all?" from the RAW FILE via metric_epub.probe_notation (tags stripped, entities decoded, any failure answers yes-to-everything) instead of from the 160s crengine read. 73% of a 45-book corpus contain neither, so most shy books now skip all 7. Controlled pair, same prose: lonesome-dove-shy 16.99s -> 2.74s against lonesome-dove 2.39s, both 261 matches; smoketest5shy still 13 with 0 passes, smoketest5 still 321 with 7 passes run (it does contain the notation). Shy-book ETA multiplier corrected 55x -> 8x. (65 was: soft-hyphen books. TWO fixes, both surfaced by profiling one novel against an 82k-soft-hyphen twin of itself (2026-08-17). (1) The shy path's adjacent-character boundary probe read exactly ONE character, and in these books that character is frequently the soft hyphen itself — not %a, so the guard passed and the "mi" alias matched inside longer words: "losing five mi|nutes" converted as "five mi" = 8 km, 48 times in one book. The probe now reads 4 characters and strips U+00AD before testing. (2) The whole-book getTextFromXPointers gate that decides whether to run the prime/°F literal passes cost 0.02s on the ordinary book and 159.95s on the shy twin — 98% of the entire scan, and it gated nothing: zero passes ran after it. Shy books now skip the gate and take the same branch as a failed gate read (run the passes unconditionally), the conservative direction: a wrong "skip" is silent lost prime/°F coverage, a wrong "run" is a few extra passes. (64 was: the year/decade possessive guard for a bare feet-mark ("2001's", "the 90's") ACTUALLY WORKS now. It shipped in 63 but was inert: it tested next_text for a leading "s", and crengine builds context word-by-word — "2001’s" is one token, so the possessive "s" is swallowed and next_text starts at " Ghosts of Mars". The test could never fire, so reports #11-13 (2001’ = 600 m) were still live; VM-verified 2026-08-07, 5 false positives in smoketest5 CH49. Now reads the actual next character from the document via _xpointer_offset, the same one-char xpointer read the mid-word guard below already uses (a genuine height reads a space there: "6’ wide"). (63 was: "square <unit>" now recognizes "league"/"leagues" (was missing from _AREA_CONV entirely — the "square" cue had nothing to convert with, so "twenty-three square leagues" was a total miss, report #10). "<count>-toed/-legged/-clawed/-pawed/etc. feet/foot" no longer reads as a distance — anatomy, not a measurement (report #9: "three-toed feet" was reading as 91 cm; the shared _parse_num word-number fallback treats a hyphen right after a number word as an ordinary compound-number boundary, the same mechanism that composes "twenty-three", so it doesn't distinguish "three-toed" from "twenty-three"). (62 was: shorthand height notation (issue #2) now recognizes curly/smart quotes ("6’2”"), not just straight ASCII/true-prime — most commercial EPUBs are typeset this way, which is why it looked entirely broken to the reporter. A digit-adjacent bare feet-mark ('/′/’) immediately followed by "s" is now read as a year/decade possessive or plural ("2001's", "the 90's"), not a height — closes the false positive in reports #11-13 ("2001's Ghosts of Mars" was reading as 2001 ft = 600 m). (61 was: bare "degrees" (no F/Fahrenheit qualifier) now converts as a Fahrenheit temperature when a nearby word suggests one (cold/hot/warm/chill/freez.../temperature/weather/humid/...); default is still to leave it alone (angle, rotation, proof, heading, latitude). Spelled "minus" before a number now negates it ("minus seventy degrees" = -70), matching the existing symbolic-dash handling. "N degrees below zero" is suppressed rather than mis-signed (residual — reports #14-33). (60 was: hyphenated adjectival "square <unit>" compounds ("a 250,000-square-foot room", "a three-million-square-foot cave") now detect as area — the "square" cue check missed the hyphen glue and fell through to the linear-foot factor, badly wrong and missing the ² (reports #22-24). (59 was: metric→imperial direction ("Preferred units": metric/us/uk; sidecars carry a direction field, matches can now target imperial compound formats). (58 was: hyphen-glued attributive fractions parse — "<ordinal>-of-a-<unit>-thick/long" reads as 1/denominator ("a third-of-a-mile-thick" = 540 m; "quarter-of-a" worked already via _WORD_NUMS, ordinals like "third" were nil because bare ordinals are ambiguous — the glued "-of-a" tail disambiguates). (57 was: bare-article "a million miles" (incl. "an hour"/"away" forms) suppressed as hyperbole — user-approved 2026-07-06, all 7 corpus hits figurative; digits and real multiples ("two million miles", "half a million miles") still convert. (56 was: URL path fragments never convert (digit/letter slash in matched_text — "178650/League" was 860 000 km); "N-foot-by-M-foot" dimension adjectives convert both sides ("twenty-foot-by-hundred-foot" = 6 × 30 m, was a bare 6 m). (55 was: shy-book plain passes enforce true \\b via adjacent-char probes on BOTH sides (plain-path contexts are word-based, so "15 mi|nutes"/"one kn|ows" looked clean and inflated matches 3-6x). (54 was: soft-hyphen books (U+00AD in the text) scan via per-alias PLAIN findAllText passes — the regex path returns span-shifted/missing hits in such books (The Rise and Fall of the Dinosaurs: "1,700 miles" never hit, "seven-ton" garbled). (53 was: new-test-books sweep fixes — em-dash/ellipsis glued to the number no longer defeats _prev_num_words ("too far—eleven feet six inches", "off course by…sixty miles", "park—four acres"); fused digit+unit forms hit via a digit lookbehind in _FAST_UNIT_PAT ("260lbs", "6ft"); banking vocabulary (bank/account/bills/untraceable) added to the soft-currency cues. (52 was: "for a mile" article cue (user-approved) + attributive-tail guard ("ran a mile RELAY" is a compound noun — the batch-2 motion-verb cues were wrongly converting it). (51 was: tight U+2044 fractions from sup/sub-span markup ("21⁄2-inch" = 2½, "13⁄16-inch" = 13/16 — improper-looking numerator reads as a mixed number, proper as a plain fraction). 50 was: corpus-sweep batch 2 follow-ups — prime matches re-check the coordinate/astronomy vocab on the tail of their own paragraph (the 5-word hit window missed "ABERRATION … is established 20″"); spaced U+2044 mixed fractions parse ("2 1 ⁄ 2 -inch plank" = 2.5); _prev_num_words' article-fraction tail requires both words ("half LONG" no longer reads 0.5, which spawned a bogus 0.5–1000 range eating "…a mile and a half long and 1000 ft. deep"). (49 was: batch 2 — FP guards for closing-quote/middle-dot/arcsecond; enumeration lists; ASCII mixed fractions; million; article-mile directional/motion cues; at-a-time ≤ 2; "<digit> of a mile" fraction guard. 48 was: foot-idiom positional cues gated ≤ 2.)))))
 local _REVERSE_VERSION = 2  -- v2: ordered originals per converted string (position-aware reverse lookup)
 
 -- ── Number prefixes ───────────────────────────────────────────────────────────
 
 -- [^0-9,] before the digit prevents mid-number matches (e.g. "0 lbs" from "140 lbs").
-local _ND  = "[^0-9,][0-9][0-9,.]*"   -- digit with mandatory boundary char
+-- A number, anchored on its first DIGIT.
+--
+-- This used to be "[^0-9,][0-9][0-9,.]*" — a mandatory non-digit, non-comma
+-- boundary character, consumed as part of the match, to stop "1950" also
+-- matching as "950"/"50"/"0". It worked, and it was almost the entire cost of
+-- the pass: [^0-9,] matches nearly every character in a book, so the engine had
+-- to attempt a match at every single position instead of skipping from digit to
+-- digit. Measured on one novel, same alternation, only this atom changed:
+-- 1.56s -> 0.24s, SIX TIMES faster (2026-08-18).
+--
+-- The boundary rule is not gone, it moved — see `needs_left_char` in
+-- run_passes. Two halves of it, and neither costs a document read:
+--   * a digit/comma to the left  -> already handled, for free, by seen_end:
+--     "950'" and "1950'" share an END xpointer, and document order delivers the
+--     longer one first, so the sub-match is dropped as a tail sub-match.
+--   * no character at all to the left (the match starts a text node) -> the old
+--     pattern could not match there, so those hits are dropped explicitly.
+local _ND  = "[0-9][0-9,.]*"
 
 -- ── Word → number lookup ──────────────────────────────────────────────────────
 -- Longest-first so sub(1,#word) finds the right entry before shorter prefixes.
@@ -576,10 +597,28 @@ local function _is_approx_num(n)
     return n % 10 == 0
 end
 
+-- How many significant digits the SOURCE number carries. Trailing zeros in a
+-- whole number are not significant — "a hundred feet" is one figure, "29,028
+-- feet" is five. Same signal _is_approx_num reads, at finer resolution: it
+-- answers "is this round?", this answers "how precise is it?".
+local function _sig_digits(n)
+    if not n or n == 0 then return 1 end
+    if n < 0 then n = -n end
+    local s
+    if n ~= math.floor(n) then
+        s = (string.format("%.10f", n):gsub("0+$", ""):gsub("%.", ""):gsub("^0+", ""))
+    else
+        s = (string.format("%.0f", n):gsub("0+$", ""))
+    end
+    return math.max(1, #s)
+end
+
 -- Round v to the coarsest 1-2-5×10^n step whose relative error stays within
 -- _SMART_ROUND_TOLERANCE. Returns v unchanged if even the smallest such step
--- would overshoot the tolerance.
-local function _nice_round(v, tol)
+-- would overshoot the tolerance. `min_sig` sets a floor on how few significant
+-- figures the result may collapse to, so a precise source can't be flattened
+-- (see the distance branch of _smart_round).
+local function _nice_round(v, tol, min_sig)
     if v == 0 then return v end
     tol = tol or _SMART_ROUND_TOLERANCE
     -- Round the magnitude and reapply the sign, so negative values (sub-zero °C
@@ -592,7 +631,7 @@ local function _nice_round(v, tol)
     -- from the true value than necessary (the old coarsest-1-2-5-step rule could
     -- overshoot, e.g. 6705.6 → 6800 instead of the closer 6700).
     local digits = math.floor(math.log(v) / math.log(10))  -- 10^digits <= v < 10^(digits+1)
-    for sig = 1, 8 do
+    for sig = math.max(1, min_sig or 1), 8 do
         local pow = 10 ^ (digits - sig + 1)
         local rounded = math.floor(v / pow + 0.5) * pow
         if rounded > 0 and math.abs(rounded - v) / v <= tol then
@@ -642,7 +681,28 @@ local function _smart_round(v, n, force, target)
     -- metres only qualify at distance scale (≥10 m), sparing heights/short lengths.
     if target and (_HARSH_TARGETS[target]
                    or (target == "m" and (v >= 10 or v <= -10))) then
-        return _nice_round(v, _HARSH_TOLERANCE)
+        -- ...except that DISTANCE must not flatten a precise source. A reader
+        -- reported "29,028 feet" (Everest) coming out as "9 000 m": the true
+        -- 8 847.7 m is only 1.72% from 9 000, inside the 4% band, so one
+        -- significant figure was allowed to swallow a five-figure surveyed
+        -- number. Approximate sources still round hard — "1,700 feet" -> 500 m
+        -- is unchanged, because _is_approx_num already says that number is
+        -- rough. This only bites when the source is BOTH precise and long:
+        -- 29,028 ft -> 8 848 m, 511 ft -> 156 m (which is what the comment at
+        -- the top of this section always claimed happened), 333 ft -> 101 m.
+        -- Ranges keep rounding hard: force means "inherently approximate".
+        local floor_sig
+        if (target == "m" or target == "km")
+           and not force and not _is_approx_num(n) then
+            floor_sig = _sig_digits(n)
+        end
+        local r = _nice_round(v, _HARSH_TOLERANCE, floor_sig)
+        -- A precision floor can leave a decimal at distance scale ("8 847.7 m"
+        -- reads as false precision); whole units are the honest rendering.
+        if floor_sig and r ~= math.floor(r) and math.abs(r) >= 10 then
+            r = _round_to_int(r)
+        end
+        return r
     end
     -- Sub-metre lengths display as centimetres (via _downscale at format time),
     -- so round them on the cm scale to ~2 sig figs — otherwise the metre value's
@@ -2042,6 +2102,34 @@ end
 -- Class attribute, not a local: this file is at the 200-local ceiling.
 FootFree._LOADER_DIR = _PLUGIN_DIR .. "/assets/loader"
 local _LOADER_PX  = 28            -- on-screen size before DPI scaling
+-- How long our corner ring yields to KOReader's own re-render bar before
+-- drawing beside it again. Long enough to cover a full-book re-render after an
+-- in-text convert; short enough that a stuck rendering_state can't hide our
+-- progress for a whole session. On the class, not a chunk local: merged with
+-- the fork's additions, main.lua sits at Lua's 200-locals-per-chunk ceiling.
+FootFree._RENDER_YIELD_S = 60
+-- How a scan-and-convert divides the ONE ring the reader sees. Each leg gets a
+-- slice and only the last is allowed to close the circle, so the ring never
+-- appears to finish and restart. Grouped in a table rather than as three
+-- top-level locals because main.lua is at Lua's 200-locals-per-chunk ceiling.
+--
+--   0 → tail_from        the scan (its own 0→0.97 sweep, compressed)
+--   tail_from → relocate  the in-place rewrite
+--   relocate → 1.0        the post-reload re-locate of converted positions
+--
+-- Before this split each leg ran its own 0→100%: the scan filled the circle,
+-- the convert restarted it at 75%, and the re-locate did it again — "it
+-- finished, then went backwards" (on-device report, 2026-08-17).
+--
+-- notice_wait_s bounds how long a queued toast waits for the ring and
+-- KOReader's re-render bar to clear. A bound, not a timeout we expect to hit:
+-- the rendering flag is KOReader's, and a notice that can be swallowed forever
+-- is worse than one that arrives late.
+local _RING = {
+    tail_from     = 0.70,
+    relocate_from = 0.88,
+    notice_wait_s = 60,
+}
 local _loader_tile_cache = {}
 
 -- Map a 0..1 progress fraction to the nearest available 5% bucket (0,5,..,100).
@@ -3038,33 +3126,30 @@ local function _conv_hundred_and(text)
 end
 
 -- ── Scan ──────────────────────────────────────────────────────────────────────
--- The only scan path: do ONE findAllText over the unit alternation, then
--- classify each unit hit in Lua from the number that precedes it. ~40x faster
--- than per-pattern passes (measured: Lonesome Dove 108s -> 2.5s) because the cost
--- is the per-call document walk, not the matching. Compounds (feet+inches,
+-- The scan does ONE PLAIN findAllText per unit alias, then classifies each hit
+-- in Lua from the number that precedes it. Compounds (feet+inches,
 -- pounds+ounces, "6 foot 4", "nine stone four"), ranges, fractions, and prime/°F
 -- notation are all handled (the last two via dedicated literal passes below).
--- The unit alternation is built from the FULL unit list (longest-first). "°F" is
--- handled separately (a word boundary around "°F" doesn't behave); bare "in" is
--- intentionally not in _UNIT_SUFFIXES — too easily the English preposition.
-local _FAST_UNIT_PAT
-do
-    local alts = {}
-    for _, u in ipairs(_UNIT_SUFFIXES) do
-        if u ~= "°F" then alts[#alts + 1] = u end
-    end
-    -- "°F" (the degree-symbol form) is deliberately NOT anchored here: a leading
-    -- dash/minus and the range forms can't be read reliably from prev_text, so
-    -- °F is handled entirely by dedicated literal passes (_TEMP_PATS) instead.
-    -- Left anchor: \b OR a digit lookbehind — regex \b never fires between a
-    -- digit and a letter (both are \w), so fused forms ("260lbs", "6ft")
-    -- produced no hit at all. The lookbehind keeps matched_text to just the
-    -- unit, so the number path reads "…of 260" from prev_text unchanged.
-    _FAST_UNIT_PAT = "(?:\\b|(?<=[0-9]))(" .. table.concat(alts, "|") .. ")\\b"
-end
-
--- Metric-direction twin of _FAST_UNIT_PAT — exactly its shape, minus the
--- one-letter aliases. "m"/"g" can't ride in this alternation at all:
+-- Aliases come from the FULL unit list, searched longest-first so a longer alias
+-- claims a position before a shorter one can ("nautical mile" before "mile").
+-- The pass loop and the measurements that chose it are at the top of
+-- _fast_scan_matches. "°F" is handled separately (a word boundary around "°F"
+-- doesn't behave); bare "in" is intentionally not in _UNIT_SUFFIXES — too easily
+-- the English preposition.
+--
+-- HISTORY, because the removed code keeps getting reinvented: this was a single
+-- 54-branch regex alternation until 2026-08-17, on the stated grounds that "the
+-- cost is the per-call document walk, not the matching". Measurement says the
+-- opposite — the walk is ~0.03s and the alternation was ~4.8s of a 5s scan. The
+-- alternation carried a `(?:\b|(?<=[0-9]))` left anchor, because regex \b never
+-- fires between a digit and a letter and fused forms ("260lbs", "6ft") produced
+-- no hit at all; that anchor alone cost 2.34s of the 4.82s. Plain search needs
+-- no anchor — the boundary is enforced by reading the adjacent characters
+-- instead (shy_boundary_ok), which is both cheaper and, unlike \b, able to see
+-- a soft hyphen sitting where a letter would be.
+--
+-- One thing from that design still stands and must not be re-litigated: "m" and
+-- "g" cannot ride in a shared alternation at all —
 --   * a plain \b anchor lets "I'm" hit "m" via the apostrophe boundary,
 --     blowing the 2000-hit budget on every novel;
 --   * a branch-leading lookbehind ((?<=[0-9])[ ]?m) makes crengine return a
@@ -3074,15 +3159,9 @@ end
 --     start off by a character ("1.8m" reported as "8m", "500g" as "00g"),
 --     which the glued-number fallback then "fixes" into a truncated value
 --     (1.8 m read as 1 m, 500 g as 5 g).
--- They run as dedicated literal passes instead (unit_pats below) — the
--- standalone digit-leading shape is the proven _TEMP_PATS one.
-do
-    local alts = {}
-    for _, u in ipairs(FootFree._IMPERIAL.suffixes) do
-        if u ~= "m" and u ~= "g" then alts[#alts + 1] = u end
-    end
-    FootFree._IMPERIAL.pat = "(?:\\b|(?<=[0-9]))(" .. table.concat(alts, "|") .. ")\\b"
-end
+-- Nor can they ride a PLAIN pass, which would match every letter m in the book.
+-- They run as dedicated number-anchored literal passes instead (unit_pats
+-- below) — the standalone digit-leading shape is the proven _TEMP_PATS one.
 
 -- Single-letter metric aliases as literal passes (see above). The number is
 -- part of the match, so the value comes from _parse_num(matched_text) like
@@ -3092,10 +3171,18 @@ end
 -- million dollars; the symbol can share the word with the digits, so the
 -- veto raw-reads the characters just before the hit).
 FootFree._IMPERIAL.unit_pats = {
-    { pat = "\\b[0-9][0-9.,]*[ ]?m\\b", cat = "length",
+    pre = "\\b[0-9][0-9.,]*",
+    { suf = "[ ]?m\\b", cat = "length",
       factor = 3.28084, offset = 0, target = "ftin", money = true },
-    { pat = "\\b[0-9][0-9.,]*g\\b", cat = "weight",
+    { suf = "g\\b", cat = "weight",
       factor = 0.0352740, offset = 0, target = "oz", money = true },
+    -- One alternation, one walk (see _PRIME_PATS). The trailing letter is the
+    -- whole distinction here.
+    classify = function(s)
+        if s:sub(-1) == "m" then return 1 end
+        if s:sub(-1) == "g" then return 2 end
+        return nil
+    end,
 }
 
 -- Is this token part of a number phrase? (digit, number-word, or connector word
@@ -3774,14 +3861,19 @@ local function _is_coordinate(prev, nxt)
     return false
 end
 
--- Prime/apostrophe notation (6′8″, 3″, 5'11", 4′ × 2″) isn't anchored on a unit
--- word, so these run as their own findAllText passes (longest-first so the
--- feet+inches form claims "6′8″" before the bare feet/inches forms). All marks
--- (ASCII + U+2019/U+201D + Unicode primes) are handled; inches may carry a
--- vulgar-fraction glyph ("6'8½\""). The penultimate pattern is the bare
--- compound "6'4" (US shorthand, no closing inch mark).
--- Held on the CLASS (not chunk locals) — the chunk sits near LuaJIT's
--- 200-locals ceiling (same convention as FootFree._TON/_GATED_UNITS).
+local _PRIME_PATS = {
+    pre = _ND,
+    needs_left_char = true,
+    { suf = _PRIME_MARKS.ft.."[ ]*".._TIMES.."[ ]*[0-9][0-9.,]*".._PRIME_MARKS.in_mark,
+      converter = _conv_dim_to_m_cm, target = "m×cm", cat = "length" },
+    { suf = _PRIME_MARKS.ft.."[ ]*[0-9][0-9.,]*".._PRIME_MARKS.vfrac.."?".._PRIME_MARKS.in_mark,
+      converter = _conv_prime_to_m, target = "m", cat = "length" },
+    { suf = _PRIME_MARKS.ft.."[0-9][0-9.,]*",
+      converter = _conv_prime_to_m, target = "m", cat = "length" },
+    { suf = _PRIME_MARKS.ft,   factor = 0.3048, offset = 0, target = "m",  cat = "length" },
+    { suf = _PRIME_MARKS.in_mark,   factor = 2.54,   offset = 0, target = "cm", cat = "length" },
+}
+
 -- Pinyin 時辰 appellations rendered in English — each named period is ONE
 -- 2-hour shichen, and in prose it appears WITHOUT a count ("the Shen Hour",
 -- "during the Chou Hour"), so it can't ride the fast path (which requires a
@@ -3816,42 +3908,73 @@ FootFree._conv_shichen = function(text)
     return nil
 end
 FootFree._SHICHEN_PATS = {
-    {
-        pat = "\\b(" .. table.concat(FootFree._SHICHEN_HOURS, "|") .. ")\\b",
-        converter = FootFree._conv_shichen, cat = "time", unit = "shichen",
-    },
+    pre = "",
+    { suf = "\\b(" .. table.concat(FootFree._SHICHEN_HOURS, "|") .. ")\\b",
+      converter = FootFree._conv_shichen, cat = "time", unit = "shichen" },
+    classify = function(s) return 1 end,
 }
 
-local _PRIME_PATS = {
-    { pat = _ND.._PRIME_MARKS.ft.."[ ]*".._TIMES.."[ ]*[0-9][0-9.,]*".._PRIME_MARKS.in_mark,
-      converter = _conv_dim_to_m_cm, target = "m×cm", cat = "length" },
-    { pat = _ND.._PRIME_MARKS.ft.."[ ]*[0-9][0-9.,]*".._PRIME_MARKS.vfrac.."?".._PRIME_MARKS.in_mark,
-      converter = _conv_prime_to_m, target = "m", cat = "length" },
-    { pat = _ND.._PRIME_MARKS.ft.."[0-9][0-9.,]*",
-      converter = _conv_prime_to_m, target = "m", cat = "length" },
-    { pat = _ND.._PRIME_MARKS.ft,   factor = 0.3048, offset = 0, target = "m",  cat = "length" },
-    { pat = _ND.._PRIME_MARKS.in_mark,   factor = 2.54,   offset = 0, target = "cm", cat = "length" },
-}
+-- Map a combined-pass hit back to the entry that would have produced it when
+-- each pattern ran its own pass. Tested in order, so the first fit wins — the
+-- same longest-first precedence as the pattern list. Returns nil for a hit that
+-- fits nothing, which run_passes drops rather than guessing at.
+--
+-- A class-attached function, not a local: main.lua is at Lua's ceiling of 200
+-- locals per chunk, and this form is also what the headless harness can extract
+-- by name. These classifiers decide which conversion factor a match gets, so
+-- they are exactly the kind of pure string logic that should be unit-tested
+-- rather than only exercised through a full device scan.
+function FootFree._classify_prime(s)
+    local SGL = { _PRIME, "'", FootFree._CAPOS }    -- feet marks  ′ ' ’
+    local DBL = { _DPRIME, "\"", FootFree._CDQ }    -- inch marks  ″ " ”
+    local function ends_any(t, marks)
+        for _, m in ipairs(marks) do
+            if #t >= #m and t:sub(-#m) == m then return true end
+        end
+        return false
+    end
+    local function has_any(t, marks)
+        for _, m in ipairs(marks) do
+            if t:find(m, 1, true) then return true end
+        end
+        return false
+    end
+    -- Classify on what follows the NUMBER, not on the whole match. `_ND`
+    -- consumes one boundary character before the digits and that character can
+    -- itself be a quote — in "'12\"" the leading apostrophe would otherwise
+    -- read as a feet mark and turn a plain inches hit into a feet+inches one.
+    local tail = s:match("^.-[0-9][0-9,.]*(.*)$") or s
+    if tail:find(_TIMES, 1, true) then return 1 end   -- 4′ × 2″
+    local dbl = ends_any(tail, DBL)
+    if dbl and has_any(tail, SGL) then return 2 end   -- 6′8″
+    if dbl then return 5 end                          -- 3″
+    if ends_any(tail, SGL) then return 4 end          -- 6′
+    if has_any(tail, SGL) then return 3 end           -- 6′4 (bare, no closing quote)
+    return nil
+end
+_PRIME_PATS.classify = FootFree._classify_prime
 
 -- All °F (degree-symbol form) handling runs as dedicated literal passes, like
 -- the prime passes — the unit-anchored stage can't reliably read a leading dash
 -- from prev_text (it would drop the sign, or emit the two endpoints as separate
--- singles), so °F is intentionally absent from _FAST_UNIT_PAT. Longest-first:
+-- singles), so °F is intentionally absent from the alias list. Longest-first:
 -- both-°F range, then trailing-°F range, then the bare value. Each number takes
 -- an optional dash prefix covering "−10°F"/"–10°F"/"—10°F"/"-10°F".
 local _DEGF = "\194\176F"   -- °F  (U+00B0 'F')
 local _TEMP_SIGN = "(-|" .. _ENDASH .. "|" .. _EMDASH .. "|" .. _UMINUS .. ")?"
 local _TNUM = _TEMP_SIGN .. "[0-9][0-9.,]*"
 local _TEMP_CONV = _range_conv(5/9, -32*5/9, "°C")
+-- `pre`/`suf`/`classify`: the group runs as one alternation, see _PRIME_PATS.
 local _TEMP_PATS = {
+    pre = _TNUM,
     -- "−10°F and 0°F" / "15°F to 75°F"
-    { pat = _TNUM .. "[ ]*" .. _DEGF .. "[ ]+(to|and|or)[ ]+" .. _TNUM .. "[ ]*" .. _DEGF,
+    { suf = "[ ]*" .. _DEGF .. "[ ]+(to|and|or)[ ]+" .. _TNUM .. "[ ]*" .. _DEGF,
       converter = _TEMP_CONV, target = "°C", cat = "temperature" },
     -- "15 to 75°F" (only the trailing endpoint carries the symbol)
-    { pat = _TNUM .. "[ ]+(to|and|or)[ ]+" .. _TNUM .. "[ ]*" .. _DEGF,
+    { suf = "[ ]+(to|and|or)[ ]+" .. _TNUM .. "[ ]*" .. _DEGF,
       converter = _TEMP_CONV, target = "°C", cat = "temperature" },
     -- "98°F" / "−10°F"
-    { pat = _TNUM .. "[ ]*" .. _DEGF,
+    { suf = "[ ]*" .. _DEGF,
       factor = 5/9, offset = -32*5/9, target = "°C", cat = "temperature" },
 }
 
@@ -3859,13 +3982,33 @@ local _TEMP_PATS = {
 -- degree-symbol anchoring problem as °F; same longest-first structure.
 FootFree._IMPERIAL.degc = "\194\176C"   -- °C
 FootFree._IMPERIAL.temp_pats = {
-    { pat = _TNUM .. "[ ]*" .. "\194\176C" .. "[ ]+(to|and|or)[ ]+" .. _TNUM .. "[ ]*" .. "\194\176C",
+    pre = _TNUM,
+    { suf = "[ ]*" .. "\194\176C" .. "[ ]+(to|and|or)[ ]+" .. _TNUM .. "[ ]*" .. "\194\176C",
       converter = _range_conv(9/5, 32, "°F"), target = "°F", cat = "temperature" },
-    { pat = _TNUM .. "[ ]+(to|and|or)[ ]+" .. _TNUM .. "[ ]*" .. "\194\176C",
+    { suf = "[ ]+(to|and|or)[ ]+" .. _TNUM .. "[ ]*" .. "\194\176C",
       converter = _range_conv(9/5, 32, "°F"), target = "°F", cat = "temperature" },
-    { pat = _TNUM .. "[ ]*" .. "\194\176C",
+    { suf = "[ ]*" .. "\194\176C",
       factor = 9/5, offset = 32, target = "°F", cat = "temperature" },
 }
+
+-- Both temperature groups classify the same way: count the degree symbols. Two
+-- means the both-endpoints range; one plus a range word means the trailing-only
+-- range ("15 to 75°F"); one alone is the bare value. Class-attached and
+-- symbol-parameterised for the same reasons as _classify_prime.
+function FootFree._classify_temp(s, sym)
+    local stripped, n = s:gsub(sym, "")
+    if stripped and n >= 2 then return 1 end
+    -- The range words are the pattern's own (to|and|or), always spaced.
+    if s:find("[ ]to[ ]") or s:find("[ ]and[ ]") or s:find("[ ]or[ ]") then
+        return 2
+    end
+    if n >= 1 then return 3 end
+    return nil
+end
+_TEMP_PATS.classify = function(s) return FootFree._classify_temp(s, _DEGF) end
+FootFree._IMPERIAL.temp_pats.classify = function(s)
+    return FootFree._classify_temp(s, FootFree._IMPERIAL.degc)
+end
 
 -- Does prev_text end with "<unit> [,/and] <number>"? Confirms a compound tail
 -- even with a comma or "and" connector ("two pounds, four ounces",
@@ -3967,6 +4110,17 @@ local function _fast_scan_matches(doc, cat_enabled)
     -- 15 is the sweet spot — recovers ~10 out-of-window currency cases with no
     -- genuine-weight loss; wider starts crossing sentence boundaries.)
     local _t0 = _now()
+    -- Phase timings for the dev-mode scan report. Written here, read by
+    -- _finishScan (same process — the fork happens above this call, so a
+    -- module-level table carries across without an IPC channel). The old
+    -- per-pattern `t_per_pat` breakdown died with the single-alternation
+    -- rewrite (both call sites pass {}), and total-only can't tell a slow
+    -- document walk from a slow per-hit loop — which is the ONLY question
+    -- worth asking before optimizing either. Cost is a handful of _now()
+    -- calls per scan; the fields are consumed only when dev mode is on.
+    FootFree._scan_t = { walk = 0, loop = 0, lit = 0, gate = 0, litn = 0,
+                         hits = 0, passes = 1, shy = false,
+                         probe = 0, skipped = 0 }
     -- Active direction: imperial preference scans METRIC units (metric →
     -- imperial); the default scans imperial as always. Read once per scan —
     -- the subprocess inherits the parent's settings snapshot.
@@ -3980,7 +4134,13 @@ local function _fast_scan_matches(doc, cat_enabled)
     -- alternation without \b is equally broken, so it's the regex engine
     -- itself, not the anchors). The PLAIN (non-regex) search path handles the
     -- same text correctly, so such books scan with one plain pass per unit
-    -- alias instead — slower, but correct. Detection: file-level, via
+    -- alias instead. ("Slower, but correct" is what this comment used to say;
+    -- it is wrong. Measured 2026-08-17 on one book and its soft-hyphen twin:
+    -- all 54 plain passes = 2.63s, the single regex alternation = 4.84s. Plain
+    -- search is ~100x cheaper PER PASS, so 54 of them still beat one regex
+    -- pass. Whether the plain path should therefore be the default for ALL
+    -- books is an open question, not a settled one — the two paths do not
+    -- currently agree on what they find.) Detection: file-level, via
     -- metric_epub's libarchive reader — no crengine text API exposes the
     -- character (context extraction strips it; the plain search path skips it
     -- for matching, so it can't even be searched for). (Known limitation: the
@@ -3996,42 +4156,118 @@ local function _fast_scan_matches(doc, cat_enabled)
             shy_book = (oks and res) or false
         end
     end
+    -- ── The only scan path: one PLAIN search per unit alias ──────────────────
+    -- This used to be the soft-hyphen fallback, with a single 54-branch regex
+    -- alternation as the path every other book took. Profiling inverted that
+    -- (2026-08-17, Lonesome Dove, 366k words):
+    --
+    --     plain search for "miles"           0.03s   177 hits
+    --     regex \bmiles\b — same result      0.52s   177 hits
+    --     regex, 8 branches                  1.56s
+    --     regex, 27 branches                 2.98s
+    --     regex, 54 branches (what shipped)  4.82s
+    --
+    -- The document walk is nearly free; the alternation was the entire bill,
+    -- growing ~0.08s per branch. 54 plain passes cost ~1.6s against 4.82s for
+    -- one regex pass, so doing it 54 times is still ~3x cheaper. (Factoring the
+    -- alternation — mile|miles -> miles? — was tried and is WORSE: optional
+    -- groups cost more than extra alternatives. 17 factored branches = 3.59s
+    -- against 2.98s for 27 plain ones.)
+    --
+    -- Equivalence was established before the switch, not assumed: 12 books
+    -- scanned both ways, both directions, every match set IDENTICAL — including
+    -- smoketest5's 321 and smoketest6's 39. Consolidating to ONE path also
+    -- removes the failure mode that produced cache 65: two paths that were
+    -- supposed to agree, silently didn't, and only a soft-hyphen book ran the
+    -- one nobody profiled.
+    --
+    -- The win scales with book length — each pass has a small fixed cost, so a
+    -- tiny book pays slightly more (smoketest5: 0.24s -> 0.27s) while a novel
+    -- saves seconds (Lonesome Dove: 5.13s -> 2.43s).
     local ok, hits
-    if shy_book then
+    do
         hits = {}
         local claimed = {}   -- start xpointer -> true (longest alias wins)
         local aliases = {}
         for _, u in ipairs(ACTIVE_SUFS) do
-            -- One-letter metric aliases are excluded from the shy plain
-            -- passes: a PLAIN search for "m"/"g" matches every occurrence of
-            -- the letter (known limitation for soft-hyphen books).
+            -- One-letter metric aliases can't ride a plain search: "m"/"g"
+            -- would match every occurrence of the letter. They are covered by
+            -- their own number-anchored literal passes instead (unit_pats),
+            -- which is why the metric direction is unaffected by this path.
             if u ~= "°F" and u ~= "m" and u ~= "g" then aliases[#aliases + 1] = u end
         end
         table.sort(aliases, function(a, b) return #a > #b end)
+        FootFree._scan_t.shy, FootFree._scan_t.passes = shy_book, #aliases
         -- True \b on BOTH sides, by reading the adjacent character in the
         -- node: plain-path prev_text/next_text are WORD-based (they stop at
         -- word boundaries), so a mid-word hit ("15 mi|nutes", "one kn|ows",
         -- "s|mile|s") looks clean in its contexts and would sail through
         -- every string guard. A digit on the left stays allowed ("260lbs" —
         -- mirrors the regex path's digit lookbehind).
+        -- Read up to `n` characters outward from `xp` and strip soft hyphens
+        -- before the caller tests them. A ONE-character probe is not enough in
+        -- exactly the books this path exists for: the character adjacent to the
+        -- alias is frequently the soft hyphen itself, which is not %a, so the
+        -- guard passed and "losing five mi|nutes" converted as "five mi" = 8 km
+        -- (measured 2026-08-17: 48 such false positives in one novel, every one
+        -- of them the "mi" alias inside a longer word). Widening the read and
+        -- discarding U+00AD tests the character a reader actually sees. Falls
+        -- back to a single character if the wide read runs past the node.
+        local _SHY_CH = "\194\173"
+        local function _probe(a, b, fallback_a, fallback_b)
+            local okp, s = pcall(function()
+                return doc:getTextFromXPointers(a, b)
+            end)
+            if not (okp and s) then
+                okp, s = pcall(function()
+                    return doc:getTextFromXPointers(fallback_a, fallback_b)
+                end)
+            end
+            if not (okp and s) then return nil end
+            return (s:gsub(_SHY_CH, ""))
+        end
         local function shy_boundary_ok(h)
             local pfx, off = _xpointer_offset(h.start)
             if pfx ~= h.start and off and off > 0 then
-                local okl, c = pcall(function()
-                    return doc:getTextFromXPointers(pfx .. tostring(off - 1), h.start)
-                end)
-                if okl and c and c:match("^%a") then return false end
+                local c = _probe(pfx .. tostring(math.max(0, off - 4)), h.start,
+                                 pfx .. tostring(off - 1), h.start)
+                -- Left side: the character immediately BEFORE the alias is the
+                -- last one of the probe, so test the tail.
+                if c and c:match("%a$") then return false end
             end
             local pfx2, off2 = _xpointer_offset(h["end"])
             if pfx2 ~= h["end"] and off2 then
-                local okr, c = pcall(function()
-                    return doc:getTextFromXPointers(h["end"], pfx2 .. tostring(off2 + 1))
-                end)
-                if okr and c and c:match("^%a") then return false end
+                local c = _probe(h["end"], pfx2 .. tostring(off2 + 4),
+                                 h["end"], pfx2 .. tostring(off2 + 1))
+                if c and c:match("^%a") then return false end
             end
             return true
         end
+        -- Skip the pass entirely for an alias this book never contains. A pass
+        -- costs a full walk of the document regardless of what it finds, and
+        -- roughly half of the 54 aliases are absent from a typical novel
+        -- (measured over 20 books: 27 of 55 present on average). `present` is
+        -- nil whenever the probe could not answer confidently, and nil means
+        -- run everything — the asymmetry matters, since a wrongly skipped pass
+        -- loses conversions silently for the life of the book.
+        local _tPR = _now()
+        local present
+        do
+            local mod = _metric_module()
+            local f = doc.file or ""
+            if mod and mod.probe_aliases and f:lower():match("%.epub$") then
+                local okpr, res = pcall(mod.probe_aliases, f, aliases)
+                present = (okpr and res) or nil
+            end
+        end
+        FootFree._scan_t.probe = _now() - _tPR
+        FootFree._scan_t.skipped = 0
         for _, u in ipairs(aliases) do
+            if present and not present[u] then
+                FootFree._scan_t.skipped = FootFree._scan_t.skipped + 1
+                goto next_alias
+            end
+            do
             local okp, res = pcall(function()
                 return doc:findAllText(u, true, 15, 20000, false)
             end)
@@ -4043,22 +4279,22 @@ local function _fast_scan_matches(doc, cat_enabled)
                     end
                 end
             end
+            end
+            ::next_alias::
         end
         -- Per-alias passes lose document order; the compound-merge logic
-        -- (feet+inches etc.) depends on it. Restore it.
+        -- (feet+inches etc.) depends on it. Restore it. (crengine
+        -- compareXPointers returns -1 when the first pointer precedes the
+        -- second, so == -1 is the ascending document-order sort.)
         table.sort(hits, function(a, b)
-            return doc:compareXPointers(a.start, b.start) == 1
+            return doc:compareXPointers(a.start, b.start) == -1
         end)
         ok = true
-    else
-        ok, hits = pcall(function()
-            return doc:findAllText(dir_imperial and FootFree._IMPERIAL.pat
-                                                 or _FAST_UNIT_PAT,
-                                   true, 15, 20000, true)
-        end)
     end
     if not ok or not hits then return {} end
     local _tA1 = _now() - _t0
+    FootFree._scan_t.walk, FootFree._scan_t.hits = _tA1, #hits
+
 
     -- Real scan progress (read by the parent's _pollFastScan over
     -- _SCAN_PROGRESS_FILE). findAllText above is one opaque pass, but the per-hit
@@ -4254,6 +4490,7 @@ local function _fast_scan_matches(doc, cat_enabled)
     end
 
     local out, seen_end = {}, {}
+    local _tL0 = _now()
     for i, h in ipairs(hits) do
         if i % _prog_every == 0 then _report(i / _prog_total) end
         local unit = _identify_unit(h.matched_text, ACTIVE_SUFS)
@@ -4845,6 +5082,9 @@ local function _fast_scan_matches(doc, cat_enabled)
     end
 
 
+    FootFree._scan_t.loop = _now() - _tL0
+    local _tP0 = _now()
+
     _report(1)  -- per-hit loop done; the prime/°F tail below is the last sliver
 
     -- Prime notation — skip these extra passes ONLY when we can positively
@@ -4852,28 +5092,141 @@ local function _fast_scan_matches(doc, cat_enabled)
     -- read via getPageXPointer, which can fail in the forked subprocess (paging
     -- not resolved) even though findAllText works fine — so if bt is
     -- unavailable, run the passes rather than silently dropping primes.
-    local ok_t, bt = pcall(function()
-        return doc:getTextFromXPointers(doc:getPageXPointer(1),
-                                        doc:getPageXPointer(doc:getPageCount()))
-    end)
-    local maybe_primes = (not ok_t) or (not bt)
-        or bt:find(_PRIME, 1, true) or bt:find(_DPRIME, 1, true)
-        or bt:find("%d'") or bt:find('%d"')
-        or bt:find("%d" .. _PRIME_MARKS.rsquote) or bt:find("%d" .. _PRIME_MARKS.rdquote)
+    -- The gate read below is a whole-book getTextFromXPointers over every page.
+    -- On an ordinary book it is free (measured: 0.02s on a 366k-word novel).
+    -- On a SOFT-HYPHEN book it costs 160 SECONDS — 98% of the entire scan, and
+    -- in the measured case it gated nothing at all: zero literal passes ran
+    -- afterwards. Two and a half minutes of work to decide to skip work.
+    -- (Lonesome Dove + an 82k-soft-hyphen twin of itself, 2026-08-17.)
+    -- So shy books skip the gate and take the SAME branch as a gate that fails
+    -- to read: run the literal passes unconditionally. That is deliberately the
+    -- conservative direction — the passes are what FIND prime and °F notation,
+    -- so a wrong "skip" is silent lost coverage, while a wrong "run" only costs
+    -- a few extra passes. Deriving the answer from the raw EPUB instead was the
+    -- alternative and was rejected: entity forms (&#8242;) and markup between a
+    -- digit and its prime mark ("6<span>'</span>") make a raw-text probe prone
+    -- to exactly that silent false negative.
+    local _tG0 = _now()
+    local ok_t, bt
+    local probe   -- raw-file answer, shy books only (see below)
+    if not shy_book then
+        ok_t, bt = pcall(function()
+            return doc:getTextFromXPointers(doc:getPageXPointer(1),
+                                            doc:getPageXPointer(doc:getPageCount()))
+        end)
+    else
+        -- Shy books can't use the crengine read above (160s), and running every
+        -- pass regardless costs ~14s on a book that usually needs none — 73% of
+        -- a 45-book corpus contain no height shorthand and no °F at all. So ask
+        -- the raw file instead, which metric_epub is already opening for the
+        -- soft-hyphen check. Any failure inside probe_notation answers "yes to
+        -- everything", so this can only ever cost passes, never lose coverage.
+        local mod = _metric_module()
+        if mod and mod.probe_notation then
+            local okp, res = pcall(mod.probe_notation, doc.file or "")
+            probe = (okp and res) or nil
+        end
+    end
+    FootFree._scan_t.gate = _now() - _tG0
+    -- `probe` is set for shy books only (raw-file answer); `bt` for every other
+    -- book (crengine rendered text). If neither is available, say yes — running
+    -- a pass costs time, skipping one loses conversions silently.
+    local maybe_primes
+    if probe then
+        maybe_primes = probe.prime
+    else
+        maybe_primes = (not ok_t) or (not bt)
+            or bt:find(_PRIME, 1, true) or bt:find(_DPRIME, 1, true)
+            or bt:find("%d'") or bt:find('%d"')
+            or bt:find("%d" .. _PRIME_MARKS.rsquote) or bt:find("%d" .. _PRIME_MARKS.rdquote)
+    end
     -- Literal-match passes (primes, °F): run longest-first, deduped by start AND
     -- end xpointer so a range claims its span before the single-value pass can
     -- re-match an endpoint. seen_end is shared with the main unit loop above.
     local seen_start = {}
-    local function run_passes(pats)
-        for _, e in ipairs(pats) do
-            local okp, pres = pcall(function()
-                return doc:findAllText(e.pat, true, 5, 2000, true)
-            end)
-            if okp and pres then
-                for _, r in ipairs(pres) do
+    -- ONE findAllText per group, not one per pattern.
+    --
+    -- A pass costs a full walk of the document whether or not it matches
+    -- anything: measured on a 1MB novel, the two prime patterns that found
+    -- NOTHING still cost 1.54s each — the same as the two that found hits. So
+    -- four patterns cost four walks (6.25s) where the same four as one
+    -- alternation cost one (1.56s), for a hit set proven identical. On a Kobo
+    -- this phase was 66.7s of an 87s scan (device log, 2026-08-17).
+    --
+    -- Every entry in a group shares a leading number pattern, so the group
+    -- factors cleanly into `pre(suf1|suf2|…)`. Alternation is leftmost-first and
+    -- the entries stay ordered longest-first, which is what preserves the old
+    -- precedence — the compound "6′8″" form still claims its span before the
+    -- bare-feet form sees it. Each hit is then mapped back to its entry by the
+    -- group's `classify`, because everything downstream (the converter, the
+    -- factor, the currency veto) is per-entry.
+    local function run_passes(group)
+        -- The category filter lives here rather than at the call sites: a
+        -- filtered COPY of the list would renumber it, and classify() returns
+        -- an index into the group as written. (This also gives the prime group
+        -- a category check it never had — its patterns are all "length", so
+        -- unticking Length now skips them, which it should always have done.
+        -- No effect on the default, where every category is on.)
+        local sufs, enabled = {}, {}
+        for i, e in ipairs(group) do
+            if cat_enabled[e.cat] ~= false then
+                sufs[#sufs + 1] = e.suf
+                enabled[i] = true
+            end
+        end
+        if #sufs == 0 then return end
+        -- Collect (hit, entry) pairs, then run the guard chain over them.
+        local hits = {}
+        FootFree._scan_t.litn = FootFree._scan_t.litn + 1
+        local pat = group.pre .. "(" .. table.concat(sufs, "|") .. ")"
+        local okp, pres = pcall(function()
+            return doc:findAllText(pat, true, 5, 2000, true)
+        end)
+        for _, r in ipairs((okp and pres) or {}) do
+            -- Which pattern did this hit come from? A hit we cannot place is
+            -- DROPPED, not guessed: picking the wrong entry picks the wrong
+            -- conversion factor, and a silently wrong number in someone's book
+            -- is worse than a miss. The classifiers are covered by headless
+            -- tests, so this should never fire.
+            local idx = group.classify and group.classify(r.matched_text or "")
+            local e = idx and enabled[idx] and group[idx]
+            if e then
+                hits[#hits + 1] = { r = r, e = e }
+            else
+                logger.warn("FootFree: unclassified literal hit "
+                            .. tostring(r.matched_text))
+            end
+        end
+        do
+            do
+                for _, h in ipairs(hits) do
+                    local r, e = h.r, h.e
                     if not seen_end[r["end"]] then
+                        -- Second half of the boundary rule that used to live in
+                        -- the pattern itself (see _ND). The old leading [^0-9,]
+                        -- required a character to EXIST before the number, so a
+                        -- match starting a text node could never happen.
+                        -- Reproduce that rather than quietly widening coverage:
+                        -- the one such hit in the corpus was a Library of
+                        -- Congress call number on a copyright page
+                        -- ("F2546.G747 2008 918.1′" → 280 m), a false positive,
+                        -- and whether to start matching there is a coverage
+                        -- decision, not a performance one.
+                        --
+                        -- It CLAIMS the span rather than just skipping. Dropping
+                        -- it outright freed the sub-match one character to the
+                        -- right — the node "918.1′—dc22" then yielded "18.1′"
+                        -- (5.5 m), which the old pattern rejected because a
+                        -- digit sat to its left. Claiming is also what blocks
+                        -- every other digit-left sub-match: "1950′" and "950′"
+                        -- share an end xpointer, and document order delivers the
+                        -- longest first, so this needs no document read at all.
+                        if group.needs_left_char
+                           and select(2, _xpointer_offset(r.start or "")) <= 0 then
+                            seen_start[r.start] = true
+                            seen_end[r["end"]] = true
                         -- Headings (h1–h6: chapter/book titles) are never converted.
-                        if (r.start or ""):find("/h[1-6][%[/]") then
+                        elseif (r.start or ""):find("/h[1-6][%[/]") then
                             seen_start[r.start] = true
                             seen_end[r["end"]] = true
                         -- A lat/long coordinate prime (′ arcminute / ″ arcsecond)
@@ -4960,16 +5313,15 @@ local function _fast_scan_matches(doc, cat_enabled)
     -- SOURCE notations; °C is the metric-direction twin.
     if dir_imperial then
         local has_degc = (cat_enabled["temperature"] ~= false)
-            and ((not ok_t) or (not bt)
-                 or bt:find(FootFree._IMPERIAL.degc, 1, true) ~= nil)
+            and (probe and probe.degc
+                 or (not probe and ((not ok_t) or (not bt)
+                     or bt:find(FootFree._IMPERIAL.degc, 1, true) ~= nil)))
         if has_degc then run_passes(FootFree._IMPERIAL.temp_pats) end
         -- Single-letter aliases ("1.8m", "500g") — see unit_pats for why
-        -- these can't ride in the main alternation.
-        local upats = {}
-        for _, e in ipairs(FootFree._IMPERIAL.unit_pats) do
-            if cat_enabled[e.cat] ~= false then upats[#upats + 1] = e end
-        end
-        if #upats > 0 then run_passes(upats) end
+        -- these can't ride in the main alternation. run_passes does the
+        -- category filtering itself now (a filtered copy would renumber the
+        -- group and break classify's index).
+        run_passes(FootFree._IMPERIAL.unit_pats)
     else
         if maybe_primes then run_passes(_PRIME_PATS) end
 
@@ -4977,7 +5329,9 @@ local function _fast_scan_matches(doc, cat_enabled)
         if cat_enabled["time"] ~= false then run_passes(FootFree._SHICHEN_PATS) end
 
         local has_degf = (cat_enabled["temperature"] ~= false)
-            and ((not ok_t) or (not bt) or bt:find(_DEGF, 1, true) ~= nil)
+            and (probe and probe.degf
+                 or (not probe and ((not ok_t) or (not bt)
+                     or bt:find(_DEGF, 1, true) ~= nil)))
         if has_degf then run_passes(_TEMP_PATS) end
     end
 
@@ -4988,6 +5342,10 @@ local function _fast_scan_matches(doc, cat_enabled)
     -- half inches" — left two partially-overlapping matches. This collapses each
     -- such pair to a single match (longest span at a shared start wins, which is
     -- the foot-anchored compound), the same interval filter the reverse path uses.
+    -- `lit` deliberately includes the whole-book getTextFromXPointers read that
+    -- gates these passes — that read exists only to decide whether to run them,
+    -- so its cost belongs to them.
+    FootFree._scan_t.lit = _now() - _tP0
     return out
 end
 
@@ -5354,7 +5712,10 @@ function FootFree:onReaderReady()
             -- notice will fire.
             if FootFree._just_converted == doc.file then
                 FootFree._just_converted = nil
-                UIManager:scheduleIn(0.4, function()
+                -- Queued, not timed: this is the LAST word on the action, so it
+                -- waits for KOReader's re-render bar and our re-locate ring to
+                -- both be done. See _deferNotice.
+                self:_deferNotice(function()
                     UIManager:show(Notification:new{
                         text = self:_scanNoticeText(0, doc),
                     })
@@ -5365,13 +5726,16 @@ function FootFree:onReaderReady()
         -- convert prompt would pop right back up. Session-only (class table).
         elseif self._auto_scan and _is_english(doc)
            and not self._removed_this_session[doc.file] then
-            -- In "Convert directly in the text" mode, offer the conversion
-            -- automatically once this fresh scan finishes — the user enabled
-            -- auto-scan + convert mode and expects the "Convert?" prompt on
-            -- opening a new book, not to toggle Enable in the menu per book.
+            -- In an in-text mode, convert automatically once this fresh scan
+            -- finishes — and WITHOUT asking. Ticking "Auto-convert when opening
+            -- a new book" is the consent for this path; re-asking per book is a
+            -- question the reader already answered, and it used to arrive after
+            -- a 12-second wait (on-device report, 2026-08-17). The menu entry
+            -- and its long-press text say plainly that this rewrites the book.
             -- Only on a fresh scan (first time a book is scanned): a book that
-            -- was scanned before and left unconverted shouldn't keep re-asking.
-            self:_armConvertAfterScan()
+            -- was scanned before and left unconverted must not be converted
+            -- behind the reader's back on a later open.
+            self:_armConvertAfterScan(true)
             self:_startScan(doc)
         end
     end
@@ -6286,7 +6650,7 @@ function FootFree:_showModeDialog(touchmenu_instance)
     UIManager:show(overlay, "ui")
 end
 
-function FootFree:_finishScan(doc, all_matches, t_per_pat, t_total, in_subprocess, debug_report)
+function FootFree:_finishScan(doc, all_matches, t_total, in_subprocess, debug_report)
     -- Words that may follow a *weight* "N stone" — anything else following it
     -- (a concrete noun: cuffs, spheres, foundation, wall) marks it as the rock,
     -- not the unit. A number ("twelve stone six") or clause end also keep it.
@@ -6472,6 +6836,13 @@ function FootFree:_finishScan(doc, all_matches, t_per_pat, t_total, in_subproces
             -- (shuffling, stomping…) stay ungated: they never follow distances.
             local footn = _parse_num(mt)
             local body_scale = (not footn) or footn <= 2
+            -- Strip a leading copula so "one foot IS wrapped around the calf"
+            -- reaches the same participle cues as a bare "one foot wrapped…".
+            -- Report #36 read that sentence as 30 cm: every body-verb cue here
+            -- is anchored at the start of the following text, and "is" sat in
+            -- front of all of them.
+            local nxtv = nxt:gsub("^(%s*)[Ii]s%s+", "%1"):gsub("^(%s*)[Ww]as%s+", "%1")
+                            :gsub("^(%s*)[Ww]ere%s+", "%1"):gsub("^(%s*)[Aa]re%s+", "%1")
             local drop_foot =
                 (body_scale and (
                     nxt:match("^%s*in front")            or  -- "one foot in front of the other" (anchored: not "…foot tower in front of the cabin")
@@ -6483,7 +6854,20 @@ function FootFree:_finishScan(doc, all_matches, t_per_pat, t_total, in_subproces
                     nxt:match("^%s*in the water")        or
                     nxt:match("^%s*in the door")         or
                     nxt:match("^%s*in the grave")        or
-                    (nxt:match("^%s*on ") and not nxt:match("on%s*%d"))
+                    (nxt:match("^%s*on ") and not nxt:match("on%s*%d")) or
+                    -- A foot being POSITIONED against something, the verb
+                    -- following rather than preceding it (report #36: "one foot
+                    -- is wrapped around the calf of her other leg" = 30 cm).
+                    -- Kept inside the ≤2 gate: a genuine "fifty feet wrapped
+                    -- around the post" is a length of rope, not an ankle.
+                    -- "across" is safe from the "cross" cue — the pattern is
+                    -- anchored, so " across the room" does not match.
+                    nxtv:match("^%s*wrapp")             or
+                    nxtv:match("^%s*hook")              or
+                    nxtv:match("^%s*tuck")              or
+                    nxtv:match("^%s*curl")              or
+                    nxtv:match("^%s*propp")             or
+                    nxtv:match("^%s*cross")
                 )) or
                 nxt:match("^%s*grounded")            or
                 nxt:match("^%s*braced")              or
@@ -6500,8 +6884,12 @@ function FootFree:_finishScan(doc, all_matches, t_per_pat, t_total, in_subproces
             -- "(his/your) own two feet"; "lifted/raised/hopping/… one foot".
             if pw and _FOOT_PREV_VERBS[pw] then drop_foot = true end
             -- "with one foot" / "on one foot" (hopping/standing), but keep a real
-            -- "with one foot of clearance".
-            if mt:find("one") and (pw == "with" or pw == "on")
+            -- "with one foot of clearance". Widened from "one" to the whole ≤2
+            -- body scale for report #35: "had done so on two feet, and operated
+            -- the door" is a creature walking upright, and read as 60 cm. The
+            -- "of" exception still protects a genuine partitive ("standing on
+            -- two feet of packed snow").
+            if body_scale and (pw == "with" or pw == "on")
                and not nxt:match("^%s*of ") then
                 drop_foot = true
             end
@@ -6734,6 +7122,33 @@ function FootFree:_finishScan(doc, all_matches, t_per_pat, t_total, in_subproces
                 end
             end
         end
+        -- The same glyph ENDING A QUOTATION, with a digit legitimately before
+        -- it: '“Reach 18”' (a call sign), '“Bolivian Exploration, 1913–1914”'
+        -- (a citation). The digit test above cannot see these — the character
+        -- before the glyph really is a digit, exactly as in a true 18" — so the
+        -- tell is an unmatched OPENING curly quote earlier in the context.
+        -- Bare inches only: a spoken height reads '5'10”', which carries a feet
+        -- mark and is matched by the compound pattern, so it never lands here.
+        -- Corpus check across 45 books before adding this: 4 matches sit inside
+        -- an open quotation and ALL FOUR are citations or call signs — zero are
+        -- genuine measurements. One of them ("1913–1914”" -> -5 000 cm) was a
+        -- live false positive nobody had reported yet.
+        do
+            local mtx = r.matched_text or ""
+            local tail = mtx:sub(-3)
+            if tail == _DPRIME or tail == FootFree._CDQ then
+                local body = mtx:sub(1, -4)
+                local has_feet = body:find("'", 1, true)
+                    or body:find(_PRIME, 1, true)
+                    or body:find(FootFree._CAPOS, 1, true)
+                if not has_feet then
+                    local p = r.prev_text or ""
+                    local _, opens  = p:gsub(FootFree._CLDQ, "")
+                    local _, closes = p:gsub(FootFree._CDQ, "")
+                    if opens > closes then keep = false end
+                end
+            end
+        end
         -- Product model numbers: a comma between the number and the unit (e.g.
         -- "VTS989, kn") never appears in real measurements.
         if r.matched_text:match("%d,%s*%a") then keep = false end
@@ -6856,6 +7271,26 @@ function FootFree:_finishScan(doc, all_matches, t_per_pat, t_total, in_subproces
     -- overlapping "six-foot-five-inch" hit) to a single match.
     filtered = _filter_overlapping_matches(filtered)
 
+    -- Phase breakdown, logged unconditionally and BEFORE the completion marker
+    -- below (sweep.py's vm_scan greps for "match(es) found" to know the scan is
+    -- done, then waits on the sidecar tail — keeping that line last preserves
+    -- the ordering it relies on). Logged rather than report-only so a headless
+    -- VM run can harvest it straight from the reader log, with no dev mode and
+    -- no /mnt/macos/debug share.
+    local st = FootFree._scan_t
+    if st then
+        logger.info(string.format(
+            "FootFree: scan phases  walk=%.3fs (%d pass%s%s)  probe=%.3fs (%d skipped)"
+            .. "  loop=%.3fs (%d hits, %.2fms/hit)"
+            .. "  gate=%.3fs  literal=%.3fs (%d pass%s)",
+            (st.walk or 0) - (st.probe or 0), st.passes or 1,
+            (st.passes or 1) == 1 and "" or "es",
+            st.shy and ", shy" or "",
+            st.probe or 0, st.skipped or 0, st.loop or 0, st.hits or 0,
+            (st.hits or 0) > 0 and (st.loop or 0) * 1000 / st.hits or 0,
+            st.gate or 0, (st.lit or 0) - (st.gate or 0),
+            st.litn or 0, (st.litn or 0) == 1 and "" or "es"))
+    end
     logger.info(string.format("FootFree: %d match(es) found  total=%.3fs", #filtered, t_total or 0))
     _save_sidecar(doc.file, filtered)
 
@@ -6869,12 +7304,27 @@ function FootFree:_finishScan(doc, all_matches, t_per_pat, t_total, in_subproces
         if fh then
             fh:write(string.format("footcream scan report\nBook: %s\n%d match(es)  total=%.3fs\n%s\n",
                 doc.file, #filtered, t_total or 0, string.rep("-", 60)))
-            if t_per_pat then
-                fh:write("pattern timing:\n")
-                for _, t in ipairs(t_per_pat) do
-                    fh:write(string.format("  [%d] %-22s  %.3fs  %d hits\n",
-                        t.idx, t.label, t.elapsed, t.hits))
-                end
+            -- Phase timing. (The old per-pattern `t_per_pat` breakdown this
+            -- replaces had been dead since the single-alternation rewrite —
+            -- every caller passes {}, so the block never printed a row.)
+            if st then
+                local tt = (t_total or 0) > 0 and t_total or 1
+                local function pct(v) return (v or 0) * 100 / tt end
+                fh:write(string.format(
+                    "phase timing:\n"
+                    .. "  document walk   %7.3fs  %5.1f%%   %d pass(es)%s\n"
+                    .. "  per-hit loop    %7.3fs  %5.1f%%   %d hits, %.2f ms/hit\n"
+                    .. "  prime/degF gate %7.3fs  %5.1f%%   whole-book text read\n"
+                    .. "  literal passes  %7.3fs  %5.1f%%   %d pass(es)\n"
+                    .. "  unaccounted     %7.3fs  %5.1f%%   (filters, overlap collapse, save)\n",
+                    st.walk or 0, pct(st.walk), st.passes or 1, st.shy and "  [SHY: one per alias]" or "",
+                    st.loop or 0, pct(st.loop), st.hits or 0,
+                    (st.hits or 0) > 0 and (st.loop or 0) * 1000 / st.hits or 0,
+                    st.gate or 0, pct(st.gate),
+                    (st.lit or 0) - (st.gate or 0), pct((st.lit or 0) - (st.gate or 0)),
+                    st.litn or 0,
+                    (t_total or 0) - (st.walk or 0) - (st.loop or 0) - (st.lit or 0),
+                    pct((t_total or 0) - (st.walk or 0) - (st.loop or 0) - (st.lit or 0))))
                 fh:write(string.rep("-", 60) .. "\n")
             end
             for i, r in ipairs(filtered) do
@@ -6949,12 +7399,6 @@ local function _idiom_guard(original)
     if o == "one foot" or o == "a foot" then return _FOOT_IDIOM_NEXT end
     return nil
 end
--- cancel_restore_mode (optional): mode to fall back to when the user
--- DECLINES the confirm — set only for picker-originated changes, so a
--- canceled pick snaps back to the mode the picker opened with instead of
--- stranding the book unconverted in a convert mode. Book-originated prompts
--- (new book under an established convert mode, Enable toggle, tap) pass
--- nothing: declining those means "not this book", not "change my mode".
 -- Arm the "Convert?" prompt to fire once the scan in flight completes.
 --
 -- EVERY path that kicks off a scan while a convert mode is active needs this.
@@ -6973,7 +7417,14 @@ end
 -- Conditions are re-checked inside the closure, not just here: a scan is
 -- async, and the mode, the per-book enable, or the document itself can all
 -- change while it runs.
-function FootFree:_armConvertAfterScan()
+-- `already_confirmed` skips the post-scan "Convert?" prompt, because consent
+-- was given BEFORE the scan started — either by the reader answering
+-- _confirmScanAndConvert on an explicit action, or by them ticking
+-- "Auto-convert when opening a new book", which is itself the standing answer
+-- for that path. Without it the reader is asked a question they have already
+-- answered, after a wait, which is what made one action feel like three
+-- (on-device report, 2026-08-17).
+function FootFree:_armConvertAfterScan(already_confirmed)
     if self._tap_mode < 2 or not self._enabled then return end
     self._after_scan = function()
         UIManager:scheduleIn(0.5, function()
@@ -6981,12 +7432,93 @@ function FootFree:_armConvertAfterScan()
             if d and self._tap_mode >= 2 and self._enabled
                and not _is_metric_mode(d.file)
                and self._all_matches and #self._all_matches > 0 then
-                self:_applyMetricEdition(d)
+                self:_applyMetricEdition(d, already_confirmed)
             end
         end)
     end
 end
 
+-- Ask BEFORE scanning, then run scan + convert as one uninterrupted action.
+-- Used by every explicit entry point (Rescan book, the mode picker, a direction
+-- change). Opening a book with auto-convert on deliberately does NOT come here:
+-- the toggle is the consent there.
+--
+-- The already-converted and not-English checks run BEFORE the question, not
+-- after it — asking and then refusing is worse than never asking.
+-- `cancel_restore_mode` mirrors _applyMetricEdition's: declining from the mode
+-- picker puts the previous mode back rather than leaving the reader in a
+-- convert mode they just said no to.
+function FootFree:_confirmScanAndConvert(doc, cancel_restore_mode, start_scan)
+    if not doc or not doc.file then return end
+    if self._tap_mode < 2 or not self._enabled then
+        start_scan()          -- mode 1: nothing to confirm, just scan
+        return
+    end
+    if _is_metric_mode(doc.file) then
+        UIManager:show(InfoMessage:new{
+            -- TRANSLATORS: Refusal shown when the book's text has already been converted. The
+            -- quoted item is a menu entry - translate it exactly as you translate that entry,
+            -- and keep 'Advanced' matching its menu name.
+            text = _("This book is already converted.\nUse 'Remove Footcream data from this book' (Advanced) first."),
+            timeout = 4,
+        })
+        return
+    end
+    local imp = FootFree._IMPERIAL.preferred() ~= "metric"
+    -- TRANSLATORS: Name of the unit system being converted TO, inserted as %1 into the
+    -- questions and progress messages below ('Convert this book's measurements to
+    -- metric?', 'Converting to metric…'). Lowercase, mid-sentence.
+    local dir_word = imp and _("imperial") or _("metric")
+    local on_cancel
+    if cancel_restore_mode then
+        on_cancel = function()
+            self._tap_mode = cancel_restore_mode
+            G_reader_settings:saveSetting("footcream_tap_mode", cancel_restore_mode)
+            logger.info("Footcream: scan+convert declined — mode restored to "
+                        .. cancel_restore_mode)
+            UIManager:show(Notification:new{
+                -- TRANSLATORS: Toast confirming the mode was left as it was after the user
+                -- declined to convert. %1 is a mode name such as 'Metric only (in text)'.
+                text = T(_("Kept mode: %1"), self:_modeLabel(cancel_restore_mode)),
+            })
+            if self.view then UIManager:setDirty(self.view.dialog, "ui") end
+        end
+    end
+    self._confirm(
+        self._tap_mode == 2
+            -- TRANSLATORS: Asked BEFORE scanning, when mode 2 will then edit the book:
+            -- conversions are added next to the existing measurements. %1 is 'metric' or 'imperial'.
+            -- This one question covers BOTH steps, so the translation must say the book
+            -- will be scanned AND that conversions will be added. A suggestion offering
+            -- only the adding half is the older, convert-only wording — do not accept it.
+            and T(_("Scan this book and add %1 conversions alongside its measurements?"),
+                  dir_word)
+            -- TRANSLATORS: Asked BEFORE scanning, when mode 3 will then edit the book:
+            -- measurements are replaced by their conversions. %1 is 'metric' or 'imperial'.
+            -- This one question covers BOTH steps, so the translation must say the book
+            -- will be scanned AND that its measurements will be converted. A suggestion
+            -- offering only the converting half is the older, convert-only wording — do
+            -- not accept it.
+            or  T(_("Scan this book and convert its measurements to %1?"), dir_word),
+        -- TRANSLATORS: Button that starts the scan and then rewrites the book's text; the
+        -- other button is the shared 'Cancel'.
+        _("Scan and convert"), function()
+            logger.info("FootFree: scan+convert confirmed up front")
+            self:_armConvertAfterScan(true)
+            start_scan()
+        end, nil, on_cancel)
+end
+
+-- Convert an ALREADY-SCANNED book. `skip_confirm` is set when consent was
+-- given before the scan (see _armConvertAfterScan); otherwise this asks its
+-- own, shorter question — there is no scan to warn about here.
+--
+-- cancel_restore_mode (optional): mode to fall back to when the user
+-- DECLINES the confirm — set only for picker-originated changes, so a
+-- canceled pick snaps back to the mode the picker opened with instead of
+-- stranding the book unconverted in a convert mode. Book-originated prompts
+-- (new book under an established convert mode, Enable toggle, tap) pass
+-- nothing: declining those means "not this book", not "change my mode".
 function FootFree:_applyMetricEdition(doc, skip_confirm, cancel_restore_mode)
     -- Which way this conversion goes ("metric"/"imperial"), for the dialogs.
     local imp = FootFree._IMPERIAL.preferred() ~= "metric"
@@ -7189,12 +7721,69 @@ function FootFree:_doApplyMetricEdition(doc)
                        -- metric?', 'Converting to metric…'). Lowercase, mid-sentence.
                        and _("imperial") or _("metric")
     Trapper:wrap(function()
+        -- An invisible, UNDISMISSABLE shield over the rewrite.
+        --
+        -- Passing nil here (what this used to do) gets Trapper's own invisible
+        -- trap widget — which is invisible but still CANCEL-ON-TAP. Nothing is
+        -- drawn, yet any tap anywhere silently abandons the rewrite. That is
+        -- the worst possible pairing: the screen cannot tell the reader that a
+        -- tap cancels, and tapping is precisely what a reader does when a long
+        -- action looks stuck. On a Kobo an 87s scan was followed one second
+        -- later by "convert subprocess did not complete" — the reader had
+        -- tapped the apparently-frozen screen (device log, 2026-08-17). The
+        -- comment that stood here claimed the tap-to-cancel was gone. It never
+        -- was; that was read off the call, not off Trapper's source.
+        --
+        -- So: our own TrapWidget, shown by us and handed to Trapper as a table,
+        -- which makes it caller-owned (Trapper neither shows nor closes it),
+        -- with its single dismissal path neutered. Taps are still SWALLOWED, so
+        -- the book cannot turn pages under a rewrite in flight — they just no
+        -- longer throw the work away. The corner ring carries the progress, as
+        -- one continuous ring across scan, rewrite and re-locate.
+        local TrapWidget = require("ui/widget/trapwidget")
+        local shield = TrapWidget:new{ text = nil, resend_event = false }
+        -- Every dismissal route in TrapWidget (tap, hold, swipe, pan-release,
+        -- any key) funnels through this one method, and it returns true to mark
+        -- the event consumed. Replacing it keeps the swallowing, drops the
+        -- dismissing.
+        shield._dismissAndResend = function() return true end
+        UIManager:show(shield)
+        -- Undismissable must not mean inescapable. If the rewrite subprocess
+        -- ever wedges, nothing else would take the shield down and the reader
+        -- would be locked out of their own book. So fire Trapper's dismissal on
+        -- a timer as the last resort — the same code path a tap used to take,
+        -- now on a deadline instead of an accident. Abandoning is safe: the
+        -- rewriter guards partial writes with an .inprogress marker and a
+        -- backup of the original epub, auto-reverted on next open. 300s matches
+        -- the scan's deadline and is two orders of magnitude above a real
+        -- rewrite (312 matches convert in about a second).
+        local convert_watchdog = function()
+            if shield.dismiss_callback then
+                logger.warn("FootFree: convert exceeded 300s — abandoning")
+                shield.dismiss_callback()
+            end
+        end
+        UIManager:scheduleIn(300, convert_watchdog)
+        -- Stops short of a full circle: the reload and the re-locate that
+        -- follow own the last slice, so the ring must not look finished here.
+        self:_startRingPulse(_RING.tail_from, _RING.relocate_from)
         local completed, result = Trapper:dismissableRunInSubprocess(function()
             return Metric.apply(doc.file, patches, reps, apply_opts)
-        -- TRANSLATORS: Progress message while the book's text is being rewritten. %1 is
-        -- 'metric' or 'imperial'. Tapping it cancels.
-        end, T(_("Converting to %1…"), dir_word), true)
-        if not completed then return end  -- dismissed by the user
+        end, shield, true)
+        UIManager:unschedule(convert_watchdog)
+        UIManager:close(shield)
+        self:_stopRingPulse()
+        if not completed then
+            logger.warn("FootFree: convert subprocess did not complete")
+            UIManager:show(InfoMessage:new{
+                -- TRANSLATORS: Error shown when the in-text conversion was interrupted before it
+                -- finished. %1 is 'metric' or 'imperial'. The book is unchanged.
+                text = T(_("Converting to %1 was interrupted — the book is unchanged."),
+                         dir_word),
+                timeout = 4,
+            })
+            return
+        end
         result = result or ""
         if result:match("^OK:") then
             local n = tonumber(result:match(":(%d+)")) or 0
@@ -7238,6 +7827,10 @@ function FootFree:_doApplyMetricEdition(doc)
             -- hence the class field) to announce the conversion from the
             -- stamp: with the echo scan gone, no scan notice will fire.
             FootFree._just_converted = doc.file
+            -- Hand the ring's position across the reload (which builds a fresh
+            -- plugin instance, so an instance field wouldn't survive) — the
+            -- re-locate leg resumes here instead of restarting lower down.
+            FootFree._ring_carry = _RING.relocate_from
             -- Reload document (seamless — keeps xpointer position)
             self.ui:reloadDocument(nil, true)
         else
@@ -7298,6 +7891,11 @@ function FootFree:_revertMetricEdition(doc, on_done)
         end
         if result == "OK" then
             logger.info("FootFree: metric edition reverted")
+            -- Read the chain flags NOW: the reload below fires onReaderReady,
+            -- which consumes them.
+            local chained = _pending_rescan == doc.file
+                or FootFree._pending_reapply == doc.file
+                or on_done ~= nil
             -- The revert just rewrote the epub (byte-identical text, new
             -- mtime). The sidecar's recorded epub_mtime no longer matches, so
             -- _load_sidecar_raw would discard it on reload even though its
@@ -7333,15 +7931,26 @@ function FootFree:_revertMetricEdition(doc, on_done)
             -- rescan needed. (Rescanning a converted book is separately prevented
             -- in the "Rescan book" handler, which reverts first.)
             self.ui:reloadDocument(nil, true)
-            -- Announce the clean-up (user request — the revert was silent).
-            -- Scheduled after the reload's repaint so the toast isn't wiped;
-            -- if a rescan follows, its own notice simply takes over.
-            UIManager:scheduleIn(0.4, function()
-                UIManager:show(Notification:new{
-                    -- TRANSLATORS: Toast confirming the book's original measurements were restored.
-                    text = _("Restored original units in book"),
-                })
-            end)
+            -- Announce the clean-up (user request — the revert was silent) —
+            -- but ONLY when the restore is the END STATE.
+            --
+            -- Every other caller reverts as step one of putting the book back
+            -- into a converted state: "Rescan book" and the CACHE_VERSION
+            -- refresh (both via _pending_rescan), and a mode or direction
+            -- switch (_pending_reapply). There "Restored original units in
+            -- book" describes a state the reader never sees and contradicts
+            -- the "Converted N units" toast arriving seconds later — it read as
+            -- the plugin undoing its own work (user report, 2026-08-17).
+            -- on_done is in the list for the same reason: it exists so a caller
+            -- can act on the restored text, never to stop there.
+            if not chained then
+                UIManager:scheduleIn(0.4, function()
+                    UIManager:show(Notification:new{
+                        -- TRANSLATORS: Toast confirming the book's original measurements were restored.
+                        text = _("Restored original units in book"),
+                    })
+                end)
+            end
             if on_done then on_done() end
         elseif result:match("changed since conversion") then
             -- The on-disk file is no longer the one we converted (it was replaced
@@ -7401,13 +8010,29 @@ function FootFree:_reconcileModeWithBook(cancel_restore_mode)
         return
     end
     if self._tap_mode >= 2 then
-        -- Apply after the menu closes; _applyMetricEdition handles the
-        -- "no scan data yet" case gracefully. Declining its convert question
-        -- restores cancel_restore_mode (the pre-picker mode) so a canceled
-        -- picker change doesn't strand the book in an unconverted convert
-        -- mode.
+        -- Apply after the menu closes. Declining the question restores
+        -- cancel_restore_mode (the pre-picker mode) so a canceled picker
+        -- change doesn't strand the book in an unconverted convert mode.
+        --
+        -- Two shapes, because the picker can be used on a scanned or an
+        -- unscanned book:
+        --   scanned   → the data is already here, so only the convert needs
+        --               confirming ("Convert this book's measurements…").
+        --   unscanned → scan AND convert need confirming, as one action
+        --               ("Scan this book and convert…"). Before this,
+        --               picking a convert mode on an unscanned book dead-ended
+        --               on "No hints yet — scan the book first", which reads
+        --               as a refusal to do the thing the reader just asked for.
         UIManager:scheduleIn(0.3, function()
-            self:_applyMetricEdition(doc, nil, cancel_restore_mode)
+            local d = self.ui.document
+            if not d then return end
+            if (self._all_matches and #self._all_matches > 0) or self._scanned
+               or not _is_english(d) then
+                self:_applyMetricEdition(d, nil, cancel_restore_mode)
+            else
+                self:_confirmScanAndConvert(d, cancel_restore_mode,
+                                            function() self:_startScan(d) end)
+            end
         end)
     elseif self.view then
         -- Back to mode 1 on an unconverted book: repaint so the underlines
@@ -7445,12 +8070,14 @@ function FootFree:_setPreferred(v)
     if self.view then UIManager:setDirty(self.view.dialog, "ui") end
     if _is_english(doc) then
         self.ui:handleEvent(Event:new("CloseReaderMenu"))
-        -- In a convert mode, offer the conversion once the rescan lands —
-        -- same flow as opening a new book with auto-scan on.
-        self:_armConvertAfterScan()
+        -- Explicit action (the reader changed direction), so ASK FIRST and then
+        -- run scan + convert uninterrupted. The 0.3s settle is kept: closing
+        -- the menu triggers a full-view refresh, and a dialog raised inside it
+        -- comes back as a ghost whose buttons don't take taps.
         UIManager:scheduleIn(0.3, function()
             local d = self.ui.document
-            if d then self:_startScan(d) end
+            if not d then return end
+            self:_confirmScanAndConvert(d, nil, function() self:_startScan(d) end)
         end)
     end
 end
@@ -7469,6 +8096,12 @@ end
 -- otherwise.
 function FootFree:_loadReverseMatches(doc)
     self._reverse_matches = nil
+    -- Consume the ring hand-off UNCONDITIONALLY, before any early return below.
+    -- It is set by the convert directly before its reload and means "resume the
+    -- ring here"; if this call turns out to have no work to do, a carry left
+    -- lying around would make some later, unrelated ring start at 88%.
+    local ring_from = FootFree._ring_carry
+    FootFree._ring_carry = nil
     if self._tap_mode < 2 then return end
     -- The positions have two consumers: hold-to-flag (gated by the
     -- error-reporting opt-in) and, in mode 3, the "show original units"
@@ -7517,7 +8150,11 @@ function FootFree:_loadReverseMatches(doc)
         -- The corner ring carries the "busy" signal instead. If a tap does
         -- cancel it, nothing breaks — the positions simply stay unresolved and
         -- the next open retries (same as dismissing the old message did).
-        self:_startRingPulse()
+        -- Last leg of a scan-and-convert, so this one IS allowed to close the
+        -- circle. ring_from is set only by the convert directly before the
+        -- reload; when this runs on its own (the "show original units" toggle,
+        -- a plain open of a converted book) it falls back to the usual start.
+        self:_startRingPulse(ring_from, 1.0)
         local completed, filtered = Trapper:dismissableRunInSubprocess(function()
             local ok, results = pcall(function()
                 return doc:findAllText(pat, true, 0, 1000, true)
@@ -7584,11 +8221,17 @@ function FootFree:_startFastScan(doc)
                  or FootFree._DEFAULT_SCAN_RATE
     self._scan_size = _file_size(doc.file)
     self._scan_eta  = math.max(2, (self._scan_size or 0) * rate)
-    -- Soft-hyphen books scan via one plain findAllText pass per unit alias
-    -- instead of a single regex pass (see _fast_scan_matches), so the ETA —
-    -- and the stuck-child deadline derived from it in _pollFastScan — must
-    -- scale with the pass count. Without this, The Stand (60k soft hyphens,
-    -- 1500 pages) got SIGKILLed at the 60s deadline floor mid-scan.
+    -- Soft-hyphen books still cost more than ordinary ones, but for a different
+    -- reason than they used to. EVERY book now takes the per-alias plain path,
+    -- so the pass count is no longer what separates them (it was #_UNIT_SUFFIXES
+    -- here, which is now badly wrong). What is left is the prime/°F literal
+    -- passes, which stay REGEX and which shy books run unconditionally because
+    -- the gate that would skip them costs 160s on such a book. Measured on one
+    -- novel and its soft-hyphen twin (2026-08-17): 2.43s vs 16.99s, and 14.36s
+    -- of that 17 is those 7 regex passes — ~2s each against 0.02s on ordinary
+    -- text. So ~7x, and 8 is used for headroom. The ETA feeds the stuck-child
+    -- deadline in _pollFastScan (max(60, eta*8)); under-estimating here is what
+    -- SIGKILLed The Stand (60k soft hyphens, 1500 pages) mid-scan, so err high.
     self._scan_shy = nil
     do
         local mod = _metric_module()
@@ -7597,7 +8240,7 @@ function FootFree:_startFastScan(doc)
             local oks, res = pcall(mod.has_soft_hyphens, f)
             if oks and res then
                 self._scan_shy = true
-                self._scan_eta = self._scan_eta * #_UNIT_SUFFIXES
+                self._scan_eta = self._scan_eta * 8
             end
         end
     end
@@ -7622,7 +8265,7 @@ function FootFree:_startFastScan(doc)
                 _nice_self()
                 local t0 = _now()
                 local matches = _fast_scan_matches(doc, cat_enabled)
-                FootFree._finishScan(nil, doc, matches, {}, _now() - t0, true, debug_report)
+                FootFree._finishScan(nil, doc, matches, _now() - t0, true, debug_report)
             end)
         end)
         if ok_pid and pid and pid > 0 then
@@ -7639,7 +8282,7 @@ function FootFree:_startFastScan(doc)
     self._scan_progress = nil
     local t0 = _now()
     local matches = _fast_scan_matches(doc, self._cat_enabled)
-    self:_finishScan(doc, matches, {}, _now() - t0, false, self._debug_report)
+    self:_finishScan(doc, matches, _now() - t0, false, self._debug_report)
 end
 
 -- The unit-anchored fast scan is the only scan path now; _startScan delegates
@@ -7725,8 +8368,51 @@ function FootFree:_onScanComplete(err)
     else
         logger.warn("FootFree: subprocess done but no sidecar found" ..
                     (err and (" — " .. err) or ""))
+        -- SAY SO. This used to be log-only, so a failed scan looked exactly
+        -- like a slow one: the ring simply never resolved, and the reader had
+        -- no way to tell "still working" from "gave up two minutes ago". It is
+        -- how a killed scan was reported as "the scanning froze" (on-device,
+        -- 2026-08-17). Deliberately an InfoMessage, not a toast — this one is
+        -- worth interrupting for, because nothing else will happen.
+        self._scanned = false
+        UIManager:show(InfoMessage:new{
+            -- TRANSLATORS: Shown when the background scan failed or was stopped, so the book
+            -- has no results. 'Scan book' is a menu entry - translate it as you translate that
+            -- entry.
+            text = _("Couldn't finish scanning this book.\nUse 'Scan book' to try again."),
+            timeout = 5,
+        })
     end
-    self._scan_progress = nil
+    -- Hold the ring at the hand-off point when a convert is queued behind this
+    -- scan (_after_scan is consumed by _runAfterScan below, so it is still set
+    -- here). Clearing it blinked the corner empty for the half-second before
+    -- the convert's ring appeared — on e-ink that is a flash, and it broke the
+    -- "one action, one ring" the whole tail budget exists to produce. Mode 1
+    -- clears it as before: there the scan IS the action and it is over.
+    --
+    -- Parking requires MATCHES, not just a queued convert. A failed scan leaves
+    -- the convert nothing to do, so it declines silently — and a ring parked
+    -- for a hand-off that never comes is a spinner that never resolves. That
+    -- turned a 60s scan timeout into an apparently frozen reader.
+    if self._after_scan and self._tap_mode >= 2
+       and self._all_matches and #self._all_matches > 0 then
+        self._scan_progress = _RING.tail_from
+        -- Belt and braces: the queued convert re-checks its own conditions and
+        -- can still decline (book converted meanwhile, mode changed, Footcream
+        -- switched off), and _applyMetricEdition has early returns of its own.
+        -- Nothing else would ever clear the park, so time it out. Exact
+        -- equality is safe — no other writer produces this value, and a convert
+        -- that did start owns _ring_pulse.
+        UIManager:scheduleIn(3, function()
+            if not self._ring_pulse and self._scan_progress == _RING.tail_from then
+                logger.info("FootFree: hand-off never taken — releasing the ring")
+                self._scan_progress = nil
+                self:_refreshRing()
+            end
+        end)
+    else
+        self._scan_progress = nil
+    end
     os.remove(_SCAN_PROGRESS_FILE)
     os.remove(_SCAN_PROGRESS_FILE .. ".tmp")
     os.remove(_PARTIAL_SIDECAR)
@@ -7787,8 +8473,22 @@ function FootFree:_pollFastScan()
     -- book file changes underneath a network/9p mount mid-scan. Past a generous
     -- deadline, SIGKILL it and finish gracefully so a wedged scan can never leave
     -- the reader frozen on the spinner.
+    --
+    -- The floor was 60s and that was measurably too tight. This cannot tell
+    -- "stuck" from "slow" — it is wall-clock since the scan began — so a book
+    -- that legitimately needs longer is killed EVERY time it is opened and can
+    -- never be scanned at all. That is what happened to a 1MB LitRPG novel on a
+    -- Kobo: 7.8s on the dev VM, over 60s on the device, killed on every open
+    -- (report + device log, 2026-08-17). The ETA can't save us here either — it
+    -- is size × a learned rate, and the phase that blew the budget (the °F/prime
+    -- literal passes) is not modelled in that rate at all.
+    --
+    -- 300s is chosen knowing the cost of being wrong in each direction: the scan
+    -- runs in a subprocess and never blocks the UI, so tolerating a genuinely
+    -- hung child for five minutes costs the reader a turning ring, while killing
+    -- a slow-but-working one costs them the feature on that book permanently.
     local stuck = _now() - (self._scan_t0 or _now())
-    if stuck > math.max(60, (self._scan_eta or 30) * 8) then
+    if stuck > math.max(300, (self._scan_eta or 30) * 8) then
         logger.warn("FootFree: scan exceeded deadline (" .. math.floor(stuck)
                     .. "s) — terminating subprocess " .. tostring(self._scan_pid))
         if ok_ffiutil and ffiutil.terminateSubProcess then
@@ -7811,11 +8511,21 @@ function FootFree:_pollFastScan()
         -- Blend real per-hit-loop progress (when the child has reported it) with
         -- a time estimate for the two opaque ends:
         --   • findAllText head  → time-based, capped below the hand-off point
-        --   • per-hit loop (B)  → REAL i/#hits, mapped a1..0.93
-        --   • prime/°F tail     → time-creep 0.93..0.97 until the child is done
+        --   • per-hit loop (B)  → REAL i/#hits, mapped a1..0.80
+        --   • prime/°F tail     → 0.80..0.97, easing, until the child is done
         -- a1 (the loop's start point) is sized from the child's measured
         -- findAllText duration, clamped 0.10..0.50. Monotonic: the bar never
         -- steps backwards even if an estimate over- or under-shoots.
+        --
+        -- The tail used to get four percentage points (0.93→0.97) and to pin at
+        -- the top of them. That assumed the °F/prime literal passes are a short
+        -- coda — and on most books they are, or are skipped entirely. On the
+        -- book that prompted this rework they were 83% of the whole scan (6.5s
+        -- of 7.8s on the dev VM; most of a minute on the device), so the ring
+        -- reached "95%" seconds in and then sat motionless for the rest — read,
+        -- correctly, as a freeze. The tail now gets a real band and eases
+        -- through it on a fixed 30s time constant rather than the ETA, because
+        -- the ETA is precisely what does not model this phase.
         local elapsed = _now() - (self._scan_t0 or _now())
         local eta = self._scan_eta or 30
         local ta, f = self:_readScanProgress()
@@ -7824,21 +8534,50 @@ function FootFree:_pollFastScan()
             -- a1 = the bar position where the finished findAllText head gives way
             -- to real per-hit progress, sized from its MEASURED share of the ETA
             -- (tA1/eta). Empirically findAllText often dominates, so this is left
-            -- large (up to 0.90): an A1-dominant book keeps the bar where the time
-            -- estimate already had it (no backwards jump), while a hit-dense book
-            -- gets a long, genuinely-real loop band.
-            local a1 = math.min(0.90, math.max(0.05, (eta > 0 and ta) and (ta / eta) or 0.30))
+            -- large: an A1-dominant book keeps the bar where the time estimate
+            -- already had it (no backwards jump), while a hit-dense book gets a
+            -- long, genuinely-real loop band. Capped BELOW the loop band's top —
+            -- above it, `a1 + f * (0.80 - a1)` would run backwards as f grew.
+            local a1 = math.min(0.70, math.max(0.05, (eta > 0 and ta) and (ta / eta) or 0.30))
             if f >= 1 then
-                computed = 0.93 + 0.04 * math.min(1, eta > 0 and (elapsed / eta) or 1)
+                -- Time spent in the tail specifically, not since the scan began.
+                local tail = math.max(0, elapsed - (ta or 0))
+                computed = 0.80 + 0.17 * (1 - math.exp(-tail / 30))
             else
-                computed = a1 + f * (0.93 - a1)
+                computed = a1 + f * (0.80 - a1)
             end
         else
-            -- findAllText still running (no report yet): plain time estimate — the
-            -- best available for an opaque C call — capped just shy of the tail.
-            computed = math.min(0.92, eta > 0 and (elapsed / eta) or 0.3)
+            -- findAllText still running (no report yet): time estimate, the best
+            -- available for an opaque C call. Eased toward 0.92 rather than
+            -- ramped linearly into it, so a book that outruns its ETA keeps
+            -- moving instead of parking on the cap — a still ring is read as a
+            -- dead one, and this branch owns the whole scan on a book with no
+            -- hits to report progress from.
+            computed = 0.92 * (1 - math.exp(-elapsed / math.max(2, eta)))
         end
-        self._scan_progress = math.max(self._scan_progress or 0, math.min(0.97, computed))
+        -- In the in-text modes the scan is only the FIRST leg of the action, so
+        -- its 0→0.97 sweep is compressed into 0 → _RING.tail_from and the
+        -- convert and re-locate own what is left. Without this the ring filled
+        -- to a near-complete circle, vanished, and the convert restarted it at
+        -- 75% — "it finished, then went backwards" (on-device report,
+        -- 2026-08-17). Mode 1 keeps the full circle: there the scan is the
+        -- whole action.
+        local span = (self._after_scan and self._tap_mode >= 2)
+                     and _RING.tail_from or 1.0
+        local cap    = 0.97 * span
+        local target = math.min(0.97, computed) * span
+        local cur    = self._scan_progress or 0
+        -- Estimate spent: KEEP MOVING. The bar used to pin at its ceiling the
+        -- moment elapsed passed the ETA and sit there, motionless, for as long
+        -- as the scan overran — which on the book that prompted this was most
+        -- of a minute. A ring that stops is read as a crash, and the reader
+        -- can't tell it from one. So once the estimate is exhausted, ease
+        -- toward the ceiling instead: ~1.5% of the remaining gap per poll
+        -- (12 polls/s → visibly alive, never arriving, never going backwards).
+        if target <= cur then
+            target = cur + (cap - cur) * 0.0015
+        end
+        self._scan_progress = math.max(cur, target)
         self._scan_poll_n = (self._scan_poll_n or 0) + 1
         -- Animate the corner loader ~3×/s, refreshing ONLY its small top-left
         -- region with a gentle partial ("ui") refresh. Never "fast" (leaves
@@ -7877,13 +8616,22 @@ end
 -- right after the convert prompt and the convert progress message, and a third
 -- modal in a row is what made a single action feel like it was bombarding
 -- them (user feedback 2026-08-07).
-function FootFree:_startRingPulse()
+--
+-- `from` is where the ring resumes and `ceiling` is what it eases toward (both
+-- optional). A phase that has more work queued behind it passes a ceiling below
+-- 1.0 so it stops short — only the LAST phase of an action is allowed to close
+-- the circle, which is what stops the ring reading as finished-then-restarted.
+function FootFree:_startRingPulse(from, ceiling)
     if self._ring_pulse then return end
     -- A real scan owns _scan_progress and writes a true percentage into it;
     -- never let a pulse fight it for the same field.
     if self._scan_pid then return end
     self._ring_pulse = true
-    self._scan_progress = 0.15
+    self._ring_ceiling = ceiling or 1.0
+    -- Resume from wherever the caller left the ring rather than snapping back
+    -- to 15%: this runs as the TAIL of a scan-and-convert, so restarting the
+    -- ring near zero read as "it's doing the whole thing again".
+    self._scan_progress = math.max(self._scan_progress or 0, from or _RING.tail_from)
     local function tick()
         if not self._ring_pulse then return end
         -- Self-terminate if the book closed under us: the reader UI is torn
@@ -7894,10 +8642,21 @@ function FootFree:_startRingPulse()
             self._scan_progress = nil
             return
         end
-        local p = (self._scan_progress or 0.15) + 0.06
-        self._scan_progress = p > 0.90 and 0.15 or p
-        self:_refreshRing()
-        UIManager:scheduleIn(0.25, tick)
+        -- CREEP, never sweep. This used to loop 15%→90% every ~3s, repainting
+        -- four times a second — on e-ink that is visible flashing, and it was
+        -- the "spinning madly" in the on-device report (2026-08-17). The work
+        -- here has no measurable progress, so the ring now eases toward (but
+        -- never reaches) its ceiling and repaints once a second: still
+        -- obviously alive, no strobe, and it never travels backwards.
+        local cap = self._ring_ceiling or 1.0
+        local p = self._scan_progress or _RING.tail_from
+        -- Already at or past the ceiling (a caller resumed above its own
+        -- slice): hold position rather than easing backwards into it.
+        if p < cap then
+            self._scan_progress = p + (cap - p) * 0.12
+            self:_refreshRing()
+        end
+        UIManager:scheduleIn(1.0, tick)
     end
     tick()
 end
@@ -7905,9 +8664,48 @@ end
 function FootFree:_stopRingPulse()
     if not self._ring_pulse then return end
     self._ring_pulse = nil
+    self._ring_ceiling = nil
     self._scan_progress = nil
     -- Clear the ring itself; the page body still isn't touched.
     self:_refreshRing()
+end
+
+-- Hold a toast until the action it describes is visibly over — no ring of ours
+-- turning and no re-render bar of KOReader's up.
+--
+-- "Converted 25 units in book" used to fire on a 0.4s timer after the reload,
+-- which landed it in the MIDDLE of the work: the bar was still filling and the
+-- ring still had its re-locate leg to run, so the reader was told it was done
+-- twice before it was (on-device report, 2026-08-17). Overlapping the toast
+-- with the bar is fine; announcing completion early is not.
+--
+-- Only one notice can be queued at a time — a newer one supersedes an older
+-- (the poll checks identity, so the stale closure retires itself).
+function FootFree:_deferNotice(fn)
+    self._pending_notice = fn
+    local waited = 0
+    local function poll()
+        if self._pending_notice ~= fn then return end   -- superseded
+        -- Book closed under us: drop it rather than toasting over the next book.
+        if not self.view or not self.ui.document then
+            self._pending_notice = nil
+            return
+        end
+        local busy = self._ring_pulse or self._scan_progress ~= nil
+            or (self.ui.rolling and self.ui.rolling.rendering_state
+                and self.ui.rolling.rendering_state ~= 0)
+        if busy and waited < _RING.notice_wait_s then
+            waited = waited + 0.5
+            UIManager:scheduleIn(0.5, poll)
+            return
+        end
+        self._pending_notice = nil
+        fn()
+    end
+    -- First check on a delay, not now: the phases that follow a convert start
+    -- their own ring a beat later, and polling in the same tick would find the
+    -- corner idle and fire immediately — the very bug this exists to fix.
+    UIManager:scheduleIn(0.5, poll)
 end
 
 -- ── Settings re-application (instant toggle without rescan) ───────────────────
@@ -8382,17 +9180,42 @@ function FootFree:_drawHighlights(bb)
 
     local Screen = require("device").screen
 
-    -- Paint the SVG scan-progress loader directly into the framebuffer.
-    -- Sits at the same top-left position as KOReader's reflow progress bar.
-    -- If reflow is active (bar occupies x=0..Screen/3), we shift right past it.
+    -- Paint the SVG scan-progress loader directly into the framebuffer, at the
+    -- same top-left position as KOReader's own re-render progress bar.
+    --
+    -- When that bar is up we now YIELD to it rather than shifting right to sit
+    -- beside it. After a mode 2/3 convert the book's text has genuinely changed,
+    -- so KOReader re-renders the whole document and shows its bar — and the old
+    -- behaviour put two progress indicators side by side, ours pulsing next to
+    -- KOReader's, which is most of why one action read as "buggy" (user report,
+    -- on-device, 2026-08-17). One indicator at a time.
+    --
+    -- The yield is bounded on purpose. rendering_state is KOReader's, not ours,
+    -- and if it ever stuck non-zero a bare condition here would hide our ring
+    -- for the rest of the session — a scan with no visible progress at all,
+    -- which is worse than two rings. So after _RENDER_YIELD_S we stop yielding
+    -- and draw beside it again, exactly as before.
     if self._scan_progress ~= nil then
         local x_base = Screen:scaleBySize(4)
-        if self.ui.rolling and self.ui.rolling.rendering_state
-           and self.ui.rolling.rendering_state ~= 0 then
-            x_base = math.floor(Screen:getWidth() / 3) + Screen:scaleBySize(4)
+        local draw   = true
+        local rendering = self.ui.rolling and self.ui.rolling.rendering_state
+                          and self.ui.rolling.rendering_state ~= 0
+        if rendering then
+            self._render_yield_t0 = self._render_yield_t0 or _now()
+            if _now() - self._render_yield_t0 < FootFree._RENDER_YIELD_S then
+                draw = false          -- KOReader's bar owns the corner
+            else
+                x_base = math.floor(Screen:getWidth() / 3) + Screen:scaleBySize(4)
+            end
+        else
+            self._render_yield_t0 = nil
         end
-        local y_base = Screen:scaleBySize(4)
-        pcall(_draw_loader, bb, x_base, y_base, self._scan_progress)
+        -- Skip only the LOADER — the highlight painting below still has to run
+        -- (an early return here would blank every underline while rendering).
+        if draw then
+            local y_base = Screen:scaleBySize(4)
+            pcall(_draw_loader, bb, x_base, y_base, self._scan_progress)
+        end
     end
 
     if not self._all_matches and not self._reverse_matches then
@@ -9135,13 +9958,36 @@ function FootFree:addToMainMenu(menu_items)
                 end,
             })
 
-            -- 5. Auto-scan
+            -- 5. Auto-scan / auto-convert.
+            -- One setting, two meanings: in mode 1 it scans, in the in-text
+            -- modes it scans AND rewrites the book. The label follows the mode
+            -- because a fixed "Auto-scan" understates what it does in 2/3 —
+            -- and this toggle is now the ONLY consent for those modes on book
+            -- open (the per-book "Convert?" prompt is gone from that path).
+            -- The mode-1 string is kept verbatim so its 30 translations survive;
+            -- the convert-mode wording is a NEW string, which merely falls back
+            -- to English until translated rather than blanking an existing one.
             table.insert(items, {
-                -- TRANSLATORS: Tickable entry in 'Menu > Footcream': scan each book by itself the
-                -- first time it is opened, instead of waiting for 'Scan book'.
-                text = _("Auto-scan when opening a new book"),
-                -- TRANSLATORS: Long-press explainer for 'Auto-scan when opening a new book'.
-                help_text = _("Scan every new book automatically when you open it. Only English books are scanned — other languages are left alone. Turn this off to scan books one by one with \"Scan book\"."),
+                text_func = function()
+                    if self._tap_mode >= 2 then
+                        -- TRANSLATORS: Tickable entry in 'Menu > Footcream', shown only in the two
+                        -- in-text modes: convert each book automatically, without asking, the first
+                        -- time it is opened.
+                        return _("Auto-convert when opening a new book")
+                    end
+                    -- TRANSLATORS: Tickable entry in 'Menu > Footcream': scan each book by itself the
+                    -- first time it is opened, instead of waiting for 'Scan book'.
+                    return _("Auto-scan when opening a new book")
+                end,
+                help_text_func = function()
+                    if self._tap_mode >= 2 then
+                        -- TRANSLATORS: Long-press explainer for 'Auto-convert when opening a new book'.
+                        -- Shown only in the in-text modes, which rewrite the book's own text.
+                        return _("Convert every new book automatically when you open it, without asking first — this rewrites the book's own text. Only English books are converted; other languages are left alone. Turn this off to convert books one by one with \"Scan book\", which asks before it starts.")
+                    end
+                    -- TRANSLATORS: Long-press explainer for 'Auto-scan when opening a new book'.
+                    return _("Scan every new book automatically when you open it. Only English books are scanned — other languages are left alone. Turn this off to scan books one by one with \"Scan book\".")
+                end,
                 checked_func = function() return self._auto_scan end,
                 callback = function()
                     self._auto_scan = not self._auto_scan
@@ -9174,15 +10020,18 @@ function FootFree:addToMainMenu(menu_items)
                     local doc = self.ui.document
                     if not doc then return end
                     local function do_scan()
-                        -- An explicit scan overrides the session suppression
-                        -- set by "Remove Footcream data from this book".
-                        self._removed_this_session[doc.file] = nil
-                        os.remove(_sidecar_path(doc.file))
-                        -- Without this, rescanning in mode 2/3 scanned and then
-                        -- did nothing — the one scan entry point that never
-                        -- armed the convert prompt.
-                        self:_armConvertAfterScan()
-                        self:_startScan(doc)
+                        -- Explicit action ("Rescan book"), so ASK FIRST in the
+                        -- in-text modes and then run scan + convert as one.
+                        -- (Without arming the convert at all, rescanning in
+                        -- mode 2/3 used to scan and then do nothing — this was
+                        -- the one entry point that never offered it.)
+                        self:_confirmScanAndConvert(doc, nil, function()
+                            -- An explicit scan overrides the session suppression
+                            -- set by "Remove Footcream data from this book".
+                            self._removed_this_session[doc.file] = nil
+                            os.remove(_sidecar_path(doc.file))
+                            self:_startScan(doc)
+                        end)
                     end
                     local function maybe_scan()
                         if _is_english(doc) then
@@ -9303,15 +10152,16 @@ function FootFree:addToMainMenu(menu_items)
                             local doc = self.ui.document
                             if doc and doc.file and not _is_metric_mode(doc.file)
                                and _file_exists(_sidecar_path(doc.file)) then
-                                os.remove(_sidecar_path(doc.file))
-                                -- Same invariant as the other entry points: a
-                                -- scan started while a convert mode is active
-                                -- offers the conversion when it lands. (This
-                                -- branch only runs on an UNCONVERTED book, so
-                                -- in mode 2/3 it would otherwise rescan and
-                                -- leave the book untouched.)
-                                self:_armConvertAfterScan()
-                                self:_startScan(doc)
+                                -- Explicit action (the reader changed a setting
+                                -- that invalidates the scan), so ASK FIRST and
+                                -- then run scan + convert as one. This branch
+                                -- only runs on an UNCONVERTED book, so without
+                                -- the convert armed it would rescan and leave
+                                -- the book untouched.
+                                self:_confirmScanAndConvert(doc, nil, function()
+                                    os.remove(_sidecar_path(doc.file))
+                                    self:_startScan(doc)
+                                end)
                             end
                         end,
                     },

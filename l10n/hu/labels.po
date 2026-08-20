@@ -3,7 +3,7 @@ msgstr ""
 "Project-Id-Version: foot-cream\n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2026-08-11 14:48+0200\n"
-"PO-Revision-Date: 2026-08-11 11:56\n"
+"PO-Revision-Date: 2026-08-12 10:39\n"
 "Last-Translator: \n"
 "Language-Team: Hungarian\n"
 "Language: hu_HU\n"
@@ -45,11 +45,9 @@ msgstr "A telepítés nem sikerült — az előző verzió visszaállítva."
 #. TRANSLATORS: Confirmation after a successful self-update. %1 is the version tag
 #. (e.g. 'v1.6.0'). The new code only runs after a restart.
 #: main.lua:1747
-msgid ""
-"Updated to %1.\n"
+msgid "Updated to %1.\n"
 "Restart KOReader now to load it?"
-msgstr ""
-"Frissítve erre: %1.\n"
+msgstr "Frissítve erre: %1.\n"
 "Újraindítja most a KOReadert a betöltéshez?"
 
 #. TRANSLATORS: Left button on the 'Updated to ...' dialog; restarts KOReader
@@ -142,11 +140,8 @@ msgstr "A Footcream fejlődött — a könyv átváltásainak frissítése…"
 #. TRANSLATORS: Asked when a book was converted by an older Footcream and the
 #. conversion can now be improved. Redoing it rewrites the book's text.
 #: main.lua:4927
-msgid ""
-"Footcream's converter has improved — update this book's in-text conversions?"
-msgstr ""
-"A Footcream átváltója fejlődött — frissíti a könyv szövegében lévő "
-"átváltásokat?"
+msgid "Footcream's converter has improved — update this book's in-text conversions?"
+msgstr "A Footcream átváltója fejlődött — frissíti a könyv szövegében lévő átváltásokat?"
 
 #. TRANSLATORS: Left button on the 'converter has improved' question; rescans the
 #. book and rewrites its conversions now.
@@ -269,7 +264,7 @@ msgstr " széles volt."
 #. measurement such as '1.8 m'. This mode only draws an underline.
 #: main.lua:5678
 msgid "Underline only — tap it to see %1."
-msgstr "Csak aláhúzás — koppintson rá %1 egységekért."
+msgstr "Csak aláhúzás — koppintással látszódik: %1."
 
 #. TRANSLATORS: Mode picker, second caption line for mode 1 - the reassurance that
 #. this mode never edits the book file, unlike modes 2 and 3.
@@ -281,7 +276,7 @@ msgstr "A könyv fájlja soha nem változik."
 #. written into the book next to the original measurement.
 #: main.lua:5687
 msgid "Both units, written into the book's text."
-msgstr "Mindkét egység, a könyv szövegébe írva."
+msgstr "Mindkét mértékegység, a könyv szövegébe írva."
 
 #. TRANSLATORS: Mode picker, second caption line under the two modes that write
 #. into the book's text: the change can be undone later with 'Remove Footcream data
@@ -306,24 +301,24 @@ msgstr "Hogyan jelenjenek meg az átváltások?"
 #: main.lua:6456
 msgid "Converted %1 unit in book"
 msgid_plural "Converted %1 units in book"
-msgstr[0] "%1 egység átváltva a könyvben"
-msgstr[1] "%1 egység átváltva a könyvben"
+msgstr[0] "%1 mértékegység átváltva a könyvben"
+msgstr[1] "%1 mértékegység átváltva a könyvben"
 
 #. TRANSLATORS: Toast after a scan when the mode writes into the book's text but
 #. the conversion hasn't been applied yet. %1 is the number found.
 #: main.lua:6460
 msgid "Scan complete: %1 unit found"
 msgid_plural "Scan complete: %1 units found"
-msgstr[0] "Átvizsgálás kész: %1 egység találva"
-msgstr[1] "Átvizsgálás kész: %1 egység találva"
+msgstr[0] "Átvizsgálás kész: %1 mértékegység találva"
+msgstr[1] "Átvizsgálás kész: %1 mértékegység találva"
 
 #. TRANSLATORS: Toast after a scan in underline mode. %1 is the number of
 #. measurements now underlined.
 #: main.lua:6464
 msgid "Underlined %1 unit in book"
 msgid_plural "Underlined %1 units in book"
-msgstr[0] "%1 egység aláhúzva a könyvben"
-msgstr[1] "%1 egység aláhúzva a könyvben"
+msgstr[0] "%1 mérétkegység aláhúzva a könyvben"
+msgstr[1] "%1 mértékegység aláhúzva a könyvben"
 
 #. TRANSLATORS: Name of the unit system being converted TO, inserted as %1 into the
 #. questions and progress messages below ('Convert this book's measurements to
@@ -342,19 +337,16 @@ msgstr "metrikus"
 #. quoted item is a menu entry - translate it exactly as you translate that entry,
 #. and keep 'Advanced' matching its menu name.
 #: main.lua:6534
-msgid ""
-"This book is already converted.\n"
+msgid "This book is already converted.\n"
 "Use 'Remove Footcream data from this book' (Advanced) first."
-msgstr ""
-"Ez a könyv már át van váltva.\n"
-"Előbb használja a „Footcream-adatok eltávolítása ebből a könyvből” "
-"lehetőséget (Speciális)."
+msgstr "Ez a könyv már át van váltva.\n"
+"Előbb használja a „Footcream-adatok eltávolítása ebből a könyvből” lehetőséget (Speciális)."
 
 #. TRANSLATORS: Shown when a scan finished and the book genuinely contains no
 #. measurements to convert. %1 is 'imperial' or 'metric'.
 #: main.lua:6546
 msgid "No %1 measurements found in this book — nothing to convert."
-msgstr "Ebben a könyvben nincs mit %1 egységekre átváltani."
+msgstr "Ebben a könyvben nincs mit %1 mértékegységekre átváltani."
 
 #. TRANSLATORS: Shown when the book has not been scanned yet, so there is nothing
 #. to convert. 'hints' are the underlined measurements Footcream finds.
@@ -372,13 +364,13 @@ msgstr "Megtartott mód: %1"
 #. the existing measurements. %1 is 'metric' or 'imperial'.
 #: main.lua:6583
 msgid "Add %1 conversions alongside this book's measurements?"
-msgstr "Kerüljenek %1 egységek a könyv mértékei mellé?"
+msgstr "Kerüljenek %1 mértékegységek a könyv mértékegységei mellé?"
 
 #. TRANSLATORS: Asked before mode 3 edits the book: measurements are replaced by
 #. their conversions. %1 is 'metric' or 'imperial'.
 #: main.lua:6587
 msgid "Convert this book's measurements to %1?"
-msgstr "Átváltja a könyv mértékeit %1 egységekre?"
+msgstr "Átváltja a könyv mértékegységeit %1 mértékegységekre?"
 
 #. TRANSLATORS: Button that starts rewriting the book's text; the other button is
 #. the shared 'Cancel'.
@@ -397,40 +389,23 @@ msgstr "Az átváltómodul nem tölthető be."
 #. 'metric' or 'imperial'. Tapping it cancels.
 #: main.lua:6727
 msgid "Converting to %1…"
-msgstr "Átváltás %1 egységekre…"
+msgstr "Átváltás %1 mértékegységekre…"
 
 #. TRANSLATORS: Error when the conversion found measurements but couldn't locate
 #. them in the book file itself, so nothing was changed. %1 is the number found, %2
 #. is a mode name ('Underline units, tap for metric').
 #: main.lua:6744
-msgid ""
-"Couldn't convert this book in place.\n"
-"\n"
-"%1 measurement was found, but it could not be matched in the book's text — "
-"its markup/format may not be supported for in-text conversion.\n"
-"\n"
+msgid "Couldn't convert this book in place.\n\n"
+"%1 measurement was found, but it could not be matched in the book's text — its markup/format may not be supported for in-text conversion.\n\n"
 "The '%2' mode still works for this book."
-msgid_plural ""
-"Couldn't convert this book in place.\n"
-"\n"
-"%1 measurements were found, but none could be matched in the book's text — "
-"its markup/format may not be supported for in-text conversion.\n"
-"\n"
+msgid_plural "Couldn't convert this book in place.\n\n"
+"%1 measurements were found, but none could be matched in the book's text — its markup/format may not be supported for in-text conversion.\n\n"
 "The '%2' mode still works for this book."
-msgstr[0] ""
-"Ez a könyv nem váltható át magában a fájlban.\n"
-"\n"
-"%1 mérték került elő, de nem sikerült megfeleltetni a könyv szövegében — a "
-"jelölése vagy formátuma talán nem támogatott a szövegen belüli átváltáshoz.\n"
-"\n"
+msgstr[0] "Ez a könyv nem váltható át magában a fájlban.\n\n"
+"%1 mértékegység található, de nem sikerült megfeleltetni a könyv szövegében — a jelölése vagy formátuma talán nem támogatott a szövegen belüli átváltáshoz.\n\n"
 "A „%2” mód továbbra is működik ehhez a könyvhöz."
-msgstr[1] ""
-"Ez a könyv nem váltható át magában a fájlban.\n"
-"\n"
-"%1 mérték került elő, de egyiket sem sikerült megfeleltetni a könyv "
-"szövegében — a jelölésük vagy formátumuk talán nem támogatott a szövegen "
-"belüli átváltáshoz.\n"
-"\n"
+msgstr[1] "Ez a könyv nem váltható át magában a fájlban.\n\n"
+"%1 mértékegység található, de egyiket sem sikerült megfeleltetni a könyv szövegében — a jelölésük vagy formátumuk talán nem támogatott a szövegen belüli átváltáshoz.\n\n"
 "A „%2” mód továbbra is működik ehhez a könyvhöz."
 
 #. TRANSLATORS: Generic failure when rewriting the book's text didn't work; the
@@ -448,24 +423,19 @@ msgstr "Az eredeti szöveg visszaállítása…"
 #. TRANSLATORS: Toast confirming the book's original measurements were restored.
 #: main.lua:6873
 msgid "Restored original units in book"
-msgstr "Az eredeti egységek visszaállítva a könyvben"
+msgstr "Az eredeti mértékegységek visszaállítva a könyvben"
 
 #. TRANSLATORS: Shown when the book file was edited or replaced outside Footcream,
 #. so the saved original text no longer matches and can't be put back.
 #: main.lua:6891
-msgid ""
-"This book's file changed since Footcream converted it, so the original text "
-"can't be restored. Footcream's conversion record has been cleared."
-msgstr ""
-"A könyv fájlja megváltozott, mióta a Footcream átváltotta, ezért az eredeti "
-"szöveg nem állítható vissza. A Footcream átváltási nyilvántartása törölve "
-"lett."
+msgid "This book's file changed since Footcream converted it, so the original text can't be restored. Footcream's conversion record has been cleared."
+msgstr "A könyv fájlja megváltozott, mióta a Footcream átváltotta, ezért az eredeti szöveg nem állítható vissza. A Footcream átváltási nyilvántartása törölve lett."
 
 #. TRANSLATORS: Generic failure when restoring the book's original text didn't
 #. work; the technical reason is appended on the next line, untranslated.
 #: main.lua:6898
 msgid "Could not revert."
-msgstr "A visszavonás nem sikerült."
+msgstr "A visszaállítás nem sikerült."
 
 #. TRANSLATORS: Toast when a scan is asked for while one is already running. The
 #. running scan is left alone.
@@ -477,24 +447,22 @@ msgstr "Már folyik egy átvizsgálás…"
 #. been scanned, or when the scan found nothing.
 #: main.lua:7468
 msgid "No units found in this book yet."
-msgstr "Ebben a könyvben még nem került elő egység sem."
+msgstr "Ebben a könyvben még nem található egyetlen mértékegység sem."
 
 #. TRANSLATORS: One row of the 'Units in book' list. %1 is the row number, %2 the
 #. measurement as written in the book, %3 the value Footcream read from it, %4 the
 #. conversion, %5 the surrounding sentence. Keep the arrow.
 #: main.lua:7537
-msgid ""
-"%1. %2 (%3)  →  %4\n"
+msgid "%1. %2 (%3)  →  %4\n"
 "…%5…"
-msgstr ""
-"%1. %2 (%3)  →  %4\n"
+msgstr "%1. %2 (%3)  →  %4\n"
 "…%5…"
 
 #. TRANSLATORS: Title of the 'Units in book' list. %1 is how many measurements it
 #. contains.
 #: main.lua:7553
 msgid "Units in book (%1)"
-msgstr "Egységek a könyvben (%1)"
+msgstr "Mértékegységek a könyvben (%1)"
 
 #. TRANSLATORS: Button in the long-press report dialog: the measurement was
 #. recognised but converted to the wrong value. Keep the flag symbol.
@@ -513,7 +481,7 @@ msgstr "⚑ Rossz szöveg lett kijelölve"
 #. all and should never have been underlined. Keep the flag symbol.
 #: main.lua:7601 main.lua:8183
 msgid "⚑ Not a unit"
-msgstr "⚑ Nem egység"
+msgstr "⚑ Nem mértékegység"
 
 #. TRANSLATORS: Button in the long-press dialog on a row of the 'Units in book'
 #. list: jump to where this measurement appears in the book.
@@ -571,33 +539,27 @@ msgstr "A jelentett hibák törölve."
 #. %1 is the measurement as written in the book, %2 the value Footcream read, %3
 #. the conversion, %4 the surrounding sentence. Keep the arrow.
 #: main.lua:8092
-msgid ""
-"%1 (%2)  →  %3\n"
+msgid "%1 (%2)  →  %3\n"
 "…%4…"
-msgstr ""
-"%1 (%2)  →  %3\n"
+msgstr "%1 (%2)  →  %3\n"
 "…%4…"
 
 #. TRANSLATORS: Title of the popup after long-pressing a measurement in a book
 #. whose text was already converted. %1 is the original measurement, %2 what it now
 #. says, %3 the surrounding sentence. Keep the arrow.
 #: main.lua:8120
-msgid ""
-"%1  →  %2\n"
+msgid "%1  →  %2\n"
 "…%3…"
-msgstr ""
-"%1  →  %2\n"
+msgstr "%1  →  %2\n"
 "…%3…"
 
 #. TRANSLATORS: Title of the popup after long-pressing text you selected yourself
 #. (reporting a measurement Footcream missed). %1 is the selected text, %2 the
 #. surrounding sentence.
 #: main.lua:8141
-msgid ""
-"%1\n"
+msgid "%1\n"
 "…%2…"
-msgstr ""
-"%1\n"
+msgstr "%1\n"
 "…%2…"
 
 #. TRANSLATORS: Button in the long-press report popup, offered only for text you
@@ -605,7 +567,7 @@ msgstr ""
 #. symbol.
 #: main.lua:8169
 msgid "⚑ Missed unit"
-msgstr "⚑ Kimaradt egység"
+msgstr "⚑ Kimaradt mértékegység"
 
 #. TRANSLATORS: Button in the long-press report popup that looks the word up in
 #. KOReader's dictionary. %1 is the word itself.
@@ -646,15 +608,11 @@ msgstr "Nem található letölthető kiadási csomag."
 #. TRANSLATORS: Asked when a newer Footcream is available. %1 is the new version
 #. tag, %2 the installed version number.
 #: main.lua:8273
-msgid ""
-"Update available: %1\n"
-"(installed: v%2)\n"
-"\n"
+msgid "Update available: %1\n"
+"(installed: v%2)\n\n"
 "Download and install now?"
-msgstr ""
-"Elérhető frissítés: %1\n"
-"(telepítve: v%2)\n"
-"\n"
+msgstr "Elérhető frissítés: %1\n"
+"(telepítve: v%2)\n\n"
 "Letölti és telepíti most?"
 
 #. TRANSLATORS: Button that downloads and installs the new version; the other
@@ -708,7 +666,7 @@ msgstr "%1 az eredeti mellett (a szövegben)"
 #. lowercase mid-sentence.
 #: main.lua:8378
 msgid "Underline units, tap for %1"
-msgstr "Egységek aláhúzása, koppintás %1 egységekért"
+msgstr "Mértékegységek aláhúzása, koppintás %1 mérétkegységekért"
 
 #. TRANSLATORS: Tickable measurement category under 'Menu > Footcream > Advanced >
 #. Unit categories'. Untick it and distances are left alone everywhere in the book.
@@ -720,7 +678,7 @@ msgstr "Hossz és távolság"
 #. Unit categories'. Untick it and weights are left alone everywhere in the book.
 #: main.lua:8408
 msgid "Weight"
-msgstr "Súly"
+msgstr "Tömeg"
 
 #. TRANSLATORS: Tickable measurement category under 'Menu > Footcream > Advanced >
 #. Unit categories'. Untick it and temperatures are left alone everywhere in the
@@ -839,24 +797,16 @@ msgstr "Könyv átvizsgálása"
 #. Footcream only recognises English measurement words. %1 is the language code
 #. from the book's metadata.
 #: main.lua:8706
-msgid ""
-"This book does not appear to be in English (detected: %1).\n"
-"\n"
+msgid "This book does not appear to be in English (detected: %1).\n\n"
 "Scan it anyway?"
-msgstr ""
-"Ez a könyv láthatóan nem angol (felismert nyelv: %1).\n"
-"\n"
+msgstr "Ez a könyv láthatóan nem angol (felismert nyelv: %1).\n\n"
 "Mindenképp átvizsgálja?"
 
 #. TRANSLATORS: Same question, for a book whose metadata names no language at all.
 #: main.lua:8708
-msgid ""
-"This book does not appear to be in English.\n"
-"\n"
+msgid "This book does not appear to be in English.\n\n"
 "Scan it anyway?"
-msgstr ""
-"Ez a könyv láthatóan nem angol.\n"
-"\n"
+msgstr "Ez a könyv láthatóan nem angol.\n\n"
 "Mindenképp átvizsgálja?"
 
 #. TRANSLATORS: Button that scans the book anyway; the other button is the shared
@@ -870,9 +820,7 @@ msgstr "Átvizsgálás"
 #. conversion written again.
 #: main.lua:8732
 msgid "This book is converted — rescan it and re-apply the conversion?"
-msgstr ""
-"Ez a könyv át van váltva — átvizsgálja újra, és alkalmazza ismét az "
-"átváltást?"
+msgstr "Ez a könyv át van váltva — átvizsgálja újra, és alkalmazza ismét az átváltást?"
 
 #. TRANSLATORS: Button that starts the rescan-and-reconvert; the other button is
 #. the shared 'Cancel'.
@@ -902,7 +850,7 @@ msgstr "Speciális"
 #. (length, weight, temperature...) that can each be switched off.
 #: main.lua:8792
 msgid "Unit categories"
-msgstr "Egységkategóriák"
+msgstr "Mértékegység-kategóriák"
 
 #. TRANSLATORS: Tickable entry under 'Advanced': round conversions to values a
 #. person would say out loud rather than exact arithmetic.
@@ -916,26 +864,22 @@ msgstr "Okos kerekítés az átváltásoknál"
 #. match that mode's name.
 #: main.lua:8841
 msgid "Show original unit in tooltip (%1 only mode)"
-msgstr "Eredeti egység mutatása a buborékban („csak %1” mód)"
+msgstr "Eredeti mértékegység mutatása a buborékban („csak %1” mód)"
 
 #. TRANSLATORS: Shown when this toggle can't work because the record of the book's
 #. original measurements is gone. The quoted items are menu entries - translate
 #. them exactly as you translate those entries.
 #: main.lua:8862
-msgid ""
-"Original-unit data for this book is missing.\n"
-"To restore it, use 'Remove Footcream data from this book', then convert "
-"again via the Mode menu."
-msgstr ""
-"Ehhez a könyvhöz hiányoznak az eredeti egységek adatai.\n"
-"Visszaállításukhoz használja a „Footcream-adatok eltávolítása ebből a "
-"könyvből” lehetőséget, majd váltson át újra a Mód menüből."
+msgid "Original-unit data for this book is missing.\n"
+"To restore it, use 'Remove Footcream data from this book', then convert again via the Mode menu."
+msgstr "Ehhez a könyvhöz hiányoznak az eredeti mértékegységek adatai.\n"
+"Visszaállításukhoz használja a „Footcream-adatok eltávolítása ebből a könyvből” lehetőséget, majd váltson át újra a Mód menüből."
 
 #. TRANSLATORS: Tickable entry under 'Advanced': allow reporting bad conversions by
 #. long-pressing them while reading.
 #: main.lua:8876
 msgid "Long-press units to send errors to the developer"
-msgstr "Hosszú koppintás az egységen: hibaküldés a fejlesztőnek"
+msgstr "Hibaküldés a fejlesztőnek hosszan érintéssel"
 
 #. TRANSLATORS: Toast when error reporting is switched on, confirming that reports
 #. carry no personal information.
@@ -964,7 +908,7 @@ msgstr "Diagnosztika"
 #. this book, with its conversion.
 #: main.lua:8960
 msgid "Units in book (list)"
-msgstr "Egységek a könyvben (lista)"
+msgstr "Mértékegységek a könyvben (lista)"
 
 #. TRANSLATORS: Entry under 'Debug' showing the errors flagged on this device.
 #: main.lua:8974
@@ -975,3 +919,4 @@ msgstr "Jelentett hibák megtekintése"
 #: main.lua:8985
 msgid "Clear flagged errors"
 msgstr "Jelentett hibák törlése"
+
